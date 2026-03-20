@@ -1,5 +1,10 @@
+pub mod account;
 pub mod auth;
+pub mod capabilities;
 pub mod events;
+pub mod profile;
+pub mod room_state;
 pub mod rooms;
 pub mod sync;
 pub mod versions;
+pub mod wellknown;

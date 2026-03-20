@@ -1,0 +1,75 @@
+services:
+  db:
+    image: docker.io/library/mariadb:11
+    pull_policy: if_not_present
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASS:-changeme}
+      MARIADB_DATABASE: ${DB_NAME:-matrix}
+      MARIADB_USER: ${DB_USER:-matrix}
+      MARIADB_PASSWORD: ${DB_PASS:-changeme}
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "${DB_PORT:-13306}:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.tools
+    image: localhost/matrix-tools:dev
+    command:
+      - sh
+      - -c
+      - mysqldef --host=db --port=3306 --user=${DB_SCHEMA_USER:-matrix} --password=${DB_SCHEMA_PASS:-changeme} ${DB_NAME:-matrix} < /workspace/schema/schema.sql
+    volumes:
+      - .:/workspace:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  tools:
+    build:
+      context: .
+      dockerfile: Dockerfile.tools
+    image: localhost/matrix-tools:dev
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      DB_SCHEMA_USER: ${DB_SCHEMA_USER:-matrix}
+      DB_SCHEMA_PASS: ${DB_SCHEMA_PASS:-changeme}
+      DB_NAME: ${DB_NAME:-matrix}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sleep infinity
+    stdin_open: true
+    tty: true
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: localhost/matrix-server:dev
+    environment:
+      DATABASE_URL: mysql://${DB_USER:-matrix}:${DB_PASS:-changeme}@db:3306/${DB_NAME:-matrix}
+      BIND_ADDR: ${BIND_ADDR:-0.0.0.0:8448}
+      SERVER_NAME: ${SERVER_NAME:-localhost}
+      RUST_LOG: ${RUST_LOG:-server=debug,tower_http=debug}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+    ports:
+      - "8448:8448"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  db_data:

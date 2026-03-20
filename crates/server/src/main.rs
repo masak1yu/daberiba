@@ -9,6 +9,9 @@ mod middleware;
 mod router;
 mod state;
 
+#[cfg(test)]
+mod tests;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();

@@ -13,11 +13,11 @@ pub async fn require_auth(
 ) -> Result<Response, AppError> {
     let token = extract_access_token(&req)?;
 
-    let user_id = db::access_tokens::verify(&state.pool, &token)
+    let (user_id, device_id) = db::access_tokens::verify(&state.pool, &token)
         .await?
         .ok_or(AppError::Unauthorized)?;
 
-    req.extensions_mut().insert(AuthUser { user_id });
+    req.extensions_mut().insert(AuthUser { user_id, device_id, token });
     Ok(next.run(req).await)
 }
 
@@ -45,4 +45,6 @@ fn extract_access_token(req: &Request) -> Result<String, AppError> {
 #[derive(Clone, Debug)]
 pub struct AuthUser {
     pub user_id: String,
+    pub device_id: String,
+    pub token: String,
 }
