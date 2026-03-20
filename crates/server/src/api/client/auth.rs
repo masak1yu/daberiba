@@ -1,11 +1,19 @@
-use axum::{extract::State, routing::post, Json, Router};
+use axum::{extract::State, routing::{get, post}, Json, Router};
 use serde::{Deserialize, Serialize};
 use crate::{error::ApiResult, state::AppState};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/_matrix/client/v3/register", post(register))
-        .route("/_matrix/client/v3/login", post(login))
+        .route("/_matrix/client/v3/login", get(login_flows).post(login))
+}
+
+async fn login_flows() -> Json<serde_json::Value> {
+    Json(serde_json::json!({
+        "flows": [
+            { "type": "m.login.password" }
+        ]
+    }))
 }
 
 #[derive(Deserialize)]
