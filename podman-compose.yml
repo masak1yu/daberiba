@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  db:
+    image: docker.io/library/mariadb:11
+    environment:
+      MARIADB_ROOT_PASSWORD: root
+      MARIADB_DATABASE: matrix
+      MARIADB_USER: matrix
+      MARIADB_PASSWORD: matrix
+    volumes:
+      - db_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: mysql://matrix:matrix@db:3306/matrix
+      BIND_ADDR: 0.0.0.0:8448
+      SERVER_NAME: localhost
+      RUST_LOG: server=debug,tower_http=debug
+    ports:
+      - "8448:8448"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  db_data:
