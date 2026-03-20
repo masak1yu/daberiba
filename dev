@@ -1,0 +1,6 @@
+#!/bin/sh
+# just が未インストールの場合でもツールコンテナ経由でレシピを実行するスクリプト
+# 使い方: ./dev <recipe> [args...]
+#   例: ./dev schema-apply
+#       ./dev schema-dry-run
+exec podman compose run --rm tools just "$@"
