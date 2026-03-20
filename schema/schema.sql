@@ -4,6 +4,8 @@
 CREATE TABLE IF NOT EXISTS users (
     user_id       VARCHAR(255)  NOT NULL COMMENT '@localpart:server_name',
     password_hash VARCHAR(255)  NOT NULL,
+    display_name  VARCHAR(255)  NULL,
+    avatar_url    VARCHAR(1024) NULL,
     created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deactivated   TINYINT(1)    NOT NULL DEFAULT 0,
     PRIMARY KEY (user_id)
