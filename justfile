@@ -2,15 +2,15 @@ set dotenv-load
 
 # 開発環境起動
 up:
-    podman-compose up -d
+    podman compose up -d
 
 # 開発環境停止
 down:
-    podman-compose down
+    podman compose down
 
 # ログ確認
 logs:
-    podman-compose logs -f
+    podman compose logs -f
 
 # ビルド
 build:
@@ -34,8 +34,8 @@ schema-dry-run:
 
 # コンテナ内でサーバビルド
 container-build:
-    podman-compose build
+    podman compose build
 
-# コンテナ内サーバ再起動
+# コンテナ再起動
 restart:
-    podman-compose restart server
+    podman compose restart server

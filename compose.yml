@@ -1,8 +1,7 @@
-version: "3.8"
-
 services:
   db:
     image: docker.io/library/mariadb:11
+    pull_policy: if_not_present
     environment:
       MARIADB_ROOT_PASSWORD: root
       MARIADB_DATABASE: matrix
@@ -11,7 +10,7 @@ services:
     volumes:
       - db_data:/var/lib/mysql
     ports:
-      - "3306:3306"
+      - "13306:3306"
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -22,6 +21,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: localhost/matrix-server:dev
     environment:
       DATABASE_URL: mysql://matrix:matrix@db:3306/matrix
       BIND_ADDR: 0.0.0.0:8448

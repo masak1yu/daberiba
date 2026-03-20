@@ -2,16 +2,14 @@ set dotenv-load
 
 DB_HOST := env_var_or_default("DB_HOST", "127.0.0.1")
 DB_PORT := env_var_or_default("DB_PORT", "3306")
-DB_USER := env_var_or_default("DB_USER", "matrix")
-DB_PASS := env_var_or_default("DB_PASS", "matrix")
+DB_USER := env_var_or_default("DB_SCHEMA_USER", "matrix")
+DB_PASS := env_var_or_default("DB_SCHEMA_PASS", "matrix")
 DB_NAME := env_var_or_default("DB_NAME", "matrix")
-
-DSN := DB_USER + ":" + DB_PASS + "@" + DB_HOST + ":" + DB_PORT + "/" + DB_NAME
 
 # スキーマを適用（差分DDLのみ実行）
 apply:
-    mariadb-def --user={{DB_USER}} --password={{DB_PASS}} --host={{DB_HOST}} --port={{DB_PORT}} {{DB_NAME}} schema.sql
+    mysqldef --user={{DB_USER}} --password={{DB_PASS}} --host={{DB_HOST}} --port={{DB_PORT}} {{DB_NAME}} < schema.sql
 
 # dry-run: 実行されるSQLを確認
 dry-run:
-    mariadb-def --dry-run --user={{DB_USER}} --password={{DB_PASS}} --host={{DB_HOST}} --port={{DB_PORT}} {{DB_NAME}} schema.sql
+    mysqldef --dry-run --user={{DB_USER}} --password={{DB_PASS}} --host={{DB_HOST}} --port={{DB_PORT}} {{DB_NAME}} < schema.sql
