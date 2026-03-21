@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 
-**Status:** v0.2.0 — Client-Server API Phase 2 (functional, not production-ready)
+**Status:** v0.2.1 — Client-Server API Phase 2 (functional, not production-ready)
 
 ## Tech Stack
 
@@ -62,7 +62,32 @@ A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 
 ## Getting Started
 
-### Requirements
+### GitHub Codespaces (iPad Pro など)
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/masak1yu/ba)
+
+Codespace を開くだけで以下が自動セットアップされます。
+
+- Rust toolchain、`just`、`mariadb-def` インストール済み
+- MariaDB 起動済み
+- `claude` コマンド (`@anthropic-ai/claude-code`) インストール済み
+- ポート `8448` を自動フォワード
+- zsh プロンプトにブランチ名・変更状態を表示 (Oh My Zsh `robbyrussell`)
+
+```sh
+# Codespace ターミナルで
+just up          # DBマイグレーション
+just dev         # サーバー起動 → ポート8448がブラウザから開く
+claude           # Claude Code 起動
+```
+
+> **Note:** `.env` は開発用デフォルトパスワードで自動生成されます。
+
+---
+
+### ローカル開発
+
+#### Requirements
 
 - [Podman](https://podman.io/) + podman-compose
 
@@ -136,6 +161,10 @@ ba/
 ├── schema/
 │   ├── schema.sql        # Managed by sqldef (mysqldef)
 │   └── justfile
+├── .devcontainer/        # GitHub Codespaces 設定
+│   ├── devcontainer.json
+│   ├── Dockerfile
+│   └── setup.sh
 ├── Dockerfile            # Server image
 ├── Dockerfile.tools      # just + mysqldef tools image (arch auto-detect)
 ├── compose.yml           # podman compose (db, migrate, tools, server)
