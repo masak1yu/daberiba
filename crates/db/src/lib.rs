@@ -1,7 +1,9 @@
 use sqlx::{mysql::MySqlPoolOptions, MySqlPool};
 
 pub mod access_tokens;
+pub mod devices;
 pub mod events;
+pub mod media;
 pub mod profile;
 pub mod room_state;
 pub mod rooms;

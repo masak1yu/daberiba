@@ -2,12 +2,10 @@ use anyhow::Result;
 use sqlx::{MySqlPool, Row};
 
 pub async fn get(pool: &MySqlPool, user_id: &str) -> Result<Option<serde_json::Value>> {
-    let row = sqlx::query(
-        "SELECT display_name, avatar_url FROM users WHERE user_id = ?",
-    )
-    .bind(user_id)
-    .fetch_optional(pool)
-    .await?;
+    let row = sqlx::query("SELECT display_name, avatar_url FROM users WHERE user_id = ?")
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await?;
 
     Ok(row.map(|r| {
         serde_json::json!({

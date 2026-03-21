@@ -1,6 +1,7 @@
 pub mod account;
 pub mod auth;
 pub mod capabilities;
+pub mod devices;
 pub mod events;
 pub mod profile;
 pub mod room_state;

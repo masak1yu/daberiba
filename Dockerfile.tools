@@ -1,6 +1,5 @@
 FROM debian:bookworm-slim
 
-ARG TARGETARCH=arm64
 ARG JUST_VERSION=1.40.0
 ARG MYSQLDEF_VERSION=3.10.1
 
@@ -8,17 +7,19 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# just のインストール（アーキテクチャ自動判定）
+# just のインストール（実行時アーキテクチャ自動検出）
 RUN set -eux; \
-    JUST_ARCH=$([ "${TARGETARCH}" = "arm64" ] && echo "aarch64" || echo "x86_64"); \
+    HOST_ARCH=$(uname -m); \
+    JUST_ARCH=$([ "${HOST_ARCH}" = "aarch64" ] && echo "aarch64" || echo "x86_64"); \
     curl -fsSLk \
       "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${JUST_ARCH}-unknown-linux-musl.tar.gz" \
       | tar xz -C /usr/local/bin just; \
     just --version
 
-# mysqldef のインストール（アーキテクチャ自動判定）
+# mysqldef のインストール（実行時アーキテクチャ自動検出）
 RUN set -eux; \
-    MYSQLDEF_ARCH=$([ "${TARGETARCH}" = "arm64" ] && echo "arm64" || echo "amd64"); \
+    HOST_ARCH=$(uname -m); \
+    MYSQLDEF_ARCH=$([ "${HOST_ARCH}" = "aarch64" ] && echo "arm64" || echo "amd64"); \
     curl -fsSLk \
       "https://github.com/sqldef/sqldef/releases/download/v${MYSQLDEF_VERSION}/mysqldef_linux_${MYSQLDEF_ARCH}.tar.gz" \
       | tar xz -C /usr/local/bin mysqldef; \

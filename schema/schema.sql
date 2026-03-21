@@ -43,16 +43,42 @@ CREATE TABLE IF NOT EXISTS room_memberships (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS events (
-    event_id   VARCHAR(255)  NOT NULL COMMENT '$opaque:server_name',
-    room_id    VARCHAR(255)  NOT NULL,
-    sender     VARCHAR(255)  NOT NULL,
-    event_type VARCHAR(255)  NOT NULL,
-    state_key  VARCHAR(255)  NULL COMMENT 'NULLはtimeline event',
-    content    MEDIUMTEXT    NOT NULL,
-    created_at DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    event_id        VARCHAR(255)    NOT NULL COMMENT '$opaque:server_name',
+    room_id         VARCHAR(255)    NOT NULL,
+    sender          VARCHAR(255)    NOT NULL,
+    event_type      VARCHAR(255)    NOT NULL,
+    state_key       VARCHAR(255)    NULL COMMENT 'NULLはtimeline event',
+    content         MEDIUMTEXT      NOT NULL,
+    created_at      DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    stream_ordering BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     PRIMARY KEY (event_id),
-    INDEX idx_events_room_id (room_id, created_at),
+    UNIQUE KEY uq_events_stream_ordering (stream_ordering),
+    INDEX idx_events_room_id (room_id, stream_ordering),
     FOREIGN KEY (room_id) REFERENCES rooms(room_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS devices (
+    device_id    VARCHAR(255)  NOT NULL,
+    user_id      VARCHAR(255)  NOT NULL,
+    display_name VARCHAR(255)  NULL,
+    last_seen_ts BIGINT        NULL COMMENT 'Unix milliseconds',
+    last_seen_ip VARCHAR(64)   NULL,
+    created_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (device_id, user_id),
+    INDEX idx_devices_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS media (
+    media_id     VARCHAR(255)  NOT NULL,
+    server_name  VARCHAR(255)  NOT NULL,
+    user_id      VARCHAR(255)  NOT NULL,
+    content_type VARCHAR(255)  NOT NULL,
+    filename     VARCHAR(255)  NULL,
+    file_size    BIGINT        NOT NULL,
+    created_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (media_id, server_name),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS room_state (
