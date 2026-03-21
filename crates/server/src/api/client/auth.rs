@@ -1,6 +1,13 @@
-use axum::{extract::State, routing::{get, post}, Json, Router};
+use crate::{
+    error::{ApiResult, AppError},
+    state::AppState,
+};
+use axum::{
+    extract::State,
+    routing::{get, post},
+    Json, Router,
+};
 use serde::{Deserialize, Serialize};
-use crate::{error::{ApiResult, AppError}, state::AppState};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -37,7 +44,10 @@ fn validate_username(username: &str) -> Result<(), AppError> {
         return Err(AppError::BadRequest("username too long".into()));
     }
     // Matrix localpart: 英数字・アンダースコア・ハイフン・ドットのみ
-    if !username.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')) {
+    if !username
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
+    {
         return Err(AppError::BadRequest(
             "username may only contain a-z, 0-9, _, -, .".into(),
         ));
@@ -74,7 +84,11 @@ async fn register(
                 }
             })?;
 
-    Ok(Json(RegisterResponse { user_id, access_token, device_id }))
+    Ok(Json(RegisterResponse {
+        user_id,
+        access_token,
+        device_id,
+    }))
 }
 
 #[derive(Deserialize)]
@@ -122,5 +136,9 @@ async fn login(
             .await
             .map_err(|_| AppError::Unauthorized)?;
 
-    Ok(Json(LoginResponse { user_id, access_token, device_id }))
+    Ok(Json(LoginResponse {
+        user_id,
+        access_token,
+        device_id,
+    }))
 }

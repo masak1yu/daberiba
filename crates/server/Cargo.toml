@@ -20,6 +20,8 @@ tower-http = { workspace = true }
 dotenvy = { workspace = true }
 sqlx = { workspace = true }
 url = "2"
+async-trait = { workspace = true }
+bytes = { workspace = true }
 
 [dev-dependencies]
 axum-test = "15"

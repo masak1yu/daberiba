@@ -1,5 +1,5 @@
-use axum::{routing::get, Json, Router};
 use crate::state::AppState;
+use axum::{routing::get, Json, Router};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -9,8 +9,8 @@ pub fn routes() -> Router<AppState> {
 
 async fn well_known_client() -> Json<serde_json::Value> {
     let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
-    let base_url = std::env::var("BASE_URL")
-        .unwrap_or_else(|_| format!("http://{}:8448", server_name));
+    let base_url =
+        std::env::var("BASE_URL").unwrap_or_else(|_| format!("http://{}:8448", server_name));
 
     Json(serde_json::json!({
         "m.homeserver": {

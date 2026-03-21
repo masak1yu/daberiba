@@ -1,10 +1,10 @@
+use crate::{error::ApiResult, middleware::auth::AuthUser, state::AppState};
 use axum::{
     extract::{Path, State},
     routing::{get, post},
     Json, Router,
 };
 use serde::Deserialize;
-use crate::{error::ApiResult, middleware::auth::AuthUser, state::AppState};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -13,15 +13,15 @@ pub fn routes() -> Router<AppState> {
             "/_matrix/client/v3/rooms/{roomId}/state/{eventType}/{stateKey}",
             get(get_state_event),
         )
-        .route("/_matrix/client/v3/rooms/{roomId}/members", get(get_members))
+        .route(
+            "/_matrix/client/v3/rooms/{roomId}/members",
+            get(get_members),
+        )
         .route(
             "/_matrix/client/v3/rooms/{roomId}/joined_members",
             get(get_joined_members),
         )
-        .route(
-            "/_matrix/client/v3/rooms/{roomId}/invite",
-            post(invite),
-        )
+        .route("/_matrix/client/v3/rooms/{roomId}/invite", post(invite))
 }
 
 async fn get_state(

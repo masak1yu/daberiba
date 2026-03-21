@@ -11,7 +11,11 @@ pub async fn send(
     content: &serde_json::Value,
 ) -> Result<String> {
     let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
-    let event_id = format!("${}:{}", Uuid::new_v4().to_string().replace('-', ""), server_name);
+    let event_id = format!(
+        "${}:{}",
+        Uuid::new_v4().to_string().replace('-', ""),
+        server_name
+    );
     let content_str = serde_json::to_string(content)?;
 
     sqlx::query(

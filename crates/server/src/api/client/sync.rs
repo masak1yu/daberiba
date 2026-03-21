@@ -1,10 +1,10 @@
+use crate::{error::ApiResult, middleware::auth::AuthUser, state::AppState};
 use axum::{
     extract::{Query, State},
     routing::get,
     Json, Router,
 };
 use serde::Deserialize;
-use crate::{error::ApiResult, middleware::auth::AuthUser, state::AppState};
 
 pub fn routes() -> Router<AppState> {
     Router::new().route("/_matrix/client/v3/sync", get(sync))

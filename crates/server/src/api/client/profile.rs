@@ -1,10 +1,14 @@
+use crate::{
+    error::{ApiResult, AppError},
+    middleware::auth::AuthUser,
+    state::AppState,
+};
 use axum::{
     extract::{Path, State},
     routing::get,
     Json, Router,
 };
 use serde::Deserialize;
-use crate::{error::{ApiResult, AppError}, middleware::auth::AuthUser, state::AppState};
 
 pub fn routes() -> Router<AppState> {
     Router::new()

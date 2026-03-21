@@ -1,10 +1,9 @@
+use crate::state::AppState;
 use axum::{routing::get, Json, Router};
 use serde_json::{json, Value};
-use crate::state::AppState;
 
 pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/_matrix/client/versions", get(handler))
+    Router::new().route("/_matrix/client/versions", get(handler))
 }
 
 async fn handler() -> Json<Value> {

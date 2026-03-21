@@ -1,9 +1,9 @@
+use crate::{error::AppError, state::AppState};
 use axum::{
     extract::{Request, State},
     middleware::Next,
     response::Response,
 };
-use crate::{error::AppError, state::AppState};
 
 /// Matrix access token を Bearer または query param から抽出して検証する
 pub async fn require_auth(
@@ -17,7 +17,11 @@ pub async fn require_auth(
         .await?
         .ok_or(AppError::Unauthorized)?;
 
-    req.extensions_mut().insert(AuthUser { user_id, device_id, token });
+    req.extensions_mut().insert(AuthUser {
+        user_id,
+        device_id,
+        token,
+    });
     Ok(next.run(req).await)
 }
 

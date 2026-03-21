@@ -9,7 +9,11 @@ pub async fn create(
     topic: Option<&str>,
     server_name: &str,
 ) -> Result<String> {
-    let room_id = format!("!{}:{}", Uuid::new_v4().to_string().replace('-', ""), server_name);
+    let room_id = format!(
+        "!{}:{}",
+        Uuid::new_v4().to_string().replace('-', ""),
+        server_name
+    );
 
     sqlx::query("INSERT INTO rooms (room_id, creator_user_id, name, topic) VALUES (?, ?, ?, ?)")
         .bind(&room_id)
@@ -57,13 +61,17 @@ pub async fn leave(pool: &MySqlPool, user_id: &str, room_id: &str) -> Result<()>
 }
 
 pub async fn joined_rooms(pool: &MySqlPool, user_id: &str) -> Result<Vec<String>> {
-    let rows =
-        sqlx::query("SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'")
-            .bind(user_id)
-            .fetch_all(pool)
-            .await?;
+    let rows = sqlx::query(
+        "SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
 
-    Ok(rows.into_iter().map(|r| r.get::<String, _>("room_id")).collect())
+    Ok(rows
+        .into_iter()
+        .map(|r| r.get::<String, _>("room_id"))
+        .collect())
 }
 
 pub async fn get_members(pool: &MySqlPool, room_id: &str) -> Result<Vec<serde_json::Value>> {

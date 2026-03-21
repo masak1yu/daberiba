@@ -1,12 +1,12 @@
 services:
   db:
     image: docker.io/library/mariadb:11
-    pull_policy: if_not_present
+    pull_policy: missing
     environment:
-      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASS:-changeme}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASS}
       MARIADB_DATABASE: ${DB_NAME:-matrix}
       MARIADB_USER: ${DB_USER:-matrix}
-      MARIADB_PASSWORD: ${DB_PASS:-changeme}
+      MARIADB_PASSWORD: ${DB_PASS}
     volumes:
       - db_data:/var/lib/mysql
     ports:
@@ -25,7 +25,7 @@ services:
     command:
       - sh
       - -c
-      - mysqldef --host=db --port=3306 --user=${DB_SCHEMA_USER:-matrix} --password=${DB_SCHEMA_PASS:-changeme} ${DB_NAME:-matrix} < /workspace/schema/schema.sql
+      - mysqldef --host=db --port=3306 --user=${DB_SCHEMA_USER:-matrix} --password=${DB_SCHEMA_PASS} ${DB_NAME:-matrix} < /workspace/schema/schema.sql
     volumes:
       - .:/workspace:ro
     depends_on:
@@ -45,7 +45,7 @@ services:
       DB_HOST: db
       DB_PORT: "3306"
       DB_SCHEMA_USER: ${DB_SCHEMA_USER:-matrix}
-      DB_SCHEMA_PASS: ${DB_SCHEMA_PASS:-changeme}
+      DB_SCHEMA_PASS: ${DB_SCHEMA_PASS}
       DB_NAME: ${DB_NAME:-matrix}
     depends_on:
       db:
@@ -60,7 +60,7 @@ services:
       dockerfile: Dockerfile
     image: localhost/matrix-server:dev
     environment:
-      DATABASE_URL: mysql://${DB_USER:-matrix}:${DB_PASS:-changeme}@db:3306/${DB_NAME:-matrix}
+      DATABASE_URL: mysql://${DB_USER:-matrix}:${DB_PASS}@db:3306/${DB_NAME:-matrix}
       BIND_ADDR: ${BIND_ADDR:-0.0.0.0:8448}
       SERVER_NAME: ${SERVER_NAME:-localhost}
       RUST_LOG: ${RUST_LOG:-server=debug,tower_http=debug}

@@ -1,10 +1,10 @@
+use crate::{error::ApiResult, middleware::auth::AuthUser, state::AppState};
 use axum::{
     extract::{Path, State},
     routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use crate::{error::ApiResult, middleware::auth::AuthUser, state::AppState};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -49,8 +49,7 @@ async fn join_room(
     axum::Extension(user): axum::Extension<AuthUser>,
     Path(room_id_or_alias): Path<String>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let room_id =
-        db::rooms::join(&state.pool, &user.user_id, &room_id_or_alias).await?;
+    let room_id = db::rooms::join(&state.pool, &user.user_id, &room_id_or_alias).await?;
 
     Ok(Json(serde_json::json!({ "room_id": room_id })))
 }

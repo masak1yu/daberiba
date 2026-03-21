@@ -1,0 +1,107 @@
+use crate::{
+    error::{ApiResult, AppError},
+    middleware::auth::AuthUser,
+    state::AppState,
+};
+use axum::{
+    body::Body,
+    extract::{Path, Query, State},
+    http::{header, HeaderMap, StatusCode},
+    response::Response,
+    routing::{get, post},
+    Router,
+};
+use bytes::Bytes;
+use serde::Deserialize;
+use uuid::Uuid;
+
+pub fn routes() -> Router<AppState> {
+    Router::new()
+        .route("/_matrix/media/v3/upload", post(upload))
+        .route(
+            "/_matrix/media/v3/download/:server_name/:media_id",
+            get(download),
+        )
+        .route(
+            "/_matrix/media/v3/download/:server_name/:media_id/:filename",
+            get(download_with_filename),
+        )
+}
+
+#[derive(Deserialize)]
+struct UploadQuery {
+    filename: Option<String>,
+}
+
+async fn upload(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+    Query(query): Query<UploadQuery>,
+    headers: HeaderMap,
+    body: Bytes,
+) -> ApiResult<axum::Json<serde_json::Value>> {
+    let content_type = headers
+        .get(header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+
+    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
+    let media_id = Uuid::new_v4().to_string().replace('-', "");
+    let file_size = body.len() as i64;
+
+    state.media.store(&media_id, body).await?;
+
+    db::media::insert(
+        &state.pool,
+        &media_id,
+        &server_name,
+        &user.user_id,
+        &content_type,
+        query.filename.as_deref(),
+        file_size,
+    )
+    .await?;
+
+    let mxc_uri = format!("mxc://{}/{}", server_name, media_id);
+    Ok(axum::Json(serde_json::json!({ "content_uri": mxc_uri })))
+}
+
+async fn download(
+    State(state): State<AppState>,
+    Path((server_name, media_id)): Path<(String, String)>,
+) -> Result<Response, AppError> {
+    serve_media(&state, &server_name, &media_id).await
+}
+
+async fn download_with_filename(
+    State(state): State<AppState>,
+    Path((server_name, media_id, _filename)): Path<(String, String, String)>,
+) -> Result<Response, AppError> {
+    serve_media(&state, &server_name, &media_id).await
+}
+
+async fn serve_media(
+    state: &AppState,
+    server_name: &str,
+    media_id: &str,
+) -> Result<Response, AppError> {
+    let record = db::media::get(&state.pool, server_name, media_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let data = state
+        .media
+        .fetch(media_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let response = Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, record.content_type)
+        .header(header::CONTENT_LENGTH, data.len())
+        .body(Body::from(data))
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    Ok(response)
+}
