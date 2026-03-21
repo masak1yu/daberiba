@@ -31,12 +31,20 @@ impl IntoResponse for AppError {
     fn into_response(self) -> Response {
         let (status, errcode, message) = match &self {
             AppError::NotFound => (StatusCode::NOT_FOUND, "M_NOT_FOUND", self.to_string()),
-            AppError::Unauthorized => (StatusCode::UNAUTHORIZED, "M_UNKNOWN_TOKEN", self.to_string()),
+            AppError::Unauthorized => (
+                StatusCode::UNAUTHORIZED,
+                "M_UNKNOWN_TOKEN",
+                self.to_string(),
+            ),
             AppError::Forbidden => (StatusCode::FORBIDDEN, "M_FORBIDDEN", self.to_string()),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "M_BAD_JSON", msg.clone()),
             AppError::Internal(_) | AppError::Database(_) => {
                 tracing::error!(error = %self);
-                (StatusCode::INTERNAL_SERVER_ERROR, "M_UNKNOWN", "internal server error".to_string())
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "M_UNKNOWN",
+                    "internal server error".to_string(),
+                )
             }
         };
 

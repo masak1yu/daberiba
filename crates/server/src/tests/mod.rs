@@ -1,14 +1,20 @@
 use axum_test::TestServer;
 use serde_json::json;
+use std::sync::Arc;
 
-use crate::{router, state::AppState};
+use crate::{media_store::LocalStore, router, state::AppState};
 
 async fn test_server() -> TestServer {
     // テスト用インメモリ SQLite は使わず、versions エンドポイントなど DB 不要なものをテスト
     // DB 依存テストは統合テストで別途行う
     let pool = sqlx::MySqlPool::connect_lazy("mysql://matrix:matrix@127.0.0.1:13306/matrix")
         .expect("lazy connect");
-    let state = AppState::new(pool);
+    let media = Arc::new(
+        LocalStore::new(std::env::temp_dir().join("matrix-test-media"))
+            .await
+            .unwrap(),
+    );
+    let state = AppState::new(pool, media);
     let app = router::build(state);
     TestServer::new(app).unwrap()
 }

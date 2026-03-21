@@ -2,17 +2,14 @@ use anyhow::Result;
 use chrono::NaiveDateTime;
 use sqlx::{MySqlPool, Row};
 
-/// /sync の最小実装
-/// next_batch / since はミリ秒UNIXタイムスタンプ（文字列）
+/// /sync の実装
+/// next_batch / since は stream_ordering（u64 文字列）
 pub async fn sync(
     pool: &MySqlPool,
     user_id: &str,
     since: Option<&str>,
 ) -> Result<serde_json::Value> {
-    let since_dt: Option<NaiveDateTime> = since
-        .and_then(|s| s.parse::<i64>().ok())
-        .and_then(|ms| chrono::DateTime::from_timestamp_millis(ms))
-        .map(|dt| dt.naive_utc());
+    let since_ordering: i64 = since.and_then(|s| s.parse::<i64>().ok()).unwrap_or(0);
 
     let rooms = sqlx::query(
         "SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'",
@@ -22,44 +19,31 @@ pub async fn sync(
     .await?;
 
     let mut join_map = serde_json::Map::new();
-    let mut latest_ts: Option<NaiveDateTime> = None;
+    let mut latest_ordering: i64 = since_ordering;
 
     for room_row in &rooms {
         let room_id: String = room_row.get("room_id");
 
-        let event_rows = if let Some(dt) = since_dt {
-            sqlx::query(
-                r#"SELECT event_id, sender, event_type, state_key, content, created_at
-                   FROM events
-                   WHERE room_id = ? AND created_at > ?
-                   ORDER BY created_at ASC
-                   LIMIT 100"#,
-            )
-            .bind(&room_id)
-            .bind(dt)
-            .fetch_all(pool)
-            .await?
-        } else {
-            sqlx::query(
-                r#"SELECT event_id, sender, event_type, state_key, content, created_at
-                   FROM events
-                   WHERE room_id = ?
-                   ORDER BY created_at ASC
-                   LIMIT 100"#,
-            )
-            .bind(&room_id)
-            .fetch_all(pool)
-            .await?
-        };
+        let event_rows = sqlx::query(
+            r#"SELECT event_id, sender, event_type, state_key, content, created_at, stream_ordering
+               FROM events
+               WHERE room_id = ? AND stream_ordering > ?
+               ORDER BY stream_ordering ASC
+               LIMIT 100"#,
+        )
+        .bind(&room_id)
+        .bind(since_ordering)
+        .fetch_all(pool)
+        .await?;
 
         if let Some(last) = event_rows.last() {
-            let ts: NaiveDateTime = last.get("created_at");
-            if latest_ts.map_or(true, |t| ts > t) {
-                latest_ts = Some(ts);
+            let ord: i64 = last.get::<u64, _>("stream_ordering") as i64;
+            if ord > latest_ordering {
+                latest_ordering = ord;
             }
         }
 
-        let prev_batch = since.unwrap_or("0").to_string();
+        let prev_batch = since_ordering.to_string();
         let timeline_events: Vec<serde_json::Value> = event_rows
             .iter()
             .map(|e| {
@@ -93,13 +77,8 @@ pub async fn sync(
         );
     }
 
-    let next_batch = latest_ts
-        .map(|dt| dt.and_utc().timestamp_millis())
-        .unwrap_or_else(|| chrono::Utc::now().timestamp_millis())
-        .to_string();
-
     Ok(serde_json::json!({
-        "next_batch": next_batch,
+        "next_batch": latest_ordering.to_string(),
         "rooms": {
             "join": join_map,
             "invite": {},

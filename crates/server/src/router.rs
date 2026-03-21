@@ -1,6 +1,6 @@
+use crate::{api, middleware::auth::require_auth, state::AppState};
 use axum::{http::HeaderValue, middleware, Router};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use crate::{api, middleware::auth::require_auth, state::AppState};
 
 pub fn build(state: AppState) -> Router {
     // 認証不要ルート
@@ -13,6 +13,7 @@ pub fn build(state: AppState) -> Router {
     // 認証必須ルート
     let protected = Router::new()
         .merge(api::client::account::routes())
+        .merge(api::client::devices::routes())
         .merge(api::client::rooms::routes())
         .merge(api::client::room_state::routes())
         .merge(api::client::events::routes())
@@ -20,9 +21,14 @@ pub fn build(state: AppState) -> Router {
         .merge(api::client::sync::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
+    // メディアルート（認証必須）
+    let media =
+        api::media::routes().layer(middleware::from_fn_with_state(state.clone(), require_auth));
+
     Router::new()
         .merge(public)
         .merge(protected)
+        .merge(media)
         .layer(build_cors())
         .layer(TraceLayer::new_for_http())
         .with_state(state)

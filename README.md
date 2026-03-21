@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 
-**Status:** v0.1.0 — Client-Server API Phase 1 (functional, not production-ready)
+**Status:** v0.2.0 — Client-Server API Phase 2 (functional, not production-ready)
 
 ## Tech Stack
 
@@ -32,9 +32,15 @@ A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 | Method | Path | Description |
 |---|---|---|
 | GET | `/_matrix/client/v3/account/whoami` | Current user |
+| POST | `/_matrix/client/v3/account/password` | Change password |
 | POST | `/_matrix/client/v3/logout` | Logout |
 | POST | `/_matrix/client/v3/logout/all` | Logout all devices |
-| GET | `/_matrix/client/v3/sync` | Sync (long-poll) |
+| GET | `/_matrix/client/v3/sync` | Sync (stream_ordering cursor) |
+| GET | `/_matrix/client/v3/devices` | List devices |
+| GET | `/_matrix/client/v3/devices/{deviceId}` | Get device |
+| PUT | `/_matrix/client/v3/devices/{deviceId}` | Update device display name |
+| DELETE | `/_matrix/client/v3/devices/{deviceId}` | Delete device |
+| POST | `/_matrix/client/v3/delete_devices` | Bulk delete devices |
 | POST | `/_matrix/client/v3/createRoom` | Create room |
 | POST | `/_matrix/client/v3/join/{roomId}` | Join room |
 | POST | `/_matrix/client/v3/rooms/{roomId}/leave` | Leave room |
@@ -51,19 +57,21 @@ A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 | GET/PUT | `/_matrix/client/v3/profile/{userId}` | User profile |
 | GET/PUT | `/_matrix/client/v3/profile/{userId}/displayname` | Display name |
 | GET/PUT | `/_matrix/client/v3/profile/{userId}/avatar_url` | Avatar URL |
+| POST | `/_matrix/media/v3/upload` | Upload media |
+| GET | `/_matrix/media/v3/download/{serverName}/{mediaId}` | Download media |
 
 ## Getting Started
 
 ### Requirements
 
-- [Podman](https://podman.io/) 5.x
+- [Podman](https://podman.io/) + podman-compose
 
 That's it. `just` and `mysqldef` are bundled in the tools container.
 
 ### Setup
 
 ```sh
-# Copy environment config
+# Copy environment config and fill in passwords
 cp .env.example .env
 
 # Start DB and apply schema automatically
@@ -99,10 +107,11 @@ Copy `.env.example` to `.env` and adjust as needed.
 
 | Variable | Default | Description |
 |---|---|---|
-| `DATABASE_URL` | `mysql://matrix:matrix@127.0.0.1:13306/matrix` | MariaDB connection string |
+| `DATABASE_URL` | — | MariaDB connection string |
 | `BIND_ADDR` | `0.0.0.0:8448` | Server listen address |
 | `SERVER_NAME` | `localhost` | Matrix server name (used in user/room IDs) |
 | `CORS_ORIGINS` | `*` | Allowed CORS origins (`*` or comma-separated URLs) |
+| `MEDIA_PATH` | `./media` | Local media file storage directory |
 | `RUST_LOG` | `server=debug,tower_http=debug` | Log level |
 
 > **Note:** The local DB is mapped to port `13306` to avoid conflicts with any locally running MySQL on `3306`.
@@ -114,18 +123,21 @@ ba/
 ├── crates/
 │   ├── server/          # Axum HTTP server
 │   │   └── src/
-│   │       ├── api/client/   # Matrix Client-Server API handlers
+│   │       ├── api/
+│   │       │   ├── client/   # Matrix Client-Server API handlers
+│   │       │   └── media.rs  # Matrix Media API handlers
+│   │       ├── media_store.rs  # MediaStore trait + LocalStore
 │   │       ├── middleware/   # Auth (Bearer token)
 │   │       ├── router.rs
 │   │       ├── state.rs
 │   │       └── error.rs      # Matrix-compliant error responses
 │   └── db/              # sqlx database layer
-│       └── src/         # users, rooms, events, sync, profile, ...
+│       └── src/         # users, rooms, events, sync, profile, devices, media
 ├── schema/
 │   ├── schema.sql        # Managed by sqldef (mysqldef)
 │   └── justfile
 ├── Dockerfile            # Server image
-├── Dockerfile.tools      # just + mysqldef tools image
+├── Dockerfile.tools      # just + mysqldef tools image (arch auto-detect)
 ├── compose.yml           # podman compose (db, migrate, tools, server)
 ├── justfile
 └── dev                   # ./dev <recipe> — runs just via tools container
@@ -133,10 +145,7 @@ ba/
 
 ## Not Yet Implemented
 
-- Device management (`/devices`)
-- Media upload/download (`/_matrix/media`)
-- Password change
-- Push notifications
+- Push notifications (`/pushers/set`)
 - Federation (`/_matrix/federation`) — out of scope for now
 
 ## License
