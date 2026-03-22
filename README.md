@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.6.0 — Client-Server API Phase 6 (functional, not production-ready)
+**Status:** v0.7.0 — Client-Server API Phase 7 (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -69,6 +69,11 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | DELETE | `/_matrix/client/v3/directory/room/{roomAlias}` | Delete room alias |
 | PUT | `/_matrix/client/v3/presence/{userId}/status` | Set presence status |
 | GET | `/_matrix/client/v3/presence/{userId}/status` | Get presence status |
+| GET | `/_matrix/client/v3/user/{userId}/rooms/{roomId}/tags` | Get room tags |
+| PUT | `/_matrix/client/v3/user/{userId}/rooms/{roomId}/tags/{tag}` | Set room tag |
+| DELETE | `/_matrix/client/v3/user/{userId}/rooms/{roomId}/tags/{tag}` | Delete room tag |
+| POST | `/_matrix/client/v3/user/{userId}/filter` | Create filter |
+| GET | `/_matrix/client/v3/user/{userId}/filter/{filterId}` | Get filter |
 | POST | `/_matrix/media/v3/upload` | Upload media |
 | GET | `/_matrix/media/v3/download/{serverName}/{mediaId}` | Download media |
 
@@ -298,6 +303,40 @@ GET /_matrix/client/v3/presence/@user:server/status
 ```
 
 Presence events for joined room members are included in `/sync` as `m.presence` events in the top-level `presence.events` array.
+
+## Room Tags
+
+```sh
+# Set a tag
+PUT /_matrix/client/v3/user/@user:server/rooms/!room:server/tags/m.favourite
+{"order": 0.5}
+
+# Get tags
+GET /_matrix/client/v3/user/@user:server/rooms/!room:server/tags
+→ {"tags": {"m.favourite": {"order": 0.5}}}
+
+# Delete a tag
+DELETE /_matrix/client/v3/user/@user:server/rooms/!room:server/tags/m.favourite
+```
+
+Tags are returned in `/sync` per joined room as `account_data` events with type `m.tag`.
+
+## Filters
+
+```sh
+# Create a filter
+POST /_matrix/client/v3/user/@user:server/filter
+{"room": {"timeline": {"types": ["m.room.message"]}}}
+→ {"filter_id": "1"}
+
+# Retrieve a filter
+GET /_matrix/client/v3/user/@user:server/filter/1
+
+# Use a filter in /sync
+GET /_matrix/client/v3/sync?filter=1
+```
+
+The `filter` query parameter accepts a filter ID or an inline JSON filter. The `room.timeline.types` field is applied to timeline events.
 
 ## Not Yet Implemented
 

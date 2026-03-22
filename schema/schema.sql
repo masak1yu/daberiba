@@ -129,6 +129,26 @@ CREATE TABLE IF NOT EXISTS presence (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS room_tags (
+    user_id  VARCHAR(255)  NOT NULL,
+    room_id  VARCHAR(255)  NOT NULL,
+    tag      VARCHAR(255)  NOT NULL COMMENT 'm.favourite | m.lowpriority | u.custom 等',
+    order_   DOUBLE        NULL     COMMENT '0.0 - 1.0 の任意ソート順',
+    PRIMARY KEY (user_id, room_id, tag),
+    INDEX idx_room_tags_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (room_id) REFERENCES rooms(room_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS filters (
+    filter_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id   VARCHAR(255)   NOT NULL,
+    filter    MEDIUMTEXT     NOT NULL COMMENT 'JSON filter 定義',
+    PRIMARY KEY (filter_id),
+    INDEX idx_filters_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS room_state (
     room_id    VARCHAR(255)  NOT NULL,
     event_type VARCHAR(255)  NOT NULL,
