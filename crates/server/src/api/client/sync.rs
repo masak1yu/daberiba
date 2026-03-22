@@ -40,7 +40,10 @@ async fn sync(
     };
     let filter = filter_json.as_ref().map(FilterDef::from_json);
 
-    let mut result = db::sync::sync(&state.pool, &user.user_id, query.since.as_deref()).await?;
+    // since トークンを解析: "{stream_ordering}_{acked_to_device_id}" または "{stream_ordering}"
+    let (since_stream, acked_to_device_id) = parse_since(query.since.as_deref());
+
+    let mut result = db::sync::sync(&state.pool, &user.user_id, since_stream.as_deref()).await?;
 
     // ルームごとのタグ（account_data m.tag 用）
     let all_tags = db::room_tags::get_all_for_user(&state.pool, &user.user_id)
@@ -55,6 +58,32 @@ async fn sync(
             content.insert("order".to_string(), serde_json::json!(order));
         }
         entry.insert(tag.tag, serde_json::Value::Object(content));
+    }
+
+    // ユーザー全 account_data を取得（グローバル + ルーム固有）
+    let all_account_data = db::account_data::get_all_for_user(&state.pool, &user.user_id)
+        .await
+        .unwrap_or_default();
+    // グローバル account_data イベント
+    let mut global_account_data_events: Vec<serde_json::Value> = all_account_data
+        .iter()
+        .filter(|(room_id, _, _)| room_id.is_empty())
+        .map(|(_, event_type, content)| {
+            serde_json::json!({
+                "type": event_type,
+                "content": serde_json::from_str::<serde_json::Value>(content).unwrap_or_default(),
+            })
+        })
+        .collect();
+    // ルーム固有 account_data をルーム別に整理
+    let mut room_account_data: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+    for (room_id, event_type, content) in &all_account_data {
+        if !room_id.is_empty() {
+            room_account_data.entry(room_id.clone()).or_default().push(serde_json::json!({
+                "type": event_type,
+                "content": serde_json::from_str::<serde_json::Value>(content).unwrap_or_default(),
+            }));
+        }
     }
 
     let mut presence_user_ids: HashSet<String> = HashSet::new();
@@ -123,7 +152,7 @@ async fn sync(
                 }
             }
 
-            // account_data: m.tag
+            // account_data: m.tag + ルーム固有 account_data
             let mut account_data_events: Vec<serde_json::Value> = Vec::new();
             if let Some(tags) = tags_by_room.get(room_id) {
                 if !tags.is_empty() {
@@ -132,6 +161,9 @@ async fn sync(
                         "content": { "tags": tags },
                     }));
                 }
+            }
+            if let Some(room_events) = room_account_data.get(room_id) {
+                account_data_events.extend_from_slice(room_events);
             }
 
             // account_data フィルター
@@ -196,11 +228,24 @@ async fn sync(
         }
     }
 
-    // to_device.events（配信後に削除）
+    // グローバル account_data フィルター
+    if let Some(ref f) = filter {
+        FilterDef::apply_event_filter(
+            &mut global_account_data_events,
+            &f.account_data_types,
+            &f.account_data_not_types,
+        );
+    }
+    result["account_data"] = serde_json::json!({ "events": global_account_data_events });
+
+    // to_device.events（at-least-once 配信）
+    // 前回 sync で返したメッセージを ack（since があれば acked_to_device_id 以下を削除）
+    let _ = db::to_device::delete_acked(&state.pool, &user.user_id, acked_to_device_id).await;
+
     let pending = db::to_device::get_pending(&state.pool, &user.user_id)
         .await
         .unwrap_or_default();
-    let delivered_ids: Vec<u64> = pending.iter().map(|m| m.id).collect();
+    let max_to_device_id = pending.iter().map(|m| m.id).max().unwrap_or(0);
     let to_device_events: Vec<serde_json::Value> = pending
         .into_iter()
         .map(|m| {
@@ -212,9 +257,26 @@ async fn sync(
             })
         })
         .collect();
-    let _ = db::to_device::delete_delivered(&state.pool, &delivered_ids).await;
 
     result["to_device"] = serde_json::json!({ "events": to_device_events });
 
+    // next_batch を "{stream_ordering}_{max_to_device_id}" に更新
+    let stream_ordering = result["next_batch"].as_str().unwrap_or("0").to_string();
+    result["next_batch"] = serde_json::json!(format!("{stream_ordering}_{max_to_device_id}"));
+
     Ok(Json(result))
+}
+
+/// since トークンを解析して (stream_ordering, acked_to_device_id) を返す
+/// フォーマット: "{stream_ordering}_{acked_to_device_id}" または "{stream_ordering}"
+fn parse_since(since: Option<&str>) -> (Option<String>, u64) {
+    let Some(s) = since else {
+        return (None, 0);
+    };
+    if let Some((ord, acked)) = s.split_once('_') {
+        let acked_id = acked.parse::<u64>().unwrap_or(0);
+        (Some(ord.to_string()), acked_id)
+    } else {
+        (Some(s.to_string()), 0)
+    }
 }
