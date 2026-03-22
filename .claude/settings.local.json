@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -r \"\"ba\"\" /workspaces/daberiba --include=*.rs --include=*.toml --include=*.md --include=*.yml)",
+      "Bash(grep -r ''ba'' /workspaces/daberiba --include=*.rs --include=*.toml --include=*.md --include=*.yml)"
+    ]
+  }
+}
