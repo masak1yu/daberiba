@@ -40,8 +40,9 @@ async fn sync(
     };
     let filter = filter_json.as_ref().map(FilterDef::from_json);
 
-    // since トークンを解析: "{stream_ordering}_{acked_to_device_id}" または "{stream_ordering}"
-    let (since_stream, acked_to_device_id) = parse_since(query.since.as_deref());
+    // since トークンを解析: "{stream_ordering}_{acked_to_device_id}_{since_ms}" または旧形式
+    let (since_stream, acked_to_device_id, account_data_since_ms) =
+        parse_since(query.since.as_deref());
 
     let mut result = db::sync::sync(&state.pool, &user.user_id, since_stream.as_deref()).await?;
 
@@ -60,10 +61,11 @@ async fn sync(
         entry.insert(tag.tag, serde_json::Value::Object(content));
     }
 
-    // ユーザー全 account_data を取得（グローバル + ルーム固有）
-    let all_account_data = db::account_data::get_all_for_user(&state.pool, &user.user_id)
-        .await
-        .unwrap_or_default();
+    // ユーザー全 account_data を取得（グローバル + ルーム固有）。since がある場合は差分のみ
+    let all_account_data =
+        db::account_data::get_for_sync(&state.pool, &user.user_id, account_data_since_ms)
+            .await
+            .unwrap_or_default();
     // グローバル account_data イベント
     let mut global_account_data_events: Vec<serde_json::Value> = all_account_data
         .iter()
@@ -260,23 +262,27 @@ async fn sync(
 
     result["to_device"] = serde_json::json!({ "events": to_device_events });
 
-    // next_batch を "{stream_ordering}_{max_to_device_id}" に更新
+    // next_batch を "{stream_ordering}_{max_to_device_id}_{now_ms}" に更新
     let stream_ordering = result["next_batch"].as_str().unwrap_or("0").to_string();
-    result["next_batch"] = serde_json::json!(format!("{stream_ordering}_{max_to_device_id}"));
+    let now_ms = chrono::Utc::now().timestamp_millis() as u64;
+    result["next_batch"] =
+        serde_json::json!(format!("{stream_ordering}_{max_to_device_id}_{now_ms}"));
 
     Ok(Json(result))
 }
 
-/// since トークンを解析して (stream_ordering, acked_to_device_id) を返す
-/// フォーマット: "{stream_ordering}_{acked_to_device_id}" または "{stream_ordering}"
-fn parse_since(since: Option<&str>) -> (Option<String>, u64) {
+/// since トークンを解析して (stream_ordering, acked_to_device_id, account_data_since_ms) を返す
+/// フォーマット: "{ord}_{to_device_id}_{since_ms}" / "{ord}_{to_device_id}" / "{ord}"
+fn parse_since(since: Option<&str>) -> (Option<String>, u64, Option<u64>) {
     let Some(s) = since else {
-        return (None, 0);
+        return (None, 0, None);
     };
-    if let Some((ord, acked)) = s.split_once('_') {
-        let acked_id = acked.parse::<u64>().unwrap_or(0);
-        (Some(ord.to_string()), acked_id)
-    } else {
-        (Some(s.to_string()), 0)
-    }
+    let parts: Vec<&str> = s.splitn(3, '_').collect();
+    let ord = Some(parts[0].to_string());
+    let acked = parts
+        .get(1)
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(0);
+    let since_ms = parts.get(2).and_then(|v| v.parse::<u64>().ok());
+    (ord, acked, since_ms)
 }

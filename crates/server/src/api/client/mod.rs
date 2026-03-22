@@ -9,6 +9,7 @@ pub mod keys;
 pub mod presence;
 pub mod profile;
 pub mod public_rooms;
+pub mod push_rules;
 pub mod pushers;
 pub mod receipts;
 pub mod room_aliases;
