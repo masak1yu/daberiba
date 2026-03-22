@@ -33,7 +33,7 @@ struct SendEventPath {
     #[serde(rename = "eventType")]
     event_type: String,
     #[serde(rename = "txnId")]
-    txn_id: String,
+    _txn_id: String,
 }
 
 async fn send_event(
