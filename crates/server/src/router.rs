@@ -13,6 +13,7 @@ pub fn build(state: AppState) -> Router {
     // 認証必須ルート
     let protected = Router::new()
         .merge(api::client::account::routes())
+        .merge(api::client::account_data::routes())
         .merge(api::client::filters::routes())
         .merge(api::client::room_tags::routes())
         .merge(api::client::devices::routes())

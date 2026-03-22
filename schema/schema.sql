@@ -186,6 +186,17 @@ CREATE TABLE IF NOT EXISTS to_device_messages (
     FOREIGN KEY (recipient) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS account_data (
+    user_id    VARCHAR(255) NOT NULL,
+    room_id    VARCHAR(255) NOT NULL DEFAULT '' COMMENT '空文字=グローバル、非空=ルーム固有',
+    event_type VARCHAR(255) NOT NULL,
+    content    MEDIUMTEXT   NOT NULL COMMENT 'JSON',
+    updated_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (user_id, room_id, event_type),
+    INDEX idx_account_data_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS room_state (
     room_id    VARCHAR(255)  NOT NULL,
     event_type VARCHAR(255)  NOT NULL,

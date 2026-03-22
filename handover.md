@@ -1,9 +1,9 @@
-# Handover — v0.9.0 → v0.10.0
+# Handover — v0.10.0 → v0.11.0
 
-## v0.9.0 でやったこと
+## v0.10.0 でやったこと
 
-- **招待フロー改善**: `room_memberships` に `invited_by VARCHAR(255) NULL` カラムを追加。`db::rooms::invite()` が招待者 user_id を保存するように変更。`db::rooms::invited_rooms()` 追加。`/sync` の `rooms.invite` に stripped state（m.room.name / m.room.member）を含めるよう対応。招待時に被招待者の HTTP pusher へ非同期 push 通知を送信（ベストエフォート）。
-- **E2EE 鍵管理**: `device_keys`（user_id, device_id, key_json）・`one_time_keys`（id AUTO_INCREMENT, user_id, device_id, key_id, key_json）テーブルを追加。DB 層 `crates/db/src/keys.rs`（upload_device_keys / upload_one_time_keys / get_device_keys / claim_one_time_key / count_one_time_keys）実装。API 層 `crates/server/src/api/client/keys.rs`（POST /keys/upload / /keys/query / /keys/claim）実装。
+- **account_data**: グローバル・ルーム固有の account_data を保存・取得する API を実装。`account_data` テーブル追加（user_id, room_id, event_type, content）。`PUT/GET /_matrix/client/v3/user/{userId}/account_data/{type}` および `PUT/GET /_matrix/client/v3/user/{userId}/rooms/{roomId}/account_data/{type}` を実装。`/sync` のトップレベル `account_data.events`（グローバル）と各ルームの `account_data.events`（ルーム固有 + m.tag）に統合。
+- **to_device at-least-once 化**: `/sync` の `next_batch` トークンを `{stream_ordering}_{max_to_device_id}` 形式に変更。`since` トークンから acked_to_device_id を解析し、次回 sync 呼び出し時に `id <= acked_id` のメッセージを削除してから新規メッセージを返す。クライアントが sync 応答を受信失敗した場合でも次回 sync で再取得可能。`db::to_device::delete_acked()` に変更（旧 `delete_delivered()` を置換）。
 
 ## 既知の課題・技術的負債
 
@@ -11,20 +11,19 @@
 |---|---|
 | UIA ステージ m.login.password のみ | Matrix 仕様では他ステージ（m.login.sso 等）も定義されているが未対応 |
 | TypingStore はサーバー再起動でリセット | インメモリのため永続化なし（Matrix 仕様上は許容範囲） |
-| receipts / room_aliases / presence / unread / room_tags / filters / to_device / keys は非マクロ | sqlx offline モードでは `sqlx::query()` 非マクロを使用。`cargo sqlx prepare` でマクロ移行可能 |
+| 非マクロ sqlx クエリ | receipts / room_aliases / presence / unread / room_tags / filters / to_device / keys / account_data は `sqlx::query()` 非マクロを使用。`cargo sqlx prepare` でマクロ移行可能 |
 | highlight_count は LIKE 検索 | content に user_id 文字列が含まれるかどうかの簡易実装 |
 | プレゼンスは登録ユーザーのみ | `PUT /presence` を一度も呼んでいないユーザーは sync の presence.events に出現しない |
-| to_device は at-most-once 配信 | sync で返した後に即削除するため、クライアントが受信失敗した場合に再送不可 |
 | E2EE は鍵交換のみ | Olm セッション確立や Megolm グループセッション管理はクライアント側実装。サーバーは鍵の保存・中継のみ |
 | dnsname CNI プラグイン問題（WSL） | Ubuntu 20.04 + podman 3.4.2 では dnsname が動かないため `podman compose up migrate` が失敗する。`mysql` クライアント直接接続で回避 |
 | compose TLS workaround | GitHub からのバイナリ取得に `curl -k` を使用。社内 CA 証明書をコンテナに追加するのが正式対応 |
 
-## v0.10.0 候補
+## v0.11.0 候補
 
 1. **Federation 基盤** — `/_matrix/federation/` の基本実装（サーバー間通信）
-2. **to_device at-least-once 化** — sync next_batch ベースの既読管理に変更
-3. **E2EE 鍵バックアップ** — `/_matrix/client/v3/room_keys/` エンドポイント（Megolm セッションキーのサーバー保管）
-4. **account_data** — `PUT/GET /_matrix/client/v3/user/{userId}/account_data/{type}` でクライアントデータ保存
+2. **E2EE 鍵バックアップ** — `/_matrix/client/v3/room_keys/` エンドポイント（Megolm セッションキーのサーバー保管）
+3. **push_rules** — `/_matrix/client/v3/pushrules/` で通知ルール管理（デフォルトルール + ユーザーカスタムルール）
+4. **account_data sync since 対応** — `since` がある場合は updated_at > since の差分のみ返すように最適化
 
 ## 開発フロー（おさらい）
 

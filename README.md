@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.9.0 — Client-Server API Phase 9 (functional, not production-ready)
+**Status:** v0.10.0 — Client-Server API Phase 10 (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -78,6 +78,8 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | POST | `/_matrix/client/v3/keys/upload` | Upload device keys / one-time keys |
 | POST | `/_matrix/client/v3/keys/query` | Query device keys for users |
 | POST | `/_matrix/client/v3/keys/claim` | Claim one-time keys |
+| GET/PUT | `/_matrix/client/v3/user/{userId}/account_data/{type}` | Global account data |
+| GET/PUT | `/_matrix/client/v3/user/{userId}/rooms/{roomId}/account_data/{type}` | Room account data |
 | POST | `/_matrix/media/v3/upload` | Upload media |
 | GET | `/_matrix/media/v3/download/{serverName}/{mediaId}` | Download media |
 
@@ -351,6 +353,25 @@ The `filter` query parameter accepts a filter ID or an inline JSON filter. The f
 | `room.account_data.types` / `not_types` | Filter per-room account_data events |
 | `presence.types` / `not_types` | Filter presence events |
 
+## Account Data
+
+Store arbitrary client-side data per user (global) or per room:
+
+```sh
+# Set global account data
+PUT /_matrix/client/v3/user/@user:server/account_data/m.push_rules
+{"global": {"content": [...]}}
+
+# Get global account data
+GET /_matrix/client/v3/user/@user:server/account_data/m.push_rules
+
+# Set room-level account data
+PUT /_matrix/client/v3/user/@user:server/rooms/!room:server/account_data/m.fully_read
+{"event_id": "$abc:server"}
+```
+
+Global account data events are returned in `/sync` under `account_data.events`. Room account data events are returned per room in `rooms.join.{roomId}.account_data.events` (alongside `m.tag`).
+
 ## To-Device Messages
 
 ```sh
@@ -364,7 +385,9 @@ PUT /_matrix/client/v3/sendToDevice/m.room.key/txn1
 }
 ```
 
-Pending to-device events are returned in `/sync` under `to_device.events` and deleted after delivery.
+Pending to-device events are returned in `/sync` under `to_device.events`. Delivery uses **at-least-once** semantics: messages are not deleted until the next `/sync` call acknowledges them via the `since` token.
+
+The `next_batch` token encodes both the event stream cursor and the to-device ack position (`{stream_ordering}_{max_to_device_id}`). On the next `/sync?since=<token>`, messages up to the acked ID are deleted before returning new pending messages.
 
 ## Invite Flow
 
