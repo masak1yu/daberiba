@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "UPDATE users SET avatar_url = ? WHERE user_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "49c18d7198e8d25d75868470b619998f147bdfa5b2ae0f4772eb91eff9f268fa"
+}

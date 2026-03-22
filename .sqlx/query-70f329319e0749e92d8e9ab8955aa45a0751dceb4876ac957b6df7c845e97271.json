@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "INSERT INTO room_memberships (room_id, user_id, membership) VALUES (?, ?, 'join')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "70f329319e0749e92d8e9ab8955aa45a0751dceb4876ac957b6df7c845e97271"
+}

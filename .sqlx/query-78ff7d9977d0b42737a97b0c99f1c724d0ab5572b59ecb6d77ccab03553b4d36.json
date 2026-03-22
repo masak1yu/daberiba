@@ -1,0 +1,58 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT rm.user_id, rm.membership, u.display_name, u.avatar_url\n           FROM room_memberships rm\n           JOIN users u ON u.user_id = rm.user_id\n           WHERE rm.room_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NOT_NULL | PRIMARY_KEY | MULTIPLE_KEY | NO_DEFAULT_VALUE",
+          "char_set": 224,
+          "max_size": 1020
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "membership",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NOT_NULL | NO_DEFAULT_VALUE",
+          "char_set": 224,
+          "max_size": 128
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "display_name",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "char_set": 224,
+          "max_size": 1020
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "avatar_url",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "char_set": 224,
+          "max_size": 4096
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "78ff7d9977d0b42737a97b0c99f1c724d0ab5572b59ecb6d77ccab03553b4d36"
+}

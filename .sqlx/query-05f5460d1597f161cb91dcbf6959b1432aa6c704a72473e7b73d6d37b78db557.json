@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "UPDATE room_memberships SET membership = 'leave' WHERE room_id = ? AND user_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "05f5460d1597f161cb91dcbf6959b1432aa6c704a72473e7b73d6d37b78db557"
+}

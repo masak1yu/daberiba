@@ -3,7 +3,7 @@ use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
-use sqlx::{MySqlPool, Row};
+use sqlx::MySqlPool;
 use uuid::Uuid;
 
 pub async fn register(
@@ -16,11 +16,13 @@ pub async fn register(
     let password_hash = hash_password(password)?;
     let device_id = Uuid::new_v4().to_string().to_uppercase()[..8].to_string();
 
-    sqlx::query("INSERT INTO users (user_id, password_hash) VALUES (?, ?)")
-        .bind(&user_id)
-        .bind(&password_hash)
-        .execute(pool)
-        .await?;
+    sqlx::query!(
+        "INSERT INTO users (user_id, password_hash) VALUES (?, ?)",
+        user_id,
+        password_hash
+    )
+    .execute(pool)
+    .await?;
 
     crate::devices::create(pool, &user_id, &device_id).await?;
     let access_token = crate::access_tokens::create(pool, &user_id, &device_id).await?;
@@ -40,14 +42,12 @@ pub async fn login(
         format!("@{}:{}", username, server_name)
     };
 
-    let row = sqlx::query("SELECT password_hash FROM users WHERE user_id = ?")
-        .bind(&user_id)
+    let row = sqlx::query!("SELECT password_hash FROM users WHERE user_id = ?", user_id)
         .fetch_optional(pool)
         .await?
         .ok_or_else(|| anyhow::anyhow!("invalid credentials"))?;
 
-    let password_hash: String = row.get("password_hash");
-    verify_password(password, &password_hash)?;
+    verify_password(password, &row.password_hash)?;
 
     let device_id = Uuid::new_v4().to_string().to_uppercase()[..8].to_string();
     crate::devices::create(pool, &user_id, &device_id).await?;
@@ -62,23 +62,35 @@ pub async fn change_password(
     old_password: &str,
     new_password: &str,
 ) -> Result<()> {
-    let row = sqlx::query("SELECT password_hash FROM users WHERE user_id = ?")
-        .bind(user_id)
+    let row = sqlx::query!("SELECT password_hash FROM users WHERE user_id = ?", user_id)
         .fetch_optional(pool)
         .await?
         .ok_or_else(|| anyhow::anyhow!("user not found"))?;
 
-    let password_hash: String = row.get("password_hash");
-    verify_password(old_password, &password_hash)?;
+    verify_password(old_password, &row.password_hash)?;
 
     let new_hash = hash_password(new_password)?;
-    sqlx::query("UPDATE users SET password_hash = ? WHERE user_id = ?")
-        .bind(&new_hash)
-        .bind(user_id)
-        .execute(pool)
-        .await?;
+    sqlx::query!(
+        "UPDATE users SET password_hash = ? WHERE user_id = ?",
+        new_hash,
+        user_id
+    )
+    .execute(pool)
+    .await?;
 
     Ok(())
+}
+
+/// パスワードが正しいか検証する（変更は行わない）
+pub async fn verify(pool: &MySqlPool, user_id: &str, password: &str) -> Result<bool> {
+    let row = sqlx::query!("SELECT password_hash FROM users WHERE user_id = ?", user_id)
+        .fetch_optional(pool)
+        .await?;
+
+    match row {
+        Some(r) => Ok(verify_password(password, &r.password_hash).is_ok()),
+        None => Ok(false),
+    }
 }
 
 fn hash_password(password: &str) -> Result<String> {

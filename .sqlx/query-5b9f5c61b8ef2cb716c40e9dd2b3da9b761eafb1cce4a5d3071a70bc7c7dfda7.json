@@ -1,0 +1,58 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT device_id, display_name, last_seen_ts, last_seen_ip FROM devices WHERE user_id = ? ORDER BY created_at ASC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "device_id",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NOT_NULL | PRIMARY_KEY | NO_DEFAULT_VALUE",
+          "char_set": 224,
+          "max_size": 1020
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "display_name",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "char_set": 224,
+          "max_size": 1020
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "last_seen_ts",
+        "type_info": {
+          "type": "LongLong",
+          "flags": "",
+          "char_set": 63,
+          "max_size": 20
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "last_seen_ip",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "char_set": 224,
+          "max_size": 256
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "5b9f5c61b8ef2cb716c40e9dd2b3da9b761eafb1cce4a5d3071a70bc7c7dfda7"
+}

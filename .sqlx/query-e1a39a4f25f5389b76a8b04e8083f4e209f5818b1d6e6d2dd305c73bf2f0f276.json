@@ -1,0 +1,25 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "room_id",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NOT_NULL | PRIMARY_KEY | NO_DEFAULT_VALUE",
+          "char_set": 224,
+          "max_size": 1020
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e1a39a4f25f5389b76a8b04e8083f4e209f5818b1d6e6d2dd305c73bf2f0f276"
+}
