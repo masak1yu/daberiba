@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "INSERT INTO events (event_id, room_id, sender, event_type, state_key, content)\n           VALUES (?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "6ab10180c2be9fce291b4b44558926cfe2f1da03d4db5256226b834a623ba1dc"
+}

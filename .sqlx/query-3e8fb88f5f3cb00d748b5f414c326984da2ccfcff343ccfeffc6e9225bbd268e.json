@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "UPDATE devices SET last_seen_ts = ?, last_seen_ip = ? WHERE user_id = ? AND device_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "3e8fb88f5f3cb00d748b5f414c326984da2ccfcff343ccfeffc6e9225bbd268e"
+}

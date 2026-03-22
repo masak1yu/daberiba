@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 
-**Status:** v0.2.1 — Client-Server API Phase 2 (functional, not production-ready)
+**Status:** v0.3.0 — Client-Server API Phase 3 (functional, not production-ready)
 
 ## Tech Stack
 
@@ -136,7 +136,13 @@ Copy `.env.example` to `.env` and adjust as needed.
 | `BIND_ADDR` | `0.0.0.0:8448` | Server listen address |
 | `SERVER_NAME` | `localhost` | Matrix server name (used in user/room IDs) |
 | `CORS_ORIGINS` | `*` | Allowed CORS origins (`*` or comma-separated URLs) |
+| `MEDIA_BACKEND` | `local` | Media storage backend: `local` or `s3` (requires `--features server/s3`) |
 | `MEDIA_PATH` | `./media` | Local media file storage directory |
+| `S3_BUCKET` | — | S3 bucket name (required when `MEDIA_BACKEND=s3`) |
+| `AWS_REGION` | — | AWS region (S3) |
+| `AWS_ACCESS_KEY_ID` | — | AWS access key (S3) |
+| `AWS_SECRET_ACCESS_KEY` | — | AWS secret key (S3) |
+| `AWS_ENDPOINT_URL` | — | Custom endpoint for S3-compatible storage (e.g. MinIO) |
 | `RUST_LOG` | `server=debug,tower_http=debug` | Log level |
 
 > **Note:** The local DB is mapped to port `13306` to avoid conflicts with any locally running MySQL on `3306`.
@@ -176,6 +182,14 @@ ba/
 
 - Push notifications (`/pushers/set`)
 - Federation (`/_matrix/federation`) — out of scope for now
+
+## UIA (User Interactive Authentication)
+
+`POST /account/password` and `POST /delete_devices` require UIA with `m.login.password`.
+
+**Flow:**
+1. Send request without `auth` → server returns `401` with `flows` and `session`
+2. Re-send with `auth.type = "m.login.password"` and `auth.password = "<current-password>"`
 
 ## License
 

@@ -2,10 +2,12 @@ use crate::{
     error::{ApiResult, AppError},
     middleware::auth::AuthUser,
     state::AppState,
+    uia,
 };
 use axum::{
     extract::{Path, State},
     http::StatusCode,
+    response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
@@ -95,13 +97,29 @@ async fn delete_device(
 #[derive(Deserialize)]
 struct DeleteDevicesBody {
     devices: Vec<String>,
+    #[serde(default)]
+    auth: Option<serde_json::Value>,
 }
 
 async fn delete_devices(
     State(state): State<AppState>,
     axum::Extension(user): axum::Extension<AuthUser>,
     Json(body): Json<DeleteDevicesBody>,
-) -> ApiResult<Json<serde_json::Value>> {
-    db::devices::delete_many(&state.pool, &user.user_id, &body.devices).await?;
-    Ok(Json(serde_json::json!({})))
+) -> impl IntoResponse {
+    // auth がない、または type が m.login.password でない → UIA チャレンジ
+    let password = match body.auth.as_ref().and_then(uia::extract_password) {
+        Some(p) => p.to_string(),
+        None => return uia::challenge().into_response(),
+    };
+
+    // パスワード検証
+    match db::users::verify(&state.pool, &user.user_id, &password).await {
+        Ok(true) => {}
+        _ => return AppError::Forbidden.into_response(),
+    }
+
+    match db::devices::delete_many(&state.pool, &user.user_id, &body.devices).await {
+        Ok(()) => Json(serde_json::json!({})).into_response(),
+        Err(e) => AppError::Internal(e).into_response(),
+    }
 }

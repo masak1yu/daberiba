@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "INSERT INTO rooms (room_id, creator_user_id, name, topic) VALUES (?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "fd5e65fb585d20da606fbf5c9d56a8b380b19f7b2a99aad8f1fd2a58c6c1a534"
+}

@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "INSERT INTO room_memberships (room_id, user_id, membership)\n           VALUES (?, ?, 'join')\n           ON DUPLICATE KEY UPDATE membership = 'join'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "71dcd20ca0b05bb1fd916216554e81997a947459b792c1262f296e784e585f96"
+}

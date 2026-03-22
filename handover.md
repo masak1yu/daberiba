@@ -1,65 +1,51 @@
-# Handover — v0.2.0 → v0.3.0
+# Handover — v0.3.0 → v0.4.0
 
-## v0.2.0 でやったこと
+## v0.3.0 でやったこと
 
-- **sync cursor 改善**: `events` テーブルに `stream_ordering BIGINT AUTO_INCREMENT` を追加。`since`/`next_batch` をタイムスタンプ依存から stream_ordering ベースに変更し、同一ミリ秒内の複数イベント取りこぼし問題を解消
-- **デバイス管理 API**: `devices` テーブル新規追加。`GET/PUT/DELETE /devices/{deviceId}`, `POST /delete_devices` の5エンドポイントを実装。register/login 時に devices テーブルへ自動登録
-- **パスワード変更 API**: `POST /account/password`（旧パスワード検証 → argon2 再ハッシュ → UPDATE）
-- **メディア API**: `MediaStore` trait で Local/S3 差し替え可能な設計。`LocalStore` 実装（サブディレクトリ分散）。`POST /upload`, `GET /download/{serverName}/{mediaId}`
-- **Dockerfile.tools アーキテクチャ対応**: `TARGETARCH` ハードコードを廃止し `uname -m` 自動検出に変更（Mac/WSL 両対応）
-- **GitGuardian 対策**: `compose.yml` からパスワードのデフォルト値（`changeme`）を撤廃。`.env.example` をプレースホルダー形式に変更
-- **sqlx offline mode**: 現在 `sqlx::query()`（runtime）を使用しているため DB なしで `cargo build` が通る。`SQLX_OFFLINE=true` も動作確認済み
+- **devices last_seen 更新**: 認証ミドルウェアで `tokio::spawn` による非同期更新。IP は `X-Real-IP` → `X-Forwarded-For` → `ConnectInfo` の優先順で取得。`main.rs` に `into_make_service_with_connect_info` を追加
+- **sqlx `query!` マクロ移行**: `crates/db/src/` 全8ファイルをコンパイル時型チェック対応に移行。`Device`・`MediaRecord` に `#[derive(sqlx::FromRow)]` 追加。`.sqlx/` をコミット済み（DB なしビルド対応）。`sync.rs` の `stream_ordering` を `u64` に統一
+- **UIA（User Interactive Authentication）**: `m.login.password` ステージのみ対応。`POST /account/password` と `POST /delete_devices` に適用。`uia.rs` モジュール新規追加。`db::users::verify` 追加（パスワード検証のみ）
+- **メディア S3 対応**: `S3Store` 実装（`--features server/s3`）。`MEDIA_BACKEND=s3` + `S3_BUCKET` 環境変数で切り替え。MinIO 等の S3 互換ストレージも `AWS_ENDPOINT_URL` で対応
 
 ## 既知の課題・技術的負債
 
 | 項目 | 詳細 |
 |---|---|
-| sqlx compile-time check 未使用 | `query!()` マクロへ移行すると型安全になるが大規模リファクタ。移行後に `cargo sqlx prepare` → `.sqlx/` をコミット |
-| パスワード変更の UIA 未実装 | `/account/password` は現在 Bearer 認証のみ。Matrix 仕様では User Interactive Authentication が推奨 |
-| delete_devices の UIA 未実装 | 同上。`POST /delete_devices` も本来 UIA が必要 |
-| メディアの S3 対応未実装 | `MediaStore` trait は用意済み。`S3Store` を追加するだけで差し替え可能 |
-| メディアのアクセス制御なし | 現状は認証ユーザー全員がダウンロード可能 |
-| devices の last_seen_ts/ip 未更新 | テーブルはあるが API リクエスト時に更新するロジックがない |
+| UIA セッション管理なし | session ID を発行するだけで検証していない。本来は有効期限付きセッションをメモリ or DB で管理すべき |
+| UIA ステージ m.login.password のみ | Matrix 仕様では他ステージ（m.login.sso 等）も定義されているが未対応 |
 | dnsname CNI プラグイン問題（WSL） | Ubuntu 20.04 + podman 3.4.2 では dnsname が動かないため `podman compose up migrate` が失敗する。`mysql` クライアント直接接続で回避 |
 | compose TLS workaround | GitHub からのバイナリ取得に `curl -k` を使用。社内 CA 証明書をコンテナに追加するのが正式対応 |
+| メディアのアクセス制御なし | 現状は認証ユーザー全員がダウンロード可能 |
 
-## v0.3.0 でやること（候補）
+## v0.4.0 でやること（候補）
 
-### 1. Push Notification（任意）
+### 1. Push Notification
 - `POST /_matrix/client/v3/pushers/set`
+- pusher テーブル追加・FCM/APNs 送信は外部サービス依存
 
-### 2. sqlx query! マクロ移行
-全クエリを `query!()` / `query_as!()` に移行してコンパイル時型チェックを有効化
-```sh
-DATABASE_URL=... cargo sqlx prepare --workspace
-git add .sqlx/
-```
+### 2. UIA セッション管理強化
+- session ID の有効期限チェック（5分 TTL 等）
+- `auth_sessions` テーブル or インメモリ（DashMap）で管理
 
-### 3. UIA（User Interactive Authentication）
-- パスワード変更・デバイス削除に UIA フローを追加
-- `POST /_matrix/client/v3/auth/...`
+### 3. メディアのアクセス制御
+- ルーム参加者のみダウンロード可能にする
+- `media` テーブルに `room_id` 関連付けか、ダウンロード時にメンバーチェック
 
-### 4. メディア S3 対応
-```rust
-// S3Store を実装して MEDIA_BACKEND=s3 で切り替え
-pub struct S3Store { ... }
-impl MediaStore for S3Store { ... }
-```
-
-### 5. devices last_seen 更新
-認証ミドルウェアで `devices.last_seen_ts` / `last_seen_ip` を更新
+### 4. Pagination（`/messages` の `from`/`to` トークン）
+- 現在 `LIMIT` のみで cursor ベースのページネーションが未実装
 
 ## 開発フロー（おさらい）
 
 ```sh
 # 環境起動（DB）
-podman compose up -d db
-
-# スキーマ適用（dnsname 問題がある場合は直接接続）
-mysql -h 127.0.0.1 -P 13306 -u matrix -p matrix < schema/schema.sql
+docker compose up -d db
+docker compose run --rm migrate
 
 # ホストでサーバ起動
 cargo run --bin server
+
+# S3 ビルド（MinIO 等）
+cargo build --features server/s3
 
 # スキーマ変更時
 #   1. schema/schema.sql を編集
@@ -67,6 +53,9 @@ cargo run --bin server
 ./dev schema-dry-run
 #   3. 適用
 ./dev schema-apply
+
+# sqlx offline 用メタデータ再生成（クエリ変更時）
+DATABASE_URL=... cargo sqlx prepare --workspace
 
 # テスト
 cargo test
@@ -78,8 +67,9 @@ cargo fmt
 ## 環境設定
 
 - `.env.example` → `.env` にコピーしてパスワードを設定（`.env` は gitignore 済み）
-- `MEDIA_PATH` でメディア保存先を変更可能（デフォルト `./media`）
-- `SQLX_OFFLINE=true` で DB なしビルド可能
+- `DB_ROOT_PASS` が必須（MariaDB コンテナ起動時）
+- `MEDIA_BACKEND=s3` + `S3_BUCKET` で S3 に切り替え可能（`--features server/s3` でビルド）
+- `SQLX_OFFLINE=true` で DB なしビルド可能（`.sqlx/` がコミット済みのため CI でも動作）
 
 ## ブランチ戦略
 
