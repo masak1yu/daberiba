@@ -1,5 +1,5 @@
 -- Matrix サーバ スキーマ
--- sqldef (mariadb-def) で管理
+-- sqldef (mysqldef) で管理
 
 CREATE TABLE IF NOT EXISTS users (
     user_id       VARCHAR(255)  NOT NULL COMMENT '@localpart:server_name',

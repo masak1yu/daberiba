@@ -68,7 +68,7 @@ A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 
 Codespace を開くだけで以下が自動セットアップされます。
 
-- Rust toolchain、`just`、`mariadb-def` インストール済み
+- Rust toolchain、`just`、`mysqldef` インストール済み
 - MariaDB 起動済み
 - `claude` コマンド (`@anthropic-ai/claude-code`) インストール済み
 - ポート `8448` を自動フォワード
