@@ -1,5 +1,9 @@
 FROM mcr.microsoft.com/devcontainers/rust:1-bookworm
 
+# Node.js LTS
+RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
+    && apt-get install -y nodejs
+
 # just (タスクランナー)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
     | bash -s -- --to /usr/local/bin
