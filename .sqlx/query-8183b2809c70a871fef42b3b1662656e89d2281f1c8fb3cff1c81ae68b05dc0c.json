@@ -1,0 +1,25 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT 1 AS ok FROM room_memberships WHERE room_id = ? AND user_id = ? AND membership = 'join'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "ok",
+        "type_info": {
+          "type": "Long",
+          "flags": "NOT_NULL | BINARY",
+          "char_set": 63,
+          "max_size": 1
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "8183b2809c70a871fef42b3b1662656e89d2281f1c8fb3cff1c81ae68b05dc0c"
+}

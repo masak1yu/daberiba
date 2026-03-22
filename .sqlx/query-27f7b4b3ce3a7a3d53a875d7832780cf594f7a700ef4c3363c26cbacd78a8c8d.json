@@ -1,11 +1,11 @@
 {
   "db_name": "MySQL",
-  "query": "SELECT media_id, server_name, user_id, content_type, filename, file_size FROM media WHERE server_name = ? AND media_id = ?",
+  "query": "SELECT p.app_id, p.pushkey, p.user_id, p.kind,\n                  p.app_display_name, p.device_display_name, p.lang, p.data\n           FROM pushers p\n           JOIN room_memberships rm ON rm.user_id = p.user_id\n           WHERE rm.room_id = ? AND rm.membership = 'join' AND p.user_id != ?",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "media_id",
+        "name": "app_id",
         "type_info": {
           "type": "VarString",
           "flags": "NOT_NULL | PRIMARY_KEY | NO_DEFAULT_VALUE",
@@ -15,12 +15,12 @@
       },
       {
         "ordinal": 1,
-        "name": "server_name",
+        "name": "pushkey",
         "type_info": {
           "type": "VarString",
           "flags": "NOT_NULL | PRIMARY_KEY | NO_DEFAULT_VALUE",
           "char_set": 224,
-          "max_size": 1020
+          "max_size": 2048
         }
       },
       {
@@ -35,32 +35,52 @@
       },
       {
         "ordinal": 3,
-        "name": "content_type",
+        "name": "kind",
         "type_info": {
           "type": "VarString",
           "flags": "NOT_NULL | NO_DEFAULT_VALUE",
           "char_set": 224,
-          "max_size": 1020
+          "max_size": 128
         }
       },
       {
         "ordinal": 4,
-        "name": "filename",
+        "name": "app_display_name",
         "type_info": {
           "type": "VarString",
-          "flags": "",
+          "flags": "NOT_NULL | NO_DEFAULT_VALUE",
           "char_set": 224,
           "max_size": 1020
         }
       },
       {
         "ordinal": 5,
-        "name": "file_size",
+        "name": "device_display_name",
         "type_info": {
-          "type": "LongLong",
+          "type": "VarString",
           "flags": "NOT_NULL | NO_DEFAULT_VALUE",
-          "char_set": 63,
-          "max_size": 20
+          "char_set": 224,
+          "max_size": 1020
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "lang",
+        "type_info": {
+          "type": "VarString",
+          "flags": "NOT_NULL | NO_DEFAULT_VALUE",
+          "char_set": 224,
+          "max_size": 128
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "data",
+        "type_info": {
+          "type": "Blob",
+          "flags": "NOT_NULL | BLOB | NO_DEFAULT_VALUE",
+          "char_set": 224,
+          "max_size": 262140
         }
       }
     ],
@@ -72,9 +92,11 @@
       false,
       false,
       false,
-      true,
+      false,
+      false,
+      false,
       false
     ]
   },
-  "hash": "0d0616b8512e96c41c9f2c06532af8293568e5b7e9ffd78457cd57c83c6518ed"
+  "hash": "27f7b4b3ce3a7a3d53a875d7832780cf594f7a700ef4c3363c26cbacd78a8c8d"
 }

@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "INSERT INTO media (media_id, server_name, user_id, content_type, filename, file_size, room_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 7
+    },
+    "nullable": []
+  },
+  "hash": "e2ed1119a16c584eb1e22e4eb889f2bf73019ca521f23eab72a7abcc686b61ab"
+}

@@ -1,38 +1,26 @@
-# Handover — v0.3.0 → v0.4.0
+# Handover — v0.4.0 → v0.5.0
 
-## v0.3.0 でやったこと
+## v0.4.0 でやったこと
 
-- **devices last_seen 更新**: 認証ミドルウェアで `tokio::spawn` による非同期更新。IP は `X-Real-IP` → `X-Forwarded-For` → `ConnectInfo` の優先順で取得。`main.rs` に `into_make_service_with_connect_info` を追加
-- **sqlx `query!` マクロ移行**: `crates/db/src/` 全8ファイルをコンパイル時型チェック対応に移行。`Device`・`MediaRecord` に `#[derive(sqlx::FromRow)]` 追加。`.sqlx/` をコミット済み（DB なしビルド対応）。`sync.rs` の `stream_ordering` を `u64` に統一
-- **UIA（User Interactive Authentication）**: `m.login.password` ステージのみ対応。`POST /account/password` と `POST /delete_devices` に適用。`uia.rs` モジュール新規追加。`db::users::verify` 追加（パスワード検証のみ）
-- **メディア S3 対応**: `S3Store` 実装（`--features server/s3`）。`MEDIA_BACKEND=s3` + `S3_BUCKET` 環境変数で切り替え。MinIO 等の S3 互換ストレージも `AWS_ENDPOINT_URL` で対応
+- **UIA セッション管理強化**: `UiaStore`（DashMap + Instant）をインメモリで導入。5分 TTL でセッションを検証し一回限り有効に。`AppState` に `uia: Arc<UiaStore>` 追加。`challenge()` でセッション発行・保存、各ハンドラ（`change_password`・`delete_devices`）でセッション ID 検証を追加。ユニットテスト4本追加。
+- **メディアアクセス制御**: `media` テーブルに `room_id`（NULL許可）を追加。アップロード時に `?room_id=` クエリパラメータで関連ルームを指定可能。ダウンロードエンドポイントを認証必須に変更し、`room_id` が設定されている場合は `room_memberships` でメンバーチェック（非メンバーは 403）。`.sqlx/` 再生成済み。
+- **Pagination（`/messages`）**: `GET /rooms/{roomId}/messages` に `from`/`dir`/`limit` クエリパラメータを追加。トークン形式は `s{stream_ordering}`（sync と統一）。`dir=b`（新しい順）・`dir=f`（古い順）、`limit` はデフォルト 10・最大 100。`end` が absent なら末端。動的クエリは `sqlx::query()`（非マクロ）で実装。
+- **Push Notification**: `pushers` テーブル追加。`GET /pushers` と `POST /pushers/set`（upsert/delete）を実装。`kind=http` pusher へはイベント送信時に `tokio::spawn` でベストエフォートな HTTP push を配送（Matrix push gateway プロトコル準拠）。`reqwest` 追加。
 
 ## 既知の課題・技術的負債
 
 | 項目 | 詳細 |
 |---|---|
-| UIA セッション管理なし | session ID を発行するだけで検証していない。本来は有効期限付きセッションをメモリ or DB で管理すべき |
 | UIA ステージ m.login.password のみ | Matrix 仕様では他ステージ（m.login.sso 等）も定義されているが未対応 |
 | dnsname CNI プラグイン問題（WSL） | Ubuntu 20.04 + podman 3.4.2 では dnsname が動かないため `podman compose up migrate` が失敗する。`mysql` クライアント直接接続で回避 |
 | compose TLS workaround | GitHub からのバイナリ取得に `curl -k` を使用。社内 CA 証明書をコンテナに追加するのが正式対応 |
-| メディアのアクセス制御なし | 現状は認証ユーザー全員がダウンロード可能 |
 
-## v0.4.0 でやること（候補）
+## v0.5.0 候補
 
-### 1. Push Notification
-- `POST /_matrix/client/v3/pushers/set`
-- pusher テーブル追加・FCM/APNs 送信は外部サービス依存
-
-### 2. UIA セッション管理強化
-- session ID の有効期限チェック（5分 TTL 等）
-- `auth_sessions` テーブル or インメモリ（DashMap）で管理
-
-### 3. メディアのアクセス制御
-- ルーム参加者のみダウンロード可能にする
-- `media` テーブルに `room_id` 関連付けか、ダウンロード時にメンバーチェック
-
-### 4. Pagination（`/messages` の `from`/`to` トークン）
-- 現在 `LIMIT` のみで cursor ベースのページネーションが未実装
+1. **読み取り確認（Read Receipts）** — `POST /rooms/{roomId}/receipt/{receiptType}/{eventId}`
+2. **タイピングインジケータ** — `PUT /rooms/{roomId}/typing/{userId}`
+3. **ルーム検索** — `GET /publicRooms`
+4. **Federation 基盤** — `/_matrix/federation/` の基本実装（サーバー間通信）
 
 ## 開発フロー（おさらい）
 

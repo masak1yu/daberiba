@@ -31,6 +31,8 @@ pub fn routes() -> Router<AppState> {
 #[derive(Deserialize)]
 struct UploadQuery {
     filename: Option<String>,
+    /// アップロード先ルーム ID（指定するとダウンロードをルームメンバーに制限）
+    room_id: Option<String>,
 }
 
 async fn upload(
@@ -60,6 +62,7 @@ async fn upload(
         &content_type,
         query.filename.as_deref(),
         file_size,
+        query.room_id.as_deref(),
     )
     .await?;
 
@@ -69,26 +72,37 @@ async fn upload(
 
 async fn download(
     State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
     Path((server_name, media_id)): Path<(String, String)>,
 ) -> Result<Response, AppError> {
-    serve_media(&state, &server_name, &media_id).await
+    serve_media(&state, &server_name, &media_id, &user.user_id).await
 }
 
 async fn download_with_filename(
     State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
     Path((server_name, media_id, _filename)): Path<(String, String, String)>,
 ) -> Result<Response, AppError> {
-    serve_media(&state, &server_name, &media_id).await
+    serve_media(&state, &server_name, &media_id, &user.user_id).await
 }
 
 async fn serve_media(
     state: &AppState,
     server_name: &str,
     media_id: &str,
+    user_id: &str,
 ) -> Result<Response, AppError> {
     let record = db::media::get(&state.pool, server_name, media_id)
         .await?
         .ok_or(AppError::NotFound)?;
+
+    // アクセス制御: room_id が設定されていればルームメンバーのみ
+    let accessible = db::media::is_accessible_by(&state.pool, &record, user_id)
+        .await
+        .map_err(AppError::Internal)?;
+    if !accessible {
+        return Err(AppError::Forbidden);
+    }
 
     let data = state
         .media
