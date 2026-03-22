@@ -54,6 +54,16 @@ impl UiaStore {
     }
 }
 
+/// `auth` フィールドから m.login.password のパスワードを取り出す。
+/// `auth.type` が "m.login.password" でなければ None を返す。
+pub fn extract_password(auth: &serde_json::Value) -> Option<&str> {
+    if auth.get("type")?.as_str()? == "m.login.password" {
+        auth.get("password")?.as_str()
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -87,15 +97,5 @@ mod tests {
         let session_id = body["session"].as_str().unwrap();
         // 発行されたセッションが存在する（まだ validate していない）
         assert!(store.0.contains_key(session_id));
-    }
-}
-
-/// `auth` フィールドから m.login.password のパスワードを取り出す。
-/// `auth.type` が "m.login.password" でなければ None を返す。
-pub fn extract_password(auth: &serde_json::Value) -> Option<&str> {
-    if auth.get("type")?.as_str()? == "m.login.password" {
-        auth.get("password")?.as_str()
-    } else {
-        None
     }
 }

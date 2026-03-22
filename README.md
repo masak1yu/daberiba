@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 
-**Status:** v0.4.0 — Client-Server API Phase 4 (functional, not production-ready)
+**Status:** v0.5.0 — Client-Server API Phase 5 (functional, not production-ready)
 
 ## Tech Stack
 
@@ -35,7 +35,7 @@ A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 | POST | `/_matrix/client/v3/account/password` | Change password (UIA) |
 | POST | `/_matrix/client/v3/logout` | Logout |
 | POST | `/_matrix/client/v3/logout/all` | Logout all devices |
-| GET | `/_matrix/client/v3/sync` | Sync (stream_ordering cursor) |
+| GET | `/_matrix/client/v3/sync` | Sync (stream_ordering cursor, ephemeral events) |
 | GET | `/_matrix/client/v3/devices` | List devices |
 | GET | `/_matrix/client/v3/devices/{deviceId}` | Get device |
 | PUT | `/_matrix/client/v3/devices/{deviceId}` | Update device display name |
@@ -54,11 +54,14 @@ A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 | GET | `/_matrix/client/v3/rooms/{roomId}/members` | Room members |
 | GET | `/_matrix/client/v3/rooms/{roomId}/joined_members` | Joined members |
 | POST | `/_matrix/client/v3/rooms/{roomId}/invite` | Invite user |
+| POST | `/_matrix/client/v3/rooms/{roomId}/receipt/{type}/{eventId}` | Send read receipt |
+| PUT | `/_matrix/client/v3/rooms/{roomId}/typing/{userId}` | Set typing indicator |
 | GET/PUT | `/_matrix/client/v3/profile/{userId}` | User profile |
 | GET/PUT | `/_matrix/client/v3/profile/{userId}/displayname` | Display name |
 | GET/PUT | `/_matrix/client/v3/profile/{userId}/avatar_url` | Avatar URL |
 | GET | `/_matrix/client/v3/pushers` | List pushers |
 | POST | `/_matrix/client/v3/pushers/set` | Register / delete pusher |
+| GET | `/_matrix/client/v3/publicRooms` | Public room directory |
 | POST | `/_matrix/media/v3/upload` | Upload media |
 | GET | `/_matrix/media/v3/download/{serverName}/{mediaId}` | Download media |
 
@@ -161,12 +164,13 @@ ba/
 │   │       │   └── media.rs  # Matrix Media API handlers
 │   │       ├── media_store.rs  # MediaStore trait + LocalStore + S3Store
 │   │       ├── middleware/   # Auth (Bearer token) + last_seen update
+│   │       ├── typing_store.rs # TypingStore (in-memory, DashMap + TTL)
 │   │       ├── uia.rs        # User Interactive Authentication (UiaStore)
 │   │       ├── router.rs
 │   │       ├── state.rs
 │   │       └── error.rs      # Matrix-compliant error responses
 │   └── db/              # sqlx database layer
-│       └── src/         # users, rooms, events, sync, profile, devices, media, pushers
+│       └── src/         # users, rooms, events, sync, profile, devices, media, pushers, receipts
 ├── schema/
 │   └── schema.sql        # Managed by sqldef (mysqldef)
 ├── .sqlx/                # sqlx offline query cache (committed)
@@ -216,11 +220,42 @@ Register an HTTP pusher via `POST /pushers/set`:
 
 When an event is sent to a room, the server dispatches HTTP push notifications to all room members' registered pushers (best-effort, non-blocking). Use `kind: null` to delete a pusher.
 
+## Read Receipts
+
+Send a read receipt via `POST /rooms/{roomId}/receipt/m.read/{eventId}`.
+
+Receipts are returned in `/sync` responses as `m.receipt` ephemeral events:
+
+```json
+{
+  "type": "m.receipt",
+  "content": {
+    "$event_id": {
+      "m.read": { "@user:server": { "ts": 1234567890 } }
+    }
+  }
+}
+```
+
+## Typing Indicators
+
+```json
+PUT /rooms/{roomId}/typing/{userId}
+{ "typing": true, "timeout": 30000 }
+```
+
+Active typing users are returned in `/sync` as `m.typing` ephemeral events. State is in-memory and resets on server restart.
+
+## Public Rooms
+
+`GET /publicRooms` returns rooms where `m.room.join_rules` state is set to `"public"`.
+
 ## Not Yet Implemented
 
 - Federation (`/_matrix/federation`) — out of scope for now
-- Read receipts, typing indicators
-- Public room directory
+- Unread notification counts (`unread_notifications` in sync)
+- Room aliases (`/directory/room/{roomAlias}`)
+- Presence
 
 ## License
 

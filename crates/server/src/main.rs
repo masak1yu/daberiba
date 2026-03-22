@@ -9,6 +9,7 @@ mod media_store;
 mod middleware;
 mod router;
 mod state;
+mod typing_store;
 mod uia;
 
 #[cfg(test)]
