@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.7.0 — Client-Server API Phase 7 (functional, not production-ready)
+**Status:** v0.8.0 — Client-Server API Phase 8 (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -74,6 +74,7 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | DELETE | `/_matrix/client/v3/user/{userId}/rooms/{roomId}/tags/{tag}` | Delete room tag |
 | POST | `/_matrix/client/v3/user/{userId}/filter` | Create filter |
 | GET | `/_matrix/client/v3/user/{userId}/filter/{filterId}` | Get filter |
+| PUT | `/_matrix/client/v3/sendToDevice/{eventType}/{txnId}` | Send to-device message |
 | POST | `/_matrix/media/v3/upload` | Upload media |
 | GET | `/_matrix/media/v3/download/{serverName}/{mediaId}` | Download media |
 
@@ -336,7 +337,31 @@ GET /_matrix/client/v3/user/@user:server/filter/1
 GET /_matrix/client/v3/sync?filter=1
 ```
 
-The `filter` query parameter accepts a filter ID or an inline JSON filter. The `room.timeline.types` field is applied to timeline events.
+The `filter` query parameter accepts a filter ID or an inline JSON filter. The following filter fields are supported:
+
+| Field | Effect |
+|---|---|
+| `room.rooms` / `room.not_rooms` | Include / exclude specific rooms |
+| `room.timeline.types` / `not_types` | Filter timeline events by type |
+| `room.state.types` / `not_types` | Filter state events by type |
+| `room.ephemeral.types` / `not_types` | Filter ephemeral events by type |
+| `room.account_data.types` / `not_types` | Filter per-room account_data events |
+| `presence.types` / `not_types` | Filter presence events |
+
+## To-Device Messages
+
+```sh
+PUT /_matrix/client/v3/sendToDevice/m.room.key/txn1
+{
+  "messages": {
+    "@bob:server": {
+      "*": { "algorithm": "m.megolm.v1.aes-sha2", ... }
+    }
+  }
+}
+```
+
+Pending to-device events are returned in `/sync` under `to_device.events` and deleted after delivery.
 
 ## Not Yet Implemented
 

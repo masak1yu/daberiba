@@ -149,6 +149,20 @@ CREATE TABLE IF NOT EXISTS filters (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS to_device_messages (
+    id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    sender     VARCHAR(255)    NOT NULL,
+    recipient  VARCHAR(255)    NOT NULL,
+    device_id  VARCHAR(255)    NOT NULL COMMENT '* = 全デバイス',
+    event_type VARCHAR(255)    NOT NULL,
+    content    MEDIUMTEXT      NOT NULL COMMENT 'JSON',
+    txn_id     VARCHAR(255)    NOT NULL,
+    created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    INDEX idx_to_device_recipient (recipient, id),
+    FOREIGN KEY (recipient) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS room_state (
     room_id    VARCHAR(255)  NOT NULL,
     event_type VARCHAR(255)  NOT NULL,
