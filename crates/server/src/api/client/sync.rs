@@ -5,6 +5,7 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
+use std::collections::HashSet;
 
 pub fn routes() -> Router<AppState> {
     Router::new().route("/_matrix/client/v3/sync", get(sync))
@@ -27,6 +28,9 @@ async fn sync(
     let mut result = db::sync::sync(&state.pool, &user.user_id, query.since.as_deref()).await?;
 
     // 各参加ルームに ephemeral イベント（m.typing / m.receipt）を付加
+    // 同時にプレゼンス収集用のユーザー集合も構築
+    let mut presence_user_ids: HashSet<String> = HashSet::new();
+
     if let Some(join_map) = result
         .get_mut("rooms")
         .and_then(|r| r.get_mut("join"))
@@ -54,6 +58,44 @@ async fn sync(
                     *events = serde_json::json!(ephemeral_events);
                 }
             }
+
+            // ルームメンバーのプレゼンス対象ユーザーを収集
+            if let Ok(statuses) = db::presence::get_for_room_members(&state.pool, room_id).await {
+                for s in statuses {
+                    if presence_user_ids.insert(s.user_id.clone()) {
+                        // 重複しないユーザーを presence イベントとして後で追加
+                        let _ = s; // 後で再取得するため破棄
+                    }
+                }
+            }
+        }
+    }
+
+    // presence.events を構築
+    let mut presence_events: Vec<serde_json::Value> = Vec::new();
+    for uid in &presence_user_ids {
+        if let Ok(Some(s)) = db::presence::get(&state.pool, uid).await {
+            let now_ms = chrono::Utc::now().timestamp_millis();
+            let last_active_ago = now_ms - s.last_active_ts;
+            let mut content = serde_json::json!({
+                "presence": s.presence,
+                "last_active_ago": last_active_ago,
+                "currently_active": s.presence == "online" && last_active_ago < 60_000,
+            });
+            if let Some(msg) = &s.status_msg {
+                content["status_msg"] = serde_json::json!(msg);
+            }
+            presence_events.push(serde_json::json!({
+                "type": "m.presence",
+                "sender": uid,
+                "content": content,
+            }));
+        }
+    }
+
+    if let Some(presence) = result.get_mut("presence") {
+        if let Some(events) = presence.get_mut("events") {
+            *events = serde_json::json!(presence_events);
         }
     }
 
