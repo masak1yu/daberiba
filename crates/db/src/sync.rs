@@ -85,11 +85,53 @@ pub async fn sync(
         );
     }
 
+    // rooms.invite: membership = 'invite' なルームを stripped state で返す
+    let invited = crate::rooms::invited_rooms(pool, user_id).await?;
+    let mut invite_map = serde_json::Map::new();
+    for inv in invited {
+        let mut invite_state_events: Vec<serde_json::Value> = Vec::new();
+
+        // ルーム名があれば追加
+        if let Ok(Some(content)) =
+            crate::room_state::get_event(pool, &inv.room_id, "m.room.name", "").await
+        {
+            invite_state_events.push(serde_json::json!({
+                "type": "m.room.name",
+                "state_key": "",
+                "content": content,
+                "sender": inv.invited_by.as_deref().unwrap_or(""),
+            }));
+        }
+
+        // 招待者の m.room.member
+        if let Some(ref inviter) = inv.invited_by {
+            invite_state_events.push(serde_json::json!({
+                "type": "m.room.member",
+                "state_key": inviter,
+                "content": { "membership": "join" },
+                "sender": inviter,
+            }));
+        }
+
+        // 被招待者の m.room.member
+        invite_state_events.push(serde_json::json!({
+            "type": "m.room.member",
+            "state_key": user_id,
+            "content": { "membership": "invite" },
+            "sender": inv.invited_by.as_deref().unwrap_or(""),
+        }));
+
+        invite_map.insert(
+            inv.room_id,
+            serde_json::json!({ "invite_state": { "events": invite_state_events } }),
+        );
+    }
+
     Ok(serde_json::json!({
         "next_batch": latest_ordering.to_string(),
         "rooms": {
             "join": join_map,
-            "invite": {},
+            "invite": invite_map,
             "leave": {},
         },
         "presence": { "events": [] },
