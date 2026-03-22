@@ -57,18 +57,15 @@ pub async fn get_pending(pool: &MySqlPool, user_id: &str) -> Result<Vec<ToDevice
         .collect())
 }
 
-/// 配信済みメッセージを削除（/sync で返した後に呼ぶ）
-pub async fn delete_delivered(pool: &MySqlPool, ids: &[u64]) -> Result<()> {
-    if ids.is_empty() {
+/// 前回 sync で配信済みのメッセージを削除（acked_up_to 以下の id を削除）
+pub async fn delete_acked(pool: &MySqlPool, user_id: &str, acked_up_to: u64) -> Result<()> {
+    if acked_up_to == 0 {
         return Ok(());
     }
-    // IN 句を動的生成
-    let placeholders = ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
-    let sql = format!("DELETE FROM to_device_messages WHERE id IN ({placeholders})");
-    let mut q = sqlx::query(&sql);
-    for id in ids {
-        q = q.bind(id);
-    }
-    q.execute(pool).await?;
+    sqlx::query("DELETE FROM to_device_messages WHERE recipient = ? AND id <= ?")
+        .bind(user_id)
+        .bind(acked_up_to)
+        .execute(pool)
+        .await?;
     Ok(())
 }
