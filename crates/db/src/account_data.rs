@@ -43,15 +43,27 @@ pub async fn get(
 }
 
 /// /sync 用: ユーザーのすべての account_data を取得
+/// since_ms が Some なら updated_at > FROM_UNIXTIME(since_ms/1000) の差分のみ返す
 /// (room_id, event_type, content_json) を返す。room_id が空文字列 = グローバル
-pub async fn get_all_for_user(
+pub async fn get_for_sync(
     pool: &MySqlPool,
     user_id: &str,
+    since_ms: Option<u64>,
 ) -> Result<Vec<(String, String, String)>> {
-    let rows: Vec<(String, String, String)> =
+    let rows: Vec<(String, String, String)> = if let Some(ms) = since_ms {
+        sqlx::query_as(
+            r#"SELECT room_id, event_type, content FROM account_data
+               WHERE user_id = ? AND updated_at > FROM_UNIXTIME(? / 1000.0)"#,
+        )
+        .bind(user_id)
+        .bind(ms)
+        .fetch_all(pool)
+        .await?
+    } else {
         sqlx::query_as("SELECT room_id, event_type, content FROM account_data WHERE user_id = ?")
             .bind(user_id)
             .fetch_all(pool)
-            .await?;
+            .await?
+    };
     Ok(rows)
 }

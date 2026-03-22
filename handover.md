@@ -1,9 +1,9 @@
-# Handover — v0.10.0 → v0.11.0
+# Handover — v0.11.0 → v0.12.0
 
-## v0.10.0 でやったこと
+## v0.11.0 でやったこと
 
-- **account_data**: グローバル・ルーム固有の account_data を保存・取得する API を実装。`account_data` テーブル追加（user_id, room_id, event_type, content）。`PUT/GET /_matrix/client/v3/user/{userId}/account_data/{type}` および `PUT/GET /_matrix/client/v3/user/{userId}/rooms/{roomId}/account_data/{type}` を実装。`/sync` のトップレベル `account_data.events`（グローバル）と各ルームの `account_data.events`（ルーム固有 + m.tag）に統合。
-- **to_device at-least-once 化**: `/sync` の `next_batch` トークンを `{stream_ordering}_{max_to_device_id}` 形式に変更。`since` トークンから acked_to_device_id を解析し、次回 sync 呼び出し時に `id <= acked_id` のメッセージを削除してから新規メッセージを返す。クライアントが sync 応答を受信失敗した場合でも次回 sync で再取得可能。`db::to_device::delete_acked()` に変更（旧 `delete_delivered()` を置換）。
+- **push_rules**: Matrix 仕様のデフォルトルールセット（override 7件、content 1件、underride 5件）をハードコード。ユーザー定義ルールは `account_data` の `m.push_rules` エントリとして保存。`GET /pushrules/` でデフォルト+カスタムを返す。`GET/PUT/DELETE /pushrules/{scope}/{kind}/{ruleId}` でルール操作。`/enabled` と `/actions` サブリソースも実装。新規 DB テーブルなし（account_data を流用）。
+- **account_data sync since 対応**: `next_batch` トークンを `{stream_ordering}_{max_to_device_id}_{now_ms}` 形式に拡張。`since` がある場合は `account_data` の `updated_at > FROM_UNIXTIME(since_ms/1000.0)` で差分のみ返すように最適化。初回 sync（since なし）は全件返す。
 
 ## 既知の課題・技術的負債
 
@@ -11,19 +11,19 @@
 |---|---|
 | UIA ステージ m.login.password のみ | Matrix 仕様では他ステージ（m.login.sso 等）も定義されているが未対応 |
 | TypingStore はサーバー再起動でリセット | インメモリのため永続化なし（Matrix 仕様上は許容範囲） |
-| 非マクロ sqlx クエリ | receipts / room_aliases / presence / unread / room_tags / filters / to_device / keys / account_data は `sqlx::query()` 非マクロを使用。`cargo sqlx prepare` でマクロ移行可能 |
+| 非マクロ sqlx クエリ | receipts / room_aliases / presence / unread / room_tags / filters / to_device / keys / account_data は `sqlx::query()` 非マクロを使用 |
 | highlight_count は LIKE 検索 | content に user_id 文字列が含まれるかどうかの簡易実装 |
 | プレゼンスは登録ユーザーのみ | `PUT /presence` を一度も呼んでいないユーザーは sync の presence.events に出現しない |
-| E2EE は鍵交換のみ | Olm セッション確立や Megolm グループセッション管理はクライアント側実装。サーバーは鍵の保存・中継のみ |
-| dnsname CNI プラグイン問題（WSL） | Ubuntu 20.04 + podman 3.4.2 では dnsname が動かないため `podman compose up migrate` が失敗する。`mysql` クライアント直接接続で回避 |
-| compose TLS workaround | GitHub からのバイナリ取得に `curl -k` を使用。社内 CA 証明書をコンテナに追加するのが正式対応 |
+| E2EE は鍵交換のみ | Olm セッション確立や Megolm グループセッション管理はクライアント側実装 |
+| push_rules はサーバーサイド評価なし | プッシュルールの照合は未実装（ルール CRUD のみ） |
+| account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
 
-## v0.11.0 候補
+## v0.12.0 候補
 
 1. **Federation 基盤** — `/_matrix/federation/` の基本実装（サーバー間通信）
 2. **E2EE 鍵バックアップ** — `/_matrix/client/v3/room_keys/` エンドポイント（Megolm セッションキーのサーバー保管）
-3. **push_rules** — `/_matrix/client/v3/pushrules/` で通知ルール管理（デフォルトルール + ユーザーカスタムルール）
-4. **account_data sync since 対応** — `since` がある場合は updated_at > since の差分のみ返すように最適化
+3. **push_rules サーバーサイド評価** — イベント送信時にルールを照合してプッシュ通知をフィルタ
+4. **sync タイムライン限定配信** — `since` がある場合に joined rooms の state も差分のみ返す
 
 ## 開発フロー（おさらい）
 
@@ -34,9 +34,6 @@ docker compose run --rm migrate
 
 # ホストでサーバ起動
 cargo run --bin server
-
-# S3 ビルド（MinIO 等）
-cargo build --features server/s3
 
 # スキーマ変更時
 #   1. schema/schema.sql を編集
@@ -66,4 +63,3 @@ cargo fmt
 
 - `main` — リリース済みタグのみマージ（マージ後 release.yml が自動でタグ・GitHub Release・次バージョンブランチを作成）
 - `feature/v0.x.0` — バージョン単位の作業ブランチ
-- 機能単位でさらに feature ブランチを切っても良い
