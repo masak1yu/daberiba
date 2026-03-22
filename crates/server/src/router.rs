@@ -25,6 +25,7 @@ pub fn build(state: AppState) -> Router {
         .merge(api::client::pushers::routes())
         .merge(api::client::receipts::routes())
         .merge(api::client::room_aliases::routes())
+        .merge(api::client::to_device::routes())
         .merge(api::client::typing_notif::routes())
         .merge(api::client::public_rooms::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));

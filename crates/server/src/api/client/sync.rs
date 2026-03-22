@@ -1,4 +1,4 @@
-use crate::{error::ApiResult, middleware::auth::AuthUser, state::AppState};
+use crate::{error::ApiResult, filter::FilterDef, middleware::auth::AuthUser, state::AppState};
 use axum::{
     extract::{Query, State},
     routing::get,
@@ -24,8 +24,8 @@ async fn sync(
     axum::Extension(user): axum::Extension<AuthUser>,
     Query(query): Query<SyncQuery>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    // filter_id が指定されている場合は DB からフィルター定義を取得
-    let filter_def: Option<serde_json::Value> = if let Some(ref f) = query.filter {
+    // フィルター定義を取得
+    let filter_json: Option<serde_json::Value> = if let Some(ref f) = query.filter {
         if let Ok(id) = f.parse::<u64>() {
             db::filters::get(&state.pool, &user.user_id, id)
                 .await
@@ -33,34 +33,19 @@ async fn sync(
                 .flatten()
                 .and_then(|s| serde_json::from_str(&s).ok())
         } else {
-            // インライン JSON フィルター
             serde_json::from_str(f).ok()
         }
     } else {
         None
     };
-
-    // タイムラインの許可イベントタイプ集合（フィルター未指定なら全許可）
-    let allowed_timeline_types: Option<HashSet<String>> = filter_def
-        .as_ref()
-        .and_then(|f| f.get("room"))
-        .and_then(|r| r.get("timeline"))
-        .and_then(|t| t.get("types"))
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(str::to_string))
-                .collect()
-        });
+    let filter = filter_json.as_ref().map(FilterDef::from_json);
 
     let mut result = db::sync::sync(&state.pool, &user.user_id, query.since.as_deref()).await?;
 
-    // ルームごとのタグを取得（account_data m.tag 用）
+    // ルームごとのタグ（account_data m.tag 用）
     let all_tags = db::room_tags::get_all_for_user(&state.pool, &user.user_id)
         .await
         .unwrap_or_default();
-
-    // room_id -> タグマップ
     let mut tags_by_room: HashMap<String, serde_json::Map<String, serde_json::Value>> =
         HashMap::new();
     for (room_id, tag) in all_tags {
@@ -72,7 +57,6 @@ async fn sync(
         entry.insert(tag.tag, serde_json::Value::Object(content));
     }
 
-    // 各参加ルームに ephemeral / account_data を付加、フィルター適用
     let mut presence_user_ids: HashSet<String> = HashSet::new();
 
     if let Some(join_map) = result
@@ -80,18 +64,30 @@ async fn sync(
         .and_then(|r| r.get_mut("join"))
         .and_then(|j| j.as_object_mut())
     {
+        // ルームフィルター（rooms / not_rooms）適用
+        if let Some(ref f) = filter {
+            join_map.retain(|room_id, _| f.include_room(room_id));
+        }
+
         for (room_id, room_data) in join_map.iter_mut() {
-            // タイムラインフィルター適用
-            if let Some(ref allowed) = allowed_timeline_types {
+            // timeline フィルター
+            if let Some(ref f) = filter {
                 if let Some(timeline) = room_data.get_mut("timeline") {
                     if let Some(events) = timeline.get_mut("events") {
                         if let Some(arr) = events.as_array_mut() {
-                            arr.retain(|e| {
-                                e.get("type")
-                                    .and_then(|t| t.as_str())
-                                    .map(|t| allowed.contains(t))
-                                    .unwrap_or(true)
-                            });
+                            FilterDef::apply_event_filter(
+                                arr,
+                                &f.timeline_types,
+                                &f.timeline_not_types,
+                            );
+                        }
+                    }
+                }
+                // state フィルター
+                if let Some(state_obj) = room_data.get_mut("state") {
+                    if let Some(events) = state_obj.get_mut("events") {
+                        if let Some(arr) = events.as_array_mut() {
+                            FilterDef::apply_event_filter(arr, &f.state_types, &f.state_not_types);
                         }
                     }
                 }
@@ -112,6 +108,15 @@ async fn sync(
                 }
             }
 
+            // ephemeral フィルター
+            if let Some(ref f) = filter {
+                FilterDef::apply_event_filter(
+                    &mut ephemeral_events,
+                    &f.ephemeral_types,
+                    &f.ephemeral_not_types,
+                );
+            }
+
             if let Some(ephemeral) = room_data.get_mut("ephemeral") {
                 if let Some(events) = ephemeral.get_mut("events") {
                     *events = serde_json::json!(ephemeral_events);
@@ -128,6 +133,16 @@ async fn sync(
                     }));
                 }
             }
+
+            // account_data フィルター
+            if let Some(ref f) = filter {
+                FilterDef::apply_event_filter(
+                    &mut account_data_events,
+                    &f.account_data_types,
+                    &f.account_data_not_types,
+                );
+            }
+
             if let Some(obj) = room_data.as_object_mut() {
                 obj.insert(
                     "account_data".to_string(),
@@ -144,7 +159,7 @@ async fn sync(
         }
     }
 
-    // presence.events を構築
+    // presence.events
     let mut presence_events: Vec<serde_json::Value> = Vec::new();
     for uid in &presence_user_ids {
         if let Ok(Some(s)) = db::presence::get(&state.pool, uid).await {
@@ -166,11 +181,40 @@ async fn sync(
         }
     }
 
+    // presence フィルター
+    if let Some(ref f) = filter {
+        FilterDef::apply_event_filter(
+            &mut presence_events,
+            &f.presence_types,
+            &f.presence_not_types,
+        );
+    }
+
     if let Some(presence) = result.get_mut("presence") {
         if let Some(events) = presence.get_mut("events") {
             *events = serde_json::json!(presence_events);
         }
     }
+
+    // to_device.events（配信後に削除）
+    let pending = db::to_device::get_pending(&state.pool, &user.user_id)
+        .await
+        .unwrap_or_default();
+    let delivered_ids: Vec<u64> = pending.iter().map(|m| m.id).collect();
+    let to_device_events: Vec<serde_json::Value> = pending
+        .into_iter()
+        .map(|m| {
+            serde_json::json!({
+                "type": m.event_type,
+                "sender": m.sender,
+                "content": serde_json::from_str::<serde_json::Value>(&m.content)
+                    .unwrap_or_default(),
+            })
+        })
+        .collect();
+    let _ = db::to_device::delete_delivered(&state.pool, &delivered_ids).await;
+
+    result["to_device"] = serde_json::json!({ "events": to_device_events });
 
     Ok(Json(result))
 }
