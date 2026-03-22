@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.10.0 — Client-Server API Phase 10 (functional, not production-ready)
+**Status:** v0.11.0 — Client-Server API Phase 11 (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -80,6 +80,10 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | POST | `/_matrix/client/v3/keys/claim` | Claim one-time keys |
 | GET/PUT | `/_matrix/client/v3/user/{userId}/account_data/{type}` | Global account data |
 | GET/PUT | `/_matrix/client/v3/user/{userId}/rooms/{roomId}/account_data/{type}` | Room account data |
+| GET | `/_matrix/client/v3/pushrules/` | Get all push rules |
+| GET/PUT/DELETE | `/_matrix/client/v3/pushrules/{scope}/{kind}/{ruleId}` | Get/set/delete push rule |
+| GET/PUT | `/_matrix/client/v3/pushrules/{scope}/{kind}/{ruleId}/enabled` | Get/set rule enabled state |
+| GET/PUT | `/_matrix/client/v3/pushrules/{scope}/{kind}/{ruleId}/actions` | Get/set rule actions |
 | POST | `/_matrix/media/v3/upload` | Upload media |
 | GET | `/_matrix/media/v3/download/{serverName}/{mediaId}` | Download media |
 
@@ -370,7 +374,7 @@ PUT /_matrix/client/v3/user/@user:server/rooms/!room:server/account_data/m.fully
 {"event_id": "$abc:server"}
 ```
 
-Global account data events are returned in `/sync` under `account_data.events`. Room account data events are returned per room in `rooms.join.{roomId}.account_data.events` (alongside `m.tag`).
+Global account data events are returned in `/sync` under `account_data.events`. Room account data events are returned per room in `rooms.join.{roomId}.account_data.events` (alongside `m.tag`). When `since` is provided, only events updated after the previous sync are returned (delta).
 
 ## To-Device Messages
 
@@ -423,6 +427,30 @@ POST /_matrix/client/v3/keys/claim
 {"one_time_keys": {"@alice:server": {"DEVICE_ID": "curve25519"}}}
 → {"one_time_keys": {"@alice:server": {"curve25519:AAAAAA": "..."}}}
 ```
+
+## Push Rules
+
+`GET /pushrules/` returns the full push ruleset (Matrix-specified defaults + user overrides stored as `m.push_rules` account data):
+
+```sh
+# Get all rules
+GET /_matrix/client/v3/pushrules/
+
+# Enable/disable a rule
+PUT /_matrix/client/v3/pushrules/global/override/.m.rule.master/enabled
+{"enabled": true}
+
+# Add a custom content rule
+PUT /_matrix/client/v3/pushrules/global/content/my_keyword
+{"pattern": "keyword", "actions": ["notify"]}
+
+# Delete a rule
+DELETE /_matrix/client/v3/pushrules/global/content/my_keyword
+```
+
+Default rules include: `.m.rule.master`, `.m.rule.suppress_notices`, `.m.rule.invite_for_me`, `.m.rule.member_event`, `.m.rule.contains_display_name`, `.m.rule.tombstone`, `.m.rule.roomnotif` (override); `.m.rule.contains_user_name` (content); `.m.rule.call`, `.m.rule.encrypted_room_one_to_one`, `.m.rule.room_one_to_one`, `.m.rule.message`, `.m.rule.encrypted` (underride).
+
+User-defined rules and overrides are persisted in `account_data` as `m.push_rules`. Changes are reflected in the next `/sync` response via `account_data.events`.
 
 ## Not Yet Implemented
 
