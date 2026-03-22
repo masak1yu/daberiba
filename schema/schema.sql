@@ -76,8 +76,25 @@ CREATE TABLE IF NOT EXISTS media (
     content_type VARCHAR(255)  NOT NULL,
     filename     VARCHAR(255)  NULL,
     file_size    BIGINT        NOT NULL,
+    room_id      VARCHAR(255)  NULL COMMENT 'NULL=全認証ユーザーアクセス可、非NULL=ルームメンバーのみ',
     created_at   DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (media_id, server_name),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (room_id) REFERENCES rooms(room_id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS pushers (
+    app_id              VARCHAR(255) NOT NULL COMMENT 'アプリ識別子',
+    pushkey             VARCHAR(512) NOT NULL COMMENT 'デバイストークン等',
+    user_id             VARCHAR(255) NOT NULL,
+    kind                VARCHAR(32)  NOT NULL COMMENT 'http | email',
+    app_display_name    VARCHAR(255) NOT NULL,
+    device_display_name VARCHAR(255) NOT NULL,
+    lang                VARCHAR(32)  NOT NULL,
+    data                TEXT         NOT NULL COMMENT 'JSON {"url": "..."}',
+    created_at          DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (app_id, pushkey),
+    INDEX idx_pushers_user_id (user_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

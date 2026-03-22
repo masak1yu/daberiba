@@ -4,6 +4,7 @@ pub mod capabilities;
 pub mod devices;
 pub mod events;
 pub mod profile;
+pub mod pushers;
 pub mod room_state;
 pub mod rooms;
 pub mod sync;

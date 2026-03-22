@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "DELETE FROM pushers WHERE app_id = ? AND pushkey = ? AND user_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "dc54bf544823d9c658541b664ac53402b6b4e2e0e3045dc63de46cebfcbfbd0a"
+}
