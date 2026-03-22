@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS room_memberships (
     room_id    VARCHAR(255)  NOT NULL,
     user_id    VARCHAR(255)  NOT NULL,
     membership VARCHAR(32)   NOT NULL COMMENT 'join | leave | invite | ban | knock',
+    invited_by VARCHAR(255)  NULL     COMMENT 'invite 時の送信者 user_id',
     updated_at DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (room_id, user_id),
     INDEX idx_room_memberships_user_id (user_id),
@@ -146,6 +147,28 @@ CREATE TABLE IF NOT EXISTS filters (
     filter    MEDIUMTEXT     NOT NULL COMMENT 'JSON filter 定義',
     PRIMARY KEY (filter_id),
     INDEX idx_filters_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS device_keys (
+    user_id    VARCHAR(255) NOT NULL,
+    device_id  VARCHAR(255) NOT NULL,
+    key_json   MEDIUMTEXT   NOT NULL COMMENT 'デバイス公開鍵 JSON（algorithms, keys, signatures 含む）',
+    updated_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, device_id),
+    INDEX idx_device_keys_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS one_time_keys (
+    id        BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id   VARCHAR(255)    NOT NULL,
+    device_id VARCHAR(255)    NOT NULL,
+    key_id    VARCHAR(255)    NOT NULL COMMENT 'e.g. signed_curve25519:AAAAAQ',
+    key_json  MEDIUMTEXT      NOT NULL COMMENT 'key value（object or string）',
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_otk (user_id, device_id, key_id),
+    INDEX idx_otk_user_device (user_id, device_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

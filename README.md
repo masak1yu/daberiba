@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.8.0 — Client-Server API Phase 8 (functional, not production-ready)
+**Status:** v0.9.0 — Client-Server API Phase 9 (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -75,6 +75,9 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | POST | `/_matrix/client/v3/user/{userId}/filter` | Create filter |
 | GET | `/_matrix/client/v3/user/{userId}/filter/{filterId}` | Get filter |
 | PUT | `/_matrix/client/v3/sendToDevice/{eventType}/{txnId}` | Send to-device message |
+| POST | `/_matrix/client/v3/keys/upload` | Upload device keys / one-time keys |
+| POST | `/_matrix/client/v3/keys/query` | Query device keys for users |
+| POST | `/_matrix/client/v3/keys/claim` | Claim one-time keys |
 | POST | `/_matrix/media/v3/upload` | Upload media |
 | GET | `/_matrix/media/v3/download/{serverName}/{mediaId}` | Download media |
 
@@ -362,6 +365,41 @@ PUT /_matrix/client/v3/sendToDevice/m.room.key/txn1
 ```
 
 Pending to-device events are returned in `/sync` under `to_device.events` and deleted after delivery.
+
+## Invite Flow
+
+When a user is invited to a room, the server:
+
+1. Records the `invited_by` (inviter user ID) in `room_memberships`
+2. Dispatches an HTTP push notification to the invitee's registered pushers (best-effort, non-blocking)
+3. Returns the invite in `/sync` as `rooms.invite` with stripped state events:
+   - `m.room.name` (if set)
+   - `m.room.member` for the inviter (membership: join)
+   - `m.room.member` for the invitee (membership: invite)
+
+## E2EE Key Management
+
+Supports Olm/Megolm key exchange endpoints:
+
+```sh
+# Upload device keys and one-time keys
+POST /_matrix/client/v3/keys/upload
+{
+  "device_keys": { "user_id": "...", "device_id": "...", "algorithms": [...], "keys": {...}, "signatures": {...} },
+  "one_time_keys": { "curve25519:AAAAAA": "..." }
+}
+→ {"one_time_key_counts": {"curve25519": 5}}
+
+# Query device keys for users
+POST /_matrix/client/v3/keys/query
+{"device_keys": {"@alice:server": []}}
+→ {"device_keys": {"@alice:server": {"DEVICE_ID": {...}}}}
+
+# Claim one-time keys
+POST /_matrix/client/v3/keys/claim
+{"one_time_keys": {"@alice:server": {"DEVICE_ID": "curve25519"}}}
+→ {"one_time_keys": {"@alice:server": {"curve25519:AAAAAA": "..."}}}
+```
 
 ## Not Yet Implemented
 

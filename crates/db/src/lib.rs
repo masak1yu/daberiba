@@ -4,6 +4,7 @@ pub mod access_tokens;
 pub mod devices;
 pub mod events;
 pub mod filters;
+pub mod keys;
 pub mod media;
 pub mod presence;
 pub mod profile;
