@@ -4,6 +4,8 @@ A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 
 **Status:** v0.5.0 — Client-Server API Phase 5 (functional, not production-ready)
 
+[![CI](https://github.com/masak1yu/ba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/ba/actions/workflows/ci.yml)
+
 ## Tech Stack
 
 | Layer | Technology |
