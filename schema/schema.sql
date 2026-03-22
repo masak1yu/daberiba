@@ -98,6 +98,18 @@ CREATE TABLE IF NOT EXISTS pushers (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS receipts (
+    room_id      VARCHAR(255) NOT NULL,
+    user_id      VARCHAR(255) NOT NULL,
+    receipt_type VARCHAR(64)  NOT NULL COMMENT 'm.read | m.read.private',
+    event_id     VARCHAR(255) NOT NULL,
+    ts           BIGINT       NOT NULL COMMENT 'Unix milliseconds',
+    PRIMARY KEY (room_id, user_id, receipt_type),
+    INDEX idx_receipts_room_id (room_id),
+    FOREIGN KEY (room_id) REFERENCES rooms(room_id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS room_state (
     room_id    VARCHAR(255)  NOT NULL,
     event_type VARCHAR(255)  NOT NULL,

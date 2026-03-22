@@ -18,7 +18,7 @@ pub fn routes() -> Router<AppState> {
 struct CreateRoomRequest {
     name: Option<String>,
     topic: Option<String>,
-    preset: Option<String>,
+    _preset: Option<String>,
 }
 
 #[derive(Serialize)]

@@ -12,6 +12,7 @@ pub struct MediaRecord {
     pub room_id: Option<String>,
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn insert(
     pool: &MySqlPool,
     media_id: &str,

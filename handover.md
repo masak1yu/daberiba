@@ -1,25 +1,26 @@
-# Handover — v0.4.0 → v0.5.0
+# Handover — v0.5.0 → v0.6.0
 
-## v0.4.0 でやったこと
+## v0.5.0 でやったこと
 
-- **UIA セッション管理強化**: `UiaStore`（DashMap + Instant）をインメモリで導入。5分 TTL でセッションを検証し一回限り有効に。`AppState` に `uia: Arc<UiaStore>` 追加。`challenge()` でセッション発行・保存、各ハンドラ（`change_password`・`delete_devices`）でセッション ID 検証を追加。ユニットテスト4本追加。
-- **メディアアクセス制御**: `media` テーブルに `room_id`（NULL許可）を追加。アップロード時に `?room_id=` クエリパラメータで関連ルームを指定可能。ダウンロードエンドポイントを認証必須に変更し、`room_id` が設定されている場合は `room_memberships` でメンバーチェック（非メンバーは 403）。`.sqlx/` 再生成済み。
-- **Pagination（`/messages`）**: `GET /rooms/{roomId}/messages` に `from`/`dir`/`limit` クエリパラメータを追加。トークン形式は `s{stream_ordering}`（sync と統一）。`dir=b`（新しい順）・`dir=f`（古い順）、`limit` はデフォルト 10・最大 100。`end` が absent なら末端。動的クエリは `sqlx::query()`（非マクロ）で実装。
-- **Push Notification**: `pushers` テーブル追加。`GET /pushers` と `POST /pushers/set`（upsert/delete）を実装。`kind=http` pusher へはイベント送信時に `tokio::spawn` でベストエフォートな HTTP push を配送（Matrix push gateway プロトコル準拠）。`reqwest` 追加。
+- **Read Receipts**: `receipts` テーブル追加（room_id, user_id, receipt_type, event_id, ts）。`POST /rooms/{roomId}/receipt/{receiptType}/{eventId}` で upsert。`/sync` レスポンスの `ephemeral.events` に `m.receipt` イベントとして返す。DB 層は `sqlx::query()` 非マクロで実装（テーブルが新規のため）。
+- **タイピングインジケータ**: `TypingStore`（DashMap + Instant TTL）をインメモリで導入。`AppState` に `typing: Arc<TypingStore>` 追加。`PUT /rooms/{roomId}/typing/{userId}` で set/unset（`{"typing": true, "timeout": 30000}`）。`/sync` の `ephemeral.events` に `m.typing` イベントを返す（タイピング中ユーザーが 0 人でも常に含む）。
+- **パブリックルーム一覧**: `GET /publicRooms` を実装。`room_state` の `m.room.join_rules` が `"public"` なルームを JSON_EXTRACT で抽出し、参加メンバー数とともに返す。
 
 ## 既知の課題・技術的負債
 
 | 項目 | 詳細 |
 |---|---|
 | UIA ステージ m.login.password のみ | Matrix 仕様では他ステージ（m.login.sso 等）も定義されているが未対応 |
+| TypingStore はサーバー再起動でリセット | インメモリのため永続化なし。再起動時にタイピング状態が消える（Matrix 仕様上は許容範囲） |
+| receipts テーブルは .sqlx/ 未登録 | sqlx offline モードでは `sqlx::query()` 非マクロを使用。マクロ移行する場合はテーブル作成後に `cargo sqlx prepare` 実行が必要 |
 | dnsname CNI プラグイン問題（WSL） | Ubuntu 20.04 + podman 3.4.2 では dnsname が動かないため `podman compose up migrate` が失敗する。`mysql` クライアント直接接続で回避 |
 | compose TLS workaround | GitHub からのバイナリ取得に `curl -k` を使用。社内 CA 証明書をコンテナに追加するのが正式対応 |
 
-## v0.5.0 候補
+## v0.6.0 候補
 
-1. **読み取り確認（Read Receipts）** — `POST /rooms/{roomId}/receipt/{receiptType}/{eventId}`
-2. **タイピングインジケータ** — `PUT /rooms/{roomId}/typing/{userId}`
-3. **ルーム検索** — `GET /publicRooms`
+1. **既読数バッジ / 通知カウント** — `/sync` の `unread_notifications` フィールド（highlight_count / notification_count）
+2. **ルームエイリアス** — `PUT/GET/DELETE /_matrix/client/v3/directory/room/{roomAlias}`
+3. **プレゼンス** — `PUT /presence/{userId}/status` + `/sync` の `presence.events`
 4. **Federation 基盤** — `/_matrix/federation/` の基本実装（サーバー間通信）
 
 ## 開発フロー（おさらい）

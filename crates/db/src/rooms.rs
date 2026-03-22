@@ -127,6 +127,42 @@ pub async fn get_joined_members(
     Ok(map)
 }
 
+pub struct PublicRoom {
+    pub room_id: String,
+    pub name: Option<String>,
+    pub topic: Option<String>,
+    pub num_joined_members: i64,
+}
+
+/// join_rules = public なルームを一覧取得
+pub async fn get_public_rooms(pool: &MySqlPool) -> Result<Vec<PublicRoom>> {
+    // room_state に m.room.join_rules が "public" なルームを探す
+    let rows: Vec<(String, Option<String>, Option<String>, i64)> = sqlx::query_as(
+        r#"SELECT r.room_id, r.name, r.topic,
+                  COUNT(rm.user_id) AS num_joined_members
+           FROM rooms r
+           JOIN room_state rs ON rs.room_id = r.room_id
+                              AND rs.event_type = 'm.room.join_rules'
+                              AND rs.state_key = ''
+           JOIN events e ON e.event_id = rs.event_id
+           JOIN room_memberships rm ON rm.room_id = r.room_id AND rm.membership = 'join'
+           WHERE JSON_UNQUOTE(JSON_EXTRACT(e.content, '$.join_rule')) = 'public'
+           GROUP BY r.room_id, r.name, r.topic"#,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|(room_id, name, topic, num_joined_members)| PublicRoom {
+            room_id,
+            name,
+            topic,
+            num_joined_members,
+        })
+        .collect())
+}
+
 pub async fn invite(
     pool: &MySqlPool,
     room_id: &str,

@@ -6,6 +6,7 @@ pub mod events;
 pub mod media;
 pub mod profile;
 pub mod pushers;
+pub mod receipts;
 pub mod room_state;
 pub mod rooms;
 pub mod sync;
