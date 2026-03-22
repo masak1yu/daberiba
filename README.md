@@ -1,10 +1,10 @@
-# ba — Matrix Homeserver
+# daberiba — Matrix Platform
 
-A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
+A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
 **Status:** v0.5.0 — Client-Server API Phase 5 (functional, not production-ready)
 
-[![CI](https://github.com/masak1yu/ba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/ba/actions/workflows/ci.yml)
+[![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
 ## Tech Stack
 
@@ -71,7 +71,7 @@ A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 
 ### GitHub Codespaces (iPad Pro など)
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/masak1yu/ba)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/masak1yu/daberiba)
 
 Codespace を開くだけで以下が自動セットアップされます。
 
@@ -157,7 +157,7 @@ Copy `.env.example` to `.env` and adjust as needed.
 ## Project Structure
 
 ```
-ba/
+daberiba/
 ├── crates/
 │   ├── server/          # Axum HTTP server
 │   │   └── src/
@@ -173,6 +173,7 @@ ba/
 │   │       └── error.rs      # Matrix-compliant error responses
 │   └── db/              # sqlx database layer
 │       └── src/         # users, rooms, events, sync, profile, devices, media, pushers, receipts
+├── frontend/            # (planned) Matrix frontend client
 ├── schema/
 │   └── schema.sql        # Managed by sqldef (mysqldef)
 ├── .sqlx/                # sqlx offline query cache (committed)
