@@ -7,6 +7,12 @@ sudo ln -sf "$(which docker)" /usr/local/bin/podman
 # Claude Code のインストール
 npm install -g @anthropic-ai/claude-code
 
+# mysqldef (sqldef) のインストール — MariaDB 互換
+DPKG_ARCH="$(dpkg --print-architecture)"
+curl -fsSL "https://github.com/sqldef/sqldef/releases/latest/download/mysqldef_linux_${DPKG_ARCH}.tar.gz" \
+    | sudo tar xz -C /usr/local/bin mysqldef
+sudo chmod +x /usr/local/bin/mysqldef
+
 # .env が未作成の場合、example から生成（開発用デフォルトパスワードで埋める）
 if [ ! -f .env ]; then
     cp .env.example .env
