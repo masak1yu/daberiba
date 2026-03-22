@@ -5,7 +5,7 @@ set -e
 sudo ln -sf "$(which docker)" /usr/local/bin/podman
 
 # Claude Code のインストール
-npm install -g @anthropic-ai/claude-code
+sudo npm install -g @anthropic-ai/claude-code
 
 # mysqldef (sqldef) のインストール — MariaDB 互換
 DPKG_ARCH="$(dpkg --print-architecture)"
