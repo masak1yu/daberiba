@@ -14,6 +14,7 @@ pub mod room_state;
 pub mod room_tags;
 pub mod rooms;
 pub mod sync;
+pub mod to_device;
 pub mod unread;
 pub mod users;
 
