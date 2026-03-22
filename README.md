@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 
-**Status:** v0.3.0 — Client-Server API Phase 3 (functional, not production-ready)
+**Status:** v0.4.0 — Client-Server API Phase 4 (functional, not production-ready)
 
 ## Tech Stack
 
@@ -32,7 +32,7 @@ A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 | Method | Path | Description |
 |---|---|---|
 | GET | `/_matrix/client/v3/account/whoami` | Current user |
-| POST | `/_matrix/client/v3/account/password` | Change password |
+| POST | `/_matrix/client/v3/account/password` | Change password (UIA) |
 | POST | `/_matrix/client/v3/logout` | Logout |
 | POST | `/_matrix/client/v3/logout/all` | Logout all devices |
 | GET | `/_matrix/client/v3/sync` | Sync (stream_ordering cursor) |
@@ -40,13 +40,13 @@ A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 | GET | `/_matrix/client/v3/devices/{deviceId}` | Get device |
 | PUT | `/_matrix/client/v3/devices/{deviceId}` | Update device display name |
 | DELETE | `/_matrix/client/v3/devices/{deviceId}` | Delete device |
-| POST | `/_matrix/client/v3/delete_devices` | Bulk delete devices |
+| POST | `/_matrix/client/v3/delete_devices` | Bulk delete devices (UIA) |
 | POST | `/_matrix/client/v3/createRoom` | Create room |
 | POST | `/_matrix/client/v3/join/{roomId}` | Join room |
 | POST | `/_matrix/client/v3/rooms/{roomId}/leave` | Leave room |
 | GET | `/_matrix/client/v3/joined_rooms` | List joined rooms |
 | PUT | `/_matrix/client/v3/rooms/{roomId}/send/{type}/{txnId}` | Send event |
-| GET | `/_matrix/client/v3/rooms/{roomId}/messages` | Message history |
+| GET | `/_matrix/client/v3/rooms/{roomId}/messages` | Message history (paginated) |
 | PUT | `/_matrix/client/v3/rooms/{roomId}/state/{type}` | Send state event |
 | PUT | `/_matrix/client/v3/rooms/{roomId}/state/{type}/{key}` | Send state event (with key) |
 | GET | `/_matrix/client/v3/rooms/{roomId}/state` | Get room state |
@@ -57,6 +57,8 @@ A [Matrix](https://matrix.org/) protocol-compliant homeserver implementation.
 | GET/PUT | `/_matrix/client/v3/profile/{userId}` | User profile |
 | GET/PUT | `/_matrix/client/v3/profile/{userId}/displayname` | Display name |
 | GET/PUT | `/_matrix/client/v3/profile/{userId}/avatar_url` | Avatar URL |
+| GET | `/_matrix/client/v3/pushers` | List pushers |
+| POST | `/_matrix/client/v3/pushers/set` | Register / delete pusher |
 | POST | `/_matrix/media/v3/upload` | Upload media |
 | GET | `/_matrix/media/v3/download/{serverName}/{mediaId}` | Download media |
 
@@ -157,20 +159,18 @@ ba/
 │   │       ├── api/
 │   │       │   ├── client/   # Matrix Client-Server API handlers
 │   │       │   └── media.rs  # Matrix Media API handlers
-│   │       ├── media_store.rs  # MediaStore trait + LocalStore
-│   │       ├── middleware/   # Auth (Bearer token)
+│   │       ├── media_store.rs  # MediaStore trait + LocalStore + S3Store
+│   │       ├── middleware/   # Auth (Bearer token) + last_seen update
+│   │       ├── uia.rs        # User Interactive Authentication (UiaStore)
 │   │       ├── router.rs
 │   │       ├── state.rs
 │   │       └── error.rs      # Matrix-compliant error responses
 │   └── db/              # sqlx database layer
-│       └── src/         # users, rooms, events, sync, profile, devices, media
+│       └── src/         # users, rooms, events, sync, profile, devices, media, pushers
 ├── schema/
-│   ├── schema.sql        # Managed by sqldef (mysqldef)
-│   └── justfile
+│   └── schema.sql        # Managed by sqldef (mysqldef)
+├── .sqlx/                # sqlx offline query cache (committed)
 ├── .devcontainer/        # GitHub Codespaces 設定
-│   ├── devcontainer.json
-│   ├── Dockerfile
-│   └── setup.sh
 ├── Dockerfile            # Server image
 ├── Dockerfile.tools      # just + mysqldef tools image (arch auto-detect)
 ├── compose.yml           # podman compose (db, migrate, tools, server)
@@ -178,18 +178,49 @@ ba/
 └── dev                   # ./dev <recipe> — runs just via tools container
 ```
 
-## Not Yet Implemented
-
-- Push notifications (`/pushers/set`)
-- Federation (`/_matrix/federation`) — out of scope for now
-
 ## UIA (User Interactive Authentication)
 
 `POST /account/password` and `POST /delete_devices` require UIA with `m.login.password`.
 
 **Flow:**
-1. Send request without `auth` → server returns `401` with `flows` and `session`
-2. Re-send with `auth.type = "m.login.password"` and `auth.password = "<current-password>"`
+1. Send request without `auth` → server returns `401` with `flows` and `session` (5-minute TTL)
+2. Re-send with `auth.type = "m.login.password"`, `auth.password`, and `auth.session`
+
+## Pagination (`/messages`)
+
+```
+GET /rooms/{roomId}/messages?dir=b&limit=20
+→ { "chunk": [...], "start": "s100", "end": "s81" }
+
+GET /rooms/{roomId}/messages?from=s81&dir=b&limit=20
+→ next page (older events)
+```
+
+Token format: `s{stream_ordering}` (same as `/sync` cursor). `end` is absent when no more events exist.
+
+## Push Notifications
+
+Register an HTTP pusher via `POST /pushers/set`:
+
+```json
+{
+  "app_id": "com.example.app",
+  "pushkey": "<device-token>",
+  "kind": "http",
+  "app_display_name": "My App",
+  "device_display_name": "My Phone",
+  "lang": "en",
+  "data": { "url": "https://push.example.com/_matrix/push/v1/notify" }
+}
+```
+
+When an event is sent to a room, the server dispatches HTTP push notifications to all room members' registered pushers (best-effort, non-blocking). Use `kind: null` to delete a pusher.
+
+## Not Yet Implemented
+
+- Federation (`/_matrix/federation`) — out of scope for now
+- Read receipts, typing indicators
+- Public room directory
 
 ## License
 

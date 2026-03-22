@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "INSERT INTO pushers (app_id, pushkey, user_id, kind, app_display_name, device_display_name, lang, data)\n           VALUES (?, ?, ?, ?, ?, ?, ?, ?)\n           ON DUPLICATE KEY UPDATE\n               user_id = VALUES(user_id),\n               kind = VALUES(kind),\n               app_display_name = VALUES(app_display_name),\n               device_display_name = VALUES(device_display_name),\n               lang = VALUES(lang),\n               data = VALUES(data)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 8
+    },
+    "nullable": []
+  },
+  "hash": "e8816cb5fbcad7478295dc728b92074e90dc38f381f9e0df99f988d7c0405552"
+}

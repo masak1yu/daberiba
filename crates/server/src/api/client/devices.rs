@@ -106,10 +106,22 @@ async fn delete_devices(
     axum::Extension(user): axum::Extension<AuthUser>,
     Json(body): Json<DeleteDevicesBody>,
 ) -> impl IntoResponse {
-    // auth がない、または type が m.login.password でない → UIA チャレンジ
-    let password = match body.auth.as_ref().and_then(uia::extract_password) {
+    // auth がない → UIA チャレンジ
+    let auth = match &body.auth {
+        Some(a) => a,
+        None => return state.uia.challenge().into_response(),
+    };
+
+    // session 検証
+    let session = auth.get("session").and_then(|v| v.as_str()).unwrap_or("");
+    if !state.uia.validate(session) {
+        return state.uia.challenge().into_response();
+    }
+
+    // type が m.login.password でない → チャレンジ
+    let password = match uia::extract_password(auth) {
         Some(p) => p.to_string(),
-        None => return uia::challenge().into_response(),
+        None => return state.uia.challenge().into_response(),
     };
 
     // パスワード検証
