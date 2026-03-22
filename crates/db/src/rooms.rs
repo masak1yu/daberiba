@@ -166,17 +166,40 @@ pub async fn get_public_rooms(pool: &MySqlPool) -> Result<Vec<PublicRoom>> {
 pub async fn invite(
     pool: &MySqlPool,
     room_id: &str,
-    _inviter_user_id: &str,
+    inviter_user_id: &str,
     invitee_user_id: &str,
 ) -> Result<()> {
-    sqlx::query!(
-        r#"INSERT INTO room_memberships (room_id, user_id, membership)
-           VALUES (?, ?, 'invite')
-           ON DUPLICATE KEY UPDATE membership = 'invite'"#,
-        room_id,
-        invitee_user_id
+    sqlx::query(
+        r#"INSERT INTO room_memberships (room_id, user_id, membership, invited_by)
+           VALUES (?, ?, 'invite', ?)
+           ON DUPLICATE KEY UPDATE membership = 'invite', invited_by = VALUES(invited_by)"#,
     )
+    .bind(room_id)
+    .bind(invitee_user_id)
+    .bind(inviter_user_id)
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// membership = 'invite' なルームを取得（sync の rooms.invite 用）
+pub struct InvitedRoom {
+    pub room_id: String,
+    pub invited_by: Option<String>,
+}
+
+pub async fn invited_rooms(pool: &MySqlPool, user_id: &str) -> Result<Vec<InvitedRoom>> {
+    let rows: Vec<(String, Option<String>)> = sqlx::query_as(
+        "SELECT room_id, invited_by FROM room_memberships WHERE user_id = ? AND membership = 'invite'",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|(room_id, invited_by)| InvitedRoom {
+            room_id,
+            invited_by,
+        })
+        .collect())
 }

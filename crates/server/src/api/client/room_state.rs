@@ -89,5 +89,37 @@ async fn invite(
     Json(body): Json<InviteBody>,
 ) -> ApiResult<Json<serde_json::Value>> {
     db::rooms::invite(&state.pool, &room_id, &user.user_id, &body.user_id).await?;
+
+    // 被招待者の HTTP pusher に通知（ベストエフォート）
+    let state2 = state.clone();
+    let room_id2 = room_id.clone();
+    let inviter = user.user_id.clone();
+    let invitee = body.user_id.clone();
+    tokio::spawn(async move {
+        if let Ok(pushers) = db::pushers::list(&state2.pool, &invitee).await {
+            for p in pushers {
+                if p.kind != "http" {
+                    continue;
+                }
+                let data: serde_json::Value = serde_json::from_str(&p.data).unwrap_or_default();
+                let Some(url) = data.get("url").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                let payload = serde_json::json!({
+                    "notification": {
+                        "room_id": room_id2,
+                        "type": "m.room.member",
+                        "sender": inviter,
+                        "content": { "membership": "invite" },
+                        "devices": [{ "app_id": p.app_id, "pushkey": p.pushkey }],
+                    }
+                });
+                if let Err(e) = state2.http.post(url).json(&payload).send().await {
+                    tracing::warn!(url, error = %e, "invite push failed");
+                }
+            }
+        }
+    });
+
     Ok(Json(serde_json::json!({})))
 }
