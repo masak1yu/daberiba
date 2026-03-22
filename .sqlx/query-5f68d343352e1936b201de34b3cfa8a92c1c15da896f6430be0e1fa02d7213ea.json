@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "INSERT IGNORE INTO devices (device_id, user_id) VALUES (?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "5f68d343352e1936b201de34b3cfa8a92c1c15da896f6430be0e1fa02d7213ea"
+}

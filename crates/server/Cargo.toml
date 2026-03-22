@@ -1,6 +1,6 @@
 [package]
 name = "server"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 
 [dependencies]
@@ -22,6 +22,11 @@ sqlx = { workspace = true }
 url = "2"
 async-trait = { workspace = true }
 bytes = { workspace = true }
+aws-sdk-s3 = { version = "1", optional = true }
+aws-config = { version = "1", optional = true }
+
+[features]
+s3 = ["dep:aws-sdk-s3", "dep:aws-config"]
 
 [dev-dependencies]
 axum-test = "15"

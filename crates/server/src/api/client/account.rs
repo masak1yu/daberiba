@@ -2,9 +2,11 @@ use crate::{
     error::{ApiResult, AppError},
     middleware::auth::AuthUser,
     state::AppState,
+    uia,
 };
 use axum::{
     extract::State,
+    response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
@@ -38,20 +40,19 @@ async fn change_password(
     State(state): State<AppState>,
     axum::Extension(user): axum::Extension<AuthUser>,
     Json(body): Json<ChangePasswordBody>,
-) -> ApiResult<Json<serde_json::Value>> {
-    // auth.password から現在のパスワードを取得
-    let old_password = body
-        .auth
-        .as_ref()
-        .and_then(|a| a.get("password"))
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| AppError::BadRequest("auth.password is required".into()))?;
+) -> impl IntoResponse {
+    // auth がない、または type が m.login.password でない → UIA チャレンジ
+    let password = match body.auth.as_ref().and_then(uia::extract_password) {
+        Some(p) => p.to_string(),
+        None => return uia::challenge().into_response(),
+    };
 
-    db::users::change_password(&state.pool, &user.user_id, old_password, &body.new_password)
+    match db::users::change_password(&state.pool, &user.user_id, &password, &body.new_password)
         .await
-        .map_err(|_| AppError::Forbidden)?;
-
-    Ok(Json(serde_json::json!({})))
+    {
+        Ok(()) => Json(serde_json::json!({})).into_response(),
+        Err(_) => AppError::Forbidden.into_response(),
+    }
 }
 
 async fn logout(

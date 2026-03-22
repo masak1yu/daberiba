@@ -1,0 +1,25 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT e.content\n           FROM room_state rs\n           JOIN events e ON e.event_id = rs.event_id\n           WHERE rs.room_id = ? AND rs.event_type = ? AND rs.state_key = ?",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "content",
+        "type_info": {
+          "type": "Blob",
+          "flags": "NOT_NULL | BLOB | NO_DEFAULT_VALUE",
+          "char_set": 224,
+          "max_size": 67108860
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2c3151775f65192a51325a0fefba86ea2bf058f52ab60f8084ff491e7139ec1a"
+}

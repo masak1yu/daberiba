@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "DELETE FROM access_tokens WHERE user_id = ? AND device_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "7b526fcd007304b5e74f34a74833dac1225e525715f86c4fb55e73b4700e97b1"
+}

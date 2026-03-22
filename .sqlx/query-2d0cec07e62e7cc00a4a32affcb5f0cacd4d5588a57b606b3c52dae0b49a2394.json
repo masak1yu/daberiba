@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "INSERT INTO access_tokens (token, user_id, device_id) VALUES (?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "2d0cec07e62e7cc00a4a32affcb5f0cacd4d5588a57b606b3c52dae0b49a2394"
+}

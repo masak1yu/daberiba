@@ -1,0 +1,36 @@
+{
+  "db_name": "MySQL",
+  "query": "SELECT display_name, avatar_url FROM users WHERE user_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "display_name",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "char_set": 224,
+          "max_size": 1020
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "avatar_url",
+        "type_info": {
+          "type": "VarString",
+          "flags": "",
+          "char_set": 224,
+          "max_size": 4096
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "7943652c0025277beac1764b1e1dac512dd0648fe1ff347cd7e79b8423ddd22c"
+}

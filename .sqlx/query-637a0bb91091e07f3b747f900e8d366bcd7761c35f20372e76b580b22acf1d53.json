@@ -1,0 +1,12 @@
+{
+  "db_name": "MySQL",
+  "query": "INSERT INTO room_state (room_id, event_type, state_key, event_id)\n               VALUES (?, ?, ?, ?)\n               ON DUPLICATE KEY UPDATE event_id = VALUES(event_id)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "637a0bb91091e07f3b747f900e8d366bcd7761c35f20372e76b580b22acf1d53"
+}
