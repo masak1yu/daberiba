@@ -56,8 +56,8 @@ async fn get_alias(
 
     // server_name を room_id から抽出（!opaque:server_name 形式）
     let server = room_id
-        .splitn(2, ':')
-        .nth(1)
+        .split_once(':')
+        .map(|x| x.1)
         .unwrap_or("localhost")
         .to_string();
 
