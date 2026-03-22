@@ -1,4 +1,4 @@
-use crate::{error::ApiResult, middleware::auth::AuthUser, state::AppState};
+use crate::{error::ApiResult, error::AppError, middleware::auth::AuthUser, state::AppState};
 use axum::{
     extract::{Path, State},
     routing::{get, post},
@@ -49,8 +49,16 @@ async fn join_room(
     axum::Extension(user): axum::Extension<AuthUser>,
     Path(room_id_or_alias): Path<String>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let room_id = db::rooms::join(&state.pool, &user.user_id, &room_id_or_alias).await?;
+    // エイリアス（#で始まる）の場合はルームIDに解決する
+    let room_id = if room_id_or_alias.starts_with('#') {
+        db::room_aliases::resolve(&state.pool, &room_id_or_alias)
+            .await?
+            .ok_or(AppError::NotFound)?
+    } else {
+        room_id_or_alias.clone()
+    };
 
+    db::rooms::join(&state.pool, &user.user_id, &room_id).await?;
     Ok(Json(serde_json::json!({ "room_id": room_id })))
 }
 

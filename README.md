@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.5.0 — Client-Server API Phase 5 (functional, not production-ready)
+**Status:** v0.6.0 — Client-Server API Phase 6 (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -64,6 +64,11 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET | `/_matrix/client/v3/pushers` | List pushers |
 | POST | `/_matrix/client/v3/pushers/set` | Register / delete pusher |
 | GET | `/_matrix/client/v3/publicRooms` | Public room directory |
+| PUT | `/_matrix/client/v3/directory/room/{roomAlias}` | Create room alias |
+| GET | `/_matrix/client/v3/directory/room/{roomAlias}` | Resolve room alias |
+| DELETE | `/_matrix/client/v3/directory/room/{roomAlias}` | Delete room alias |
+| PUT | `/_matrix/client/v3/presence/{userId}/status` | Set presence status |
+| GET | `/_matrix/client/v3/presence/{userId}/status` | Get presence status |
 | POST | `/_matrix/media/v3/upload` | Upload media |
 | GET | `/_matrix/media/v3/download/{serverName}/{mediaId}` | Download media |
 
@@ -253,12 +258,50 @@ Active typing users are returned in `/sync` as `m.typing` ephemeral events. Stat
 
 `GET /publicRooms` returns rooms where `m.room.join_rules` state is set to `"public"`.
 
+## Unread Notification Counts
+
+`/sync` responses include `unread_notifications` per joined room:
+
+```json
+"unread_notifications": {
+  "notification_count": 5,
+  "highlight_count": 1
+}
+```
+
+`notification_count` is events after the user's last `m.read` receipt. `highlight_count` is the subset that mention the user.
+
+## Room Aliases
+
+```sh
+# Create
+PUT /_matrix/client/v3/directory/room/%23alias%3Aserver  {"room_id": "!abc:server"}
+
+# Resolve
+GET /_matrix/client/v3/directory/room/%23alias%3Aserver
+→ {"room_id": "!abc:server", "servers": ["server"]}
+
+# Join by alias
+POST /_matrix/client/v3/join/%23alias%3Aserver
+```
+
+## Presence
+
+```sh
+# Set
+PUT /_matrix/client/v3/presence/@user:server/status
+{"presence": "online", "status_msg": "In a meeting"}
+
+# Get
+GET /_matrix/client/v3/presence/@user:server/status
+→ {"presence": "online", "last_active_ago": 1234, "currently_active": true}
+```
+
+Presence events for joined room members are included in `/sync` as `m.presence` events in the top-level `presence.events` array.
+
 ## Not Yet Implemented
 
 - Federation (`/_matrix/federation`) — out of scope for now
-- Unread notification counts (`unread_notifications` in sync)
-- Room aliases (`/directory/room/{roomAlias}`)
-- Presence
 
 ## License
 

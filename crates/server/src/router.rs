@@ -17,10 +17,12 @@ pub fn build(state: AppState) -> Router {
         .merge(api::client::rooms::routes())
         .merge(api::client::room_state::routes())
         .merge(api::client::events::routes())
+        .merge(api::client::presence::routes())
         .merge(api::client::profile::routes())
         .merge(api::client::sync::routes())
         .merge(api::client::pushers::routes())
         .merge(api::client::receipts::routes())
+        .merge(api::client::room_aliases::routes())
         .merge(api::client::typing_notif::routes())
         .merge(api::client::public_rooms::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
