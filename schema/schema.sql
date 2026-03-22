@@ -110,6 +110,25 @@ CREATE TABLE IF NOT EXISTS receipts (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS room_aliases (
+    alias      VARCHAR(255)  NOT NULL COMMENT '#localpart:server_name',
+    room_id    VARCHAR(255)  NOT NULL,
+    creator    VARCHAR(255)  NOT NULL,
+    PRIMARY KEY (alias),
+    INDEX idx_room_aliases_room_id (room_id),
+    FOREIGN KEY (room_id)  REFERENCES rooms(room_id)  ON DELETE CASCADE,
+    FOREIGN KEY (creator)  REFERENCES users(user_id)  ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS presence (
+    user_id        VARCHAR(255)  NOT NULL,
+    presence       VARCHAR(32)   NOT NULL COMMENT 'online | offline | unavailable',
+    status_msg     TEXT          NULL,
+    last_active_ts BIGINT        NOT NULL COMMENT 'Unix milliseconds',
+    PRIMARY KEY (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS room_state (
     room_id    VARCHAR(255)  NOT NULL,
     event_type VARCHAR(255)  NOT NULL,

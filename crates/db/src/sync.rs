@@ -60,6 +60,13 @@ pub async fn sync(
             })
             .collect();
 
+        let unread = crate::unread::get_for_room(pool, room_id, user_id)
+            .await
+            .unwrap_or(crate::unread::UnreadCounts {
+                notification_count: 0,
+                highlight_count: 0,
+            });
+
         join_map.insert(
             room_id.clone(),
             serde_json::json!({
@@ -70,6 +77,10 @@ pub async fn sync(
                 },
                 "state": { "events": [] },
                 "ephemeral": { "events": [] },
+                "unread_notifications": {
+                    "notification_count": unread.notification_count,
+                    "highlight_count": unread.highlight_count,
+                },
             }),
         );
     }
