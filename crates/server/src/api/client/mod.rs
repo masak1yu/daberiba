@@ -13,6 +13,7 @@ pub mod push_rules;
 pub mod pushers;
 pub mod receipts;
 pub mod room_aliases;
+pub mod room_keys;
 pub mod room_state;
 pub mod room_tags;
 pub mod rooms;
