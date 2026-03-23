@@ -1,4 +1,5 @@
 use crate::media_store::MediaStore;
+use crate::signing_key::ServerSigningKey;
 use crate::typing_store::TypingStore;
 use crate::uia::UiaStore;
 use sqlx::MySqlPool;
@@ -11,6 +12,8 @@ pub struct AppState {
     pub uia: Arc<UiaStore>,
     pub typing: Arc<TypingStore>,
     pub http: reqwest::Client,
+    /// サーバー署名鍵（Federation 用）
+    pub signing_key: Arc<ServerSigningKey>,
 }
 
 impl AppState {
@@ -21,6 +24,7 @@ impl AppState {
             uia: UiaStore::new(),
             typing: TypingStore::new(),
             http: reqwest::Client::new(),
+            signing_key: Arc::new(ServerSigningKey::generate()),
         }
     }
 }

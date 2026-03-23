@@ -30,6 +30,7 @@ pub fn build(state: AppState) -> Router {
         .merge(api::client::typing_notif::routes())
         .merge(api::client::keys::routes())
         .merge(api::client::push_rules::routes())
+        .merge(api::client::room_keys::routes())
         .merge(api::client::public_rooms::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
@@ -37,10 +38,20 @@ pub fn build(state: AppState) -> Router {
     let media =
         api::media::routes().layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
+    // Federation ルート（認証不要 — X-Matrix 検証は各ハンドラで行う）
+    let federation = Router::new()
+        .merge(api::federation::version::routes())
+        .merge(api::federation::query::routes());
+
+    // サーバー公開鍵（認証不要）
+    let server_keys = api::server_keys::routes();
+
     Router::new()
         .merge(public)
         .merge(protected)
         .merge(media)
+        .merge(federation)
+        .merge(server_keys)
         .layer(build_cors())
         .layer(TraceLayer::new_for_http())
         .with_state(state)

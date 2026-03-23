@@ -1,5 +1,5 @@
 use anyhow::Result;
-use sqlx::MySqlPool;
+use sqlx::{MySqlPool, Row};
 
 /// /sync の実装
 /// next_batch / since は stream_ordering（u64 文字列）
@@ -9,6 +9,7 @@ pub async fn sync(
     since: Option<&str>,
 ) -> Result<serde_json::Value> {
     let since_ordering: u64 = since.and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
+    let is_initial = since_ordering == 0;
 
     let rooms = sqlx::query!(
         "SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'",
@@ -60,6 +61,40 @@ pub async fn sync(
             })
             .collect();
 
+        // 初回 sync: room_state から現在のステートスナップショットを返す
+        // 増分 sync: ステート変更は timeline に含まれるため state は空
+        let state_events: Vec<serde_json::Value> = if is_initial {
+            let rows = sqlx::query(
+                r#"SELECT e.event_id, e.sender, e.event_type, rs.state_key, e.content, e.created_at
+                   FROM room_state rs
+                   JOIN events e ON e.event_id = rs.event_id
+                   WHERE rs.room_id = ?"#,
+            )
+            .bind(room_id)
+            .fetch_all(pool)
+            .await?;
+
+            rows.iter()
+                .map(|r| {
+                    let content_str: String = r.get("content");
+                    serde_json::json!({
+                        "event_id": r.get::<String, _>("event_id"),
+                        "sender": r.get::<String, _>("sender"),
+                        "type": r.get::<String, _>("event_type"),
+                        "state_key": r.get::<String, _>("state_key"),
+                        "content": serde_json::from_str::<serde_json::Value>(&content_str)
+                            .unwrap_or_default(),
+                        "origin_server_ts": r.get::<chrono::NaiveDateTime, _>("created_at")
+                            .and_utc()
+                            .timestamp_millis(),
+                        "room_id": room_id,
+                    })
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+
         let unread = crate::unread::get_for_room(pool, room_id, user_id)
             .await
             .unwrap_or(crate::unread::UnreadCounts {
@@ -75,7 +110,7 @@ pub async fn sync(
                     "limited": false,
                     "prev_batch": prev_batch,
                 },
-                "state": { "events": [] },
+                "state": { "events": state_events },
                 "ephemeral": { "events": [] },
                 "unread_notifications": {
                     "notification_count": unread.notification_count,

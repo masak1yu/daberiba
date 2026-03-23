@@ -127,6 +127,17 @@ pub async fn get_joined_members(
     Ok(map)
 }
 
+/// ルームの参加メンバー数を返す
+pub async fn count_joined_members(pool: &MySqlPool, room_id: &str) -> Result<u64> {
+    let row: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM room_memberships WHERE room_id = ? AND membership = 'join'",
+    )
+    .bind(room_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0 as u64)
+}
+
 pub struct PublicRoom {
     pub room_id: String,
     pub name: Option<String>,

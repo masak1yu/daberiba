@@ -206,3 +206,29 @@ CREATE TABLE IF NOT EXISTS room_state (
     FOREIGN KEY (room_id)  REFERENCES rooms(room_id)   ON DELETE CASCADE,
     FOREIGN KEY (event_id) REFERENCES events(event_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS room_key_backup_versions (
+    id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id    VARCHAR(255)    NOT NULL,
+    algorithm  VARCHAR(255)    NOT NULL,
+    auth_data  MEDIUMTEXT      NOT NULL COMMENT 'JSON',
+    deleted    TINYINT(1)      NOT NULL DEFAULT 0,
+    created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    INDEX idx_rkbv_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS room_key_backup_sessions (
+    version             BIGINT UNSIGNED NOT NULL,
+    user_id             VARCHAR(255)    NOT NULL,
+    room_id             VARCHAR(255)    NOT NULL,
+    session_id          VARCHAR(255)    NOT NULL,
+    first_message_index INT             NOT NULL DEFAULT 0,
+    forwarded_count     INT             NOT NULL DEFAULT 0,
+    is_verified         TINYINT(1)      NOT NULL DEFAULT 0,
+    session_data        MEDIUMTEXT      NOT NULL COMMENT 'JSON',
+    PRIMARY KEY (version, user_id, room_id, session_id),
+    INDEX idx_rkbs_version_user (version, user_id),
+    FOREIGN KEY (version) REFERENCES room_key_backup_versions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
