@@ -14,6 +14,7 @@ mod signing_key;
 mod state;
 mod typing_store;
 mod uia;
+mod xmatrix;
 
 #[cfg(test)]
 mod tests;
@@ -48,7 +49,7 @@ async fn main() -> Result<()> {
             }
         };
 
-    let state = state::AppState::new(pool, media);
+    let state = state::AppState::new(pool, media).await;
     let app = router::build(state);
 
     let bind_addr = env::var("BIND_ADDR").unwrap_or_else(|_| "0.0.0.0:8448".to_string());

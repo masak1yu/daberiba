@@ -1,7 +1,7 @@
 /// サーバー署名鍵管理
 ///
-/// 起動時に Ed25519 鍵ペアを生成してメモリに保持する。
-/// 鍵は再起動のたびに再生成されるため、永続化は今後の課題。
+/// 起動時に DB から鍵ペアを読み込む。存在しない場合は生成して DB に保存する。
+/// DB が利用不可の場合はエフェメラル鍵にフォールバックする（テスト環境等で有用）。
 /// key ID は "ed25519:auto" を使用。
 use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
 use ed25519_dalek::{Signer, SigningKey};
@@ -13,11 +13,40 @@ pub struct ServerSigningKey {
 }
 
 impl ServerSigningKey {
-    pub fn generate() -> Self {
-        let signing_key = SigningKey::generate(&mut OsRng);
+    /// DB から鍵を読み込む。存在しない場合は新規生成して DB に保存する。
+    /// DB が利用不可の場合はエフェメラル鍵にフォールバックし、警告ログを出す。
+    pub async fn load_or_generate(pool: &sqlx::MySqlPool) -> Self {
+        const KEY_ID: &str = "ed25519:auto";
+        match db::server_signing_key::load(pool, KEY_ID).await {
+            Ok(Some(b64)) => {
+                if let Ok(bytes) = STANDARD_NO_PAD.decode(&b64) {
+                    if let Ok(arr) = <[u8; 32]>::try_from(bytes) {
+                        return Self {
+                            key_id: KEY_ID.to_string(),
+                            signing_key: SigningKey::from_bytes(&arr),
+                        };
+                    }
+                }
+                tracing::warn!("DB の署名鍵データが不正です。エフェメラル鍵を使用します");
+            }
+            Ok(None) => {
+                let signing_key = SigningKey::generate(&mut OsRng);
+                let b64 = STANDARD_NO_PAD.encode(signing_key.to_bytes());
+                if let Err(e) = db::server_signing_key::save(pool, KEY_ID, &b64).await {
+                    tracing::warn!("署名鍵を DB に保存できませんでした: {e}");
+                }
+                return Self {
+                    key_id: KEY_ID.to_string(),
+                    signing_key,
+                };
+            }
+            Err(e) => {
+                tracing::warn!("DB から署名鍵を読み込めません。エフェメラル鍵を使用します: {e}");
+            }
+        }
         Self {
-            key_id: "ed25519:auto".to_string(),
-            signing_key,
+            key_id: KEY_ID.to_string(),
+            signing_key: SigningKey::generate(&mut OsRng),
         }
     }
 

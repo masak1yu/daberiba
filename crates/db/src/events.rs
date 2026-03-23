@@ -57,7 +57,7 @@ pub struct MessagePage {
     pub end: Option<String>,
 }
 
-fn ordering_to_token(n: u64) -> String {
+pub fn ordering_to_token(n: u64) -> String {
     format!("s{}", n)
 }
 

@@ -1,11 +1,11 @@
 /// Federation ディレクトリクエリ
 /// GET /_matrix/federation/v1/query/directory?room_alias=<alias>
 ///
-/// X-Matrix 認証が必要。ここでは簡易実装として Authorization ヘッダの存在のみ確認する。
-/// 完全な署名検証は今後の課題。
+/// X-Matrix 署名検証済みリクエストのみ受け付ける。
 use crate::{error::ApiResult, state::AppState};
 use axum::{
     extract::{Query, State},
+    http::{HeaderMap, Uri},
     routing::get,
     Json, Router,
 };
@@ -26,7 +26,11 @@ struct DirectoryQuery {
 async fn query_directory(
     State(state): State<AppState>,
     Query(q): Query<DirectoryQuery>,
+    headers: HeaderMap,
+    uri: Uri,
 ) -> ApiResult<Json<serde_json::Value>> {
+    crate::xmatrix::verify_request(&state, &headers, "GET", &uri, None).await?;
+
     let result = db::room_aliases::resolve(&state.pool, &q.room_alias).await?;
     let room_id = result.ok_or(crate::error::AppError::NotFound)?;
 
