@@ -127,6 +127,15 @@ pub async fn get_joined_members(
     Ok(map)
 }
 
+/// ルームのバージョンを返す。ルームが存在しない場合は None。
+pub async fn get_version(pool: &MySqlPool, room_id: &str) -> Result<Option<String>> {
+    let row: Option<(String,)> = sqlx::query_as("SELECT room_version FROM rooms WHERE room_id = ?")
+        .bind(room_id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.map(|(v,)| v))
+}
+
 /// ルームの参加メンバー数を返す
 pub async fn count_joined_members(pool: &MySqlPool, room_id: &str) -> Result<u64> {
     let row: (i64,) = sqlx::query_as(

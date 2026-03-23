@@ -7,8 +7,11 @@ pub struct FilterDef {
     pub not_rooms: Option<HashSet<String>>,
     pub timeline_types: Option<HashSet<String>>,
     pub timeline_not_types: Option<HashSet<String>>,
+    pub timeline_limit: Option<u32>,
     pub state_types: Option<HashSet<String>>,
     pub state_not_types: Option<HashSet<String>>,
+    #[allow(dead_code)]
+    pub state_limit: Option<u32>, // 将来の初回 sync ステート制限用
     pub ephemeral_types: Option<HashSet<String>>,
     pub ephemeral_not_types: Option<HashSet<String>>,
     pub account_data_types: Option<HashSet<String>>,
@@ -32,8 +35,10 @@ impl FilterDef {
             not_rooms: extract_set(room, "not_rooms"),
             timeline_types: extract_set(timeline, "types"),
             timeline_not_types: extract_set(timeline, "not_types"),
+            timeline_limit: extract_u32(timeline, "limit"),
             state_types: extract_set(state, "types"),
             state_not_types: extract_set(state, "not_types"),
+            state_limit: extract_u32(state, "limit"),
             ephemeral_types: extract_set(ephemeral, "types"),
             ephemeral_not_types: extract_set(ephemeral, "not_types"),
             account_data_types: extract_set(account_data, "types"),
@@ -87,4 +92,10 @@ fn extract_set(obj: Option<&serde_json::Value>, key: &str) -> Option<HashSet<Str
             .filter_map(|v| v.as_str().map(str::to_string))
             .collect()
     })
+}
+
+fn extract_u32(obj: Option<&serde_json::Value>, key: &str) -> Option<u32> {
+    obj?.get(key)?
+        .as_u64()
+        .map(|v| v.min(u32::MAX as u64) as u32)
 }

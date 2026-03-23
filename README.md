@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.13.0 — Client-Server API Phase 12 + Federation Phase 2 (functional, not production-ready)
+**Status:** v0.14.0 — Client-Server API Phase 12 + Federation Phase 3 (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -99,9 +99,10 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET | `/_matrix/key/v2/server` | Server signing keys (persistent Ed25519, X-Matrix verified) |
 | GET | `/_matrix/federation/v1/version` | Server version |
 | GET | `/_matrix/federation/v1/query/directory` | Room alias lookup |
-| GET | `/_matrix/federation/v1/make_join/:room_id/:user_id` | Join event template |
-| PUT | `/_matrix/federation/v2/send_join/:room_id/:event_id` | Submit join event |
-| PUT | `/_matrix/federation/v1/send/:txn_id` | Receive transaction (PDUs) |
+| GET | `/_matrix/federation/v1/make_join/:room_id/:user_id` | Join event template (with room_version) |
+| PUT | `/_matrix/federation/v2/send_join/:room_id/:event_id` | Submit join event (PDU sig verified, auth_chain returned) |
+| PUT | `/_matrix/federation/v1/send/:txn_id` | Receive transaction (PDU sig verified, state resolution) |
+| GET | `/_matrix/federation/v1/event/:event_id` | Fetch event by ID (backfill) |
 
 ## Getting Started
 
@@ -368,6 +369,7 @@ The `filter` query parameter accepts a filter ID or an inline JSON filter. The f
 |---|---|
 | `room.rooms` / `room.not_rooms` | Include / exclude specific rooms |
 | `room.timeline.types` / `not_types` | Filter timeline events by type |
+| `room.timeline.limit` | Max timeline events per room per sync (default 50) |
 | `room.state.types` / `not_types` | Filter state events by type |
 | `room.ephemeral.types` / `not_types` | Filter ephemeral events by type |
 | `room.account_data.types` / `not_types` | Filter per-room account_data events |
@@ -470,7 +472,7 @@ User-defined rules and overrides are persisted in `account_data` as `m.push_rule
 
 ## Not Yet Implemented
 
-- Full Matrix federation (state resolution, cross-server room membership)
+- Full Matrix federation state resolution (auth_events DAG traversal, state resolution algorithm v2 full implementation)
 - E2EE Olm/Megolm session management (key exchange only)
 
 ## License

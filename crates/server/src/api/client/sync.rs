@@ -44,7 +44,14 @@ async fn sync(
     let (since_stream, acked_to_device_id, account_data_since_ms) =
         parse_since(query.since.as_deref());
 
-    let mut result = db::sync::sync(&state.pool, &user.user_id, since_stream.as_deref()).await?;
+    let timeline_limit = filter.as_ref().and_then(|f| f.timeline_limit).unwrap_or(50);
+    let mut result = db::sync::sync(
+        &state.pool,
+        &user.user_id,
+        since_stream.as_deref(),
+        timeline_limit,
+    )
+    .await?;
 
     // ルームごとのタグ（account_data m.tag 用）
     let all_tags = db::room_tags::get_all_for_user(&state.pool, &user.user_id)

@@ -44,7 +44,8 @@ pub fn build(state: AppState) -> Router {
         .merge(api::federation::query::routes())
         .merge(api::federation::make_join::routes())
         .merge(api::federation::send_join::routes())
-        .merge(api::federation::send_transaction::routes());
+        .merge(api::federation::send_transaction::routes())
+        .merge(api::federation::get_event::routes());
 
     // サーバー公開鍵（認証不要）
     let server_keys = api::server_keys::routes();

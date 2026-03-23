@@ -1,12 +1,14 @@
 use anyhow::Result;
-use sqlx::{MySqlPool, Row};
+use sqlx::{MySqlPool, Row as _};
 
 /// /sync の実装
 /// next_batch / since は stream_ordering（u64 文字列）
+/// timeline_limit: フィルターで指定された timeline のイベント上限（デフォルト 50）
 pub async fn sync(
     pool: &MySqlPool,
     user_id: &str,
     since: Option<&str>,
+    timeline_limit: u32,
 ) -> Result<serde_json::Value> {
     let since_ordering: u64 = since.and_then(|s| s.parse::<u64>().ok()).unwrap_or(0);
     let is_initial = since_ordering == 0;
@@ -24,26 +26,28 @@ pub async fn sync(
     for room_row in &rooms {
         let room_id = &room_row.room_id;
 
-        // 51 件取得して 50 件超なら limited = true
-        let mut event_rows = sqlx::query!(
-            r#"SELECT event_id, sender, event_type, state_key, content, created_at, stream_ordering
-               FROM events
-               WHERE room_id = ? AND stream_ordering > ?
-               ORDER BY stream_ordering ASC
-               LIMIT 51"#,
-            room_id,
-            since_ordering
+        // limit+1 件取得して limit 件超なら limited = true
+        let fetch_limit = (timeline_limit as i64) + 1;
+        let mut event_rows = sqlx::query(
+            "SELECT event_id, sender, event_type, state_key, content, created_at, stream_ordering \
+             FROM events \
+             WHERE room_id = ? AND stream_ordering > ? \
+             ORDER BY stream_ordering ASC \
+             LIMIT ?",
         )
+        .bind(room_id)
+        .bind(since_ordering)
+        .bind(fetch_limit)
         .fetch_all(pool)
         .await?;
 
-        let limited = event_rows.len() > 50;
+        let limited = event_rows.len() > timeline_limit as usize;
         if limited {
-            event_rows.truncate(50);
+            event_rows.truncate(timeline_limit as usize);
         }
 
         if let Some(last) = event_rows.last() {
-            let ord = last.stream_ordering;
+            let ord: u64 = last.get("stream_ordering");
             if ord > latest_ordering {
                 latest_ordering = ord;
             }
@@ -53,7 +57,7 @@ pub async fn sync(
         let prev_batch = if limited {
             event_rows
                 .first()
-                .map(|e| crate::events::ordering_to_token(e.stream_ordering))
+                .map(|e| crate::events::ordering_to_token(e.get("stream_ordering")))
                 .unwrap_or_else(|| crate::events::ordering_to_token(since_ordering))
         } else {
             crate::events::ordering_to_token(since_ordering)
@@ -62,15 +66,17 @@ pub async fn sync(
         let timeline_events: Vec<serde_json::Value> = event_rows
             .iter()
             .map(|e| {
-                let content_str = &e.content;
+                let content_str: String = e.get("content");
                 serde_json::json!({
-                    "event_id": e.event_id,
-                    "sender": e.sender,
-                    "type": e.event_type,
-                    "state_key": e.state_key,
-                    "content": serde_json::from_str::<serde_json::Value>(content_str)
+                    "event_id": e.get::<String, _>("event_id"),
+                    "sender": e.get::<String, _>("sender"),
+                    "type": e.get::<String, _>("event_type"),
+                    "state_key": e.get::<Option<String>, _>("state_key"),
+                    "content": serde_json::from_str::<serde_json::Value>(&content_str)
                         .unwrap_or_default(),
-                    "origin_server_ts": e.created_at.and_utc().timestamp_millis(),
+                    "origin_server_ts": e.get::<chrono::NaiveDateTime, _>("created_at")
+                        .and_utc()
+                        .timestamp_millis(),
                     "room_id": room_id,
                 })
             })
