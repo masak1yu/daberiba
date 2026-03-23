@@ -30,6 +30,44 @@ pub async fn get_all(pool: &MySqlPool, room_id: &str) -> Result<Vec<serde_json::
         .collect())
 }
 
+/// send_join レスポンス用の auth_chain イベントを返す。
+///
+/// auth_chain は「現在のステートを認可するイベント群」。
+/// ここでは m.room.create / m.room.join_rules / m.room.power_levels を返す
+/// （これらが存在すれば join 認可に必要な最小 auth chain となる）。
+pub async fn get_auth_events(pool: &MySqlPool, room_id: &str) -> Result<Vec<serde_json::Value>> {
+    let rows = sqlx::query(
+        r#"SELECT e.event_id, e.sender, e.event_type, rs.state_key, e.content, e.created_at
+           FROM room_state rs
+           JOIN events e ON e.event_id = rs.event_id
+           WHERE rs.room_id = ?
+             AND rs.event_type IN ('m.room.create', 'm.room.join_rules', 'm.room.power_levels')"#,
+    )
+    .bind(room_id)
+    .fetch_all(pool)
+    .await?;
+
+    use sqlx::Row;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let content_str: String = r.get("content");
+            serde_json::json!({
+                "event_id": r.get::<String, _>("event_id"),
+                "sender": r.get::<String, _>("sender"),
+                "type": r.get::<String, _>("event_type"),
+                "state_key": r.get::<String, _>("state_key"),
+                "content": serde_json::from_str::<serde_json::Value>(&content_str)
+                    .unwrap_or_default(),
+                "origin_server_ts": r.get::<chrono::NaiveDateTime, _>("created_at")
+                    .and_utc()
+                    .timestamp_millis(),
+                "room_id": room_id,
+            })
+        })
+        .collect())
+}
+
 pub async fn get_event(
     pool: &MySqlPool,
     room_id: &str,

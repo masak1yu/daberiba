@@ -150,6 +150,74 @@ pub async fn verify(
     Ok(claims)
 }
 
+/// PDU の署名を検証する。
+///
+/// origin サーバーの署名が少なくとも 1 つ有効であれば Ok を返す。
+/// signatures フィールドがない、または origin サーバーの有効な署名が見つからない場合はエラー。
+pub async fn verify_pdu_signatures(
+    state: &AppState,
+    pdu: &serde_json::Value,
+    origin: &str,
+) -> Result<()> {
+    let signatures = pdu["signatures"]
+        .as_object()
+        .ok_or_else(|| anyhow::anyhow!("PDU に signatures フィールドがありません"))?;
+
+    let origin_sigs = signatures
+        .get(origin)
+        .and_then(|v| v.as_object())
+        .ok_or_else(|| anyhow::anyhow!("{origin} の署名が PDU に見つかりません"))?;
+
+    // signatures / unsigned を除いた PDU のカノニカル JSON を構築
+    let mut redacted = pdu.clone();
+    if let Some(obj) = redacted.as_object_mut() {
+        obj.remove("signatures");
+        obj.remove("unsigned");
+    }
+    let canonical = canonical_json(&redacted);
+
+    // origin サーバーの署名をすべて試し、1 つでも成功すれば OK
+    let mut last_err: Option<anyhow::Error> = None;
+    for (key_id, sig_val) in origin_sigs {
+        let sig_b64 = match sig_val.as_str() {
+            Some(s) => s,
+            None => continue,
+        };
+        let sig_bytes = match STANDARD_NO_PAD.decode(sig_b64) {
+            Ok(b) => b,
+            Err(e) => {
+                last_err = Some(anyhow::anyhow!("base64 デコード失敗 ({key_id}): {e}"));
+                continue;
+            }
+        };
+        let sig_arr: [u8; 64] = match sig_bytes.try_into() {
+            Ok(a) => a,
+            Err(_) => {
+                last_err = Some(anyhow::anyhow!("署名長が不正 ({key_id})"));
+                continue;
+            }
+        };
+        let signature = Signature::from_bytes(&sig_arr);
+
+        match fetch_verifying_key(state, origin, key_id).await {
+            Ok(verifying_key) => {
+                use ed25519_dalek::Verifier;
+                match verifying_key.verify(canonical.as_bytes(), &signature) {
+                    Ok(()) => return Ok(()),
+                    Err(e) => {
+                        last_err = Some(anyhow::anyhow!("署名検証失敗 ({key_id}): {e}"));
+                    }
+                }
+            }
+            Err(e) => {
+                last_err = Some(anyhow::anyhow!("公開鍵取得失敗 ({key_id}): {e}"));
+            }
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| anyhow::anyhow!("{origin} の有効な署名が PDU に見つかりません")))
+}
+
 /// federation ハンドラ向けの簡易ラッパー。
 /// Authorization ヘッダーを取り出して検証し、失敗時は `AppError::Unauthorized` を返す。
 pub async fn verify_request(
