@@ -32,7 +32,8 @@
       "Bash(git merge:*)",
       "Bash(git stash:*)",
       "Bash(docker compose:*)",
-      "Read(//home/vscode/.cargo/bin/**)"
+      "Read(//home/vscode/.cargo/bin/**)",
+      "Bash(grep -n \"db::rooms::get_version\" /workspaces/daberiba/crates/server/src/api/federation/*.rs)"
     ]
   },
   "hooks": {

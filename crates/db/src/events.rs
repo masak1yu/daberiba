@@ -65,39 +65,30 @@ pub struct PduMeta<'a> {
 /// 既に同じ event_id が存在する場合は何もしない（べき等）。
 /// state_key が Some の場合は状態解決ルールに基づいて room_state を更新する。
 pub async fn store_pdu(pool: &MySqlPool, pdu: &PduMeta<'_>) -> Result<()> {
-    let event_id = pdu.event_id;
-    let room_id = pdu.room_id;
-    let sender = pdu.sender;
-    let event_type = pdu.event_type;
-    let state_key = pdu.state_key;
-    let origin_server_ts = pdu.origin_server_ts;
     let content_str = serde_json::to_string(pdu.content)?;
 
-    // 重複受信は無視（同じ event_id を 2 度処理しない）
     let affected = sqlx::query(
         r#"INSERT IGNORE INTO events
            (event_id, room_id, sender, event_type, state_key, content, origin_server_ts)
            VALUES (?, ?, ?, ?, ?, ?, ?)"#,
     )
-    .bind(event_id)
-    .bind(room_id)
-    .bind(sender)
-    .bind(event_type)
-    .bind(state_key)
+    .bind(pdu.event_id)
+    .bind(pdu.room_id)
+    .bind(pdu.sender)
+    .bind(pdu.event_type)
+    .bind(pdu.state_key)
     .bind(&content_str)
-    .bind(origin_server_ts)
+    .bind(pdu.origin_server_ts)
     .execute(pool)
     .await?
     .rows_affected();
 
     if affected == 0 {
-        // 重複 — 何もしない
         return Ok(());
     }
 
-    if let Some(sk) = state_key {
-        // 状態解決: 既存の state event より origin_server_ts が新しい場合のみ更新
-        // タイムスタンプが同一の場合は event_id の辞書順で小さい方（先着）を優先
+    if let Some(sk) = pdu.state_key {
+        // 状態解決: origin_server_ts が新しい方を採用。同一 ts は event_id 辞書順で小さい方を優先
         sqlx::query(
             r#"INSERT INTO room_state (room_id, event_type, state_key, event_id)
                VALUES (?, ?, ?, ?)
@@ -113,12 +104,12 @@ pub async fn store_pdu(pool: &MySqlPool, pdu: &PduMeta<'_>) -> Result<()> {
                    )
                  )"#,
         )
-        .bind(room_id)
-        .bind(event_type)
+        .bind(pdu.room_id)
+        .bind(pdu.event_type)
         .bind(sk)
-        .bind(event_id)
-        .bind(origin_server_ts)
-        .bind(origin_server_ts)
+        .bind(pdu.event_id)
+        .bind(pdu.origin_server_ts)
+        .bind(pdu.origin_server_ts)
         .execute(pool)
         .await?;
     }

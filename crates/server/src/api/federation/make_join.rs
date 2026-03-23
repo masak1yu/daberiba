@@ -25,15 +25,14 @@ async fn make_join(
 ) -> ApiResult<Json<serde_json::Value>> {
     crate::xmatrix::verify_request(&state, &headers, "GET", &uri, None).await?;
 
-    let count = db::rooms::count_joined_members(&state.pool, &room_id)
-        .await
-        .unwrap_or(0);
-    if count == 0 {
+    let (count, room_version) = tokio::join!(
+        db::rooms::count_joined_members(&state.pool, &room_id),
+        db::rooms::get_version(&state.pool, &room_id),
+    );
+    if count.unwrap_or(0) == 0 {
         return Err(crate::error::AppError::NotFound);
     }
-
-    let room_version = db::rooms::get_version(&state.pool, &room_id)
-        .await
+    let room_version = room_version
         .ok()
         .flatten()
         .unwrap_or_else(|| "10".to_string());

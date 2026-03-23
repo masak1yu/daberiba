@@ -79,7 +79,10 @@ async fn process_pdu(
     let origin_server_ts = pdu["origin_server_ts"]
         .as_i64()
         .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
-    let pdu_event_id = pdu["event_id"].as_str().unwrap_or("").to_string();
+    let pdu_event_id = pdu["event_id"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("missing event_id"))?
+        .to_string();
 
     let we_are_in_room = match room_cache.get(room_id) {
         Some(&v) => v,
