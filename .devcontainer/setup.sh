@@ -4,11 +4,11 @@ set -e
 # podman -> docker ブリッジ（Codespaces は Docker 環境）
 sudo ln -sf "$(which docker)" /usr/local/bin/podman
 
-# node -> bun シンボリックリンク（claude の shebang が #!/usr/bin/env node のため）
-sudo ln -sf /usr/local/bin/bun /usr/local/bin/node
+# bun -> node の旧シムリンクを削除（残っている場合）
+sudo unlink /usr/local/bin/node 2>/dev/null || true
 
-# Claude Code のインストール（BUN_INSTALL=/usr/local で /usr/local/bin/claude に配置）
-sudo env BUN_INSTALL=/usr/local bun install -g @anthropic-ai/claude-code
+# Claude Code のインストール（公式ネイティブバイナリ、Node.js 不要）
+curl -fsSL https://claude.ai/install.sh | bash
 
 # mysqldef (sqldef) のインストール — MariaDB 互換
 DPKG_ARCH="$(dpkg --print-architecture)"
