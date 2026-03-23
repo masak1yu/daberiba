@@ -4,8 +4,8 @@ set -e
 # podman -> docker ブリッジ（Codespaces は Docker 環境）
 sudo ln -sf "$(which docker)" /usr/local/bin/podman
 
-# Claude Code のインストール
-sudo npm install -g @anthropic-ai/claude-code
+# Claude Code のインストール（BUN_INSTALL=/usr/local で /usr/local/bin/claude に配置）
+sudo env BUN_INSTALL=/usr/local bun install -g @anthropic-ai/claude-code
 
 # mysqldef (sqldef) のインストール — MariaDB 互換
 DPKG_ARCH="$(dpkg --print-architecture)"

@@ -140,6 +140,7 @@ struct MessagesResponse {
 }
 
 /// room_id のメンバー（sender 除く）の HTTP pusher に通知を送る。
+/// push rule 評価を行い、notify アクションがある場合のみ配送する。
 /// tokio::spawn で非同期に実行し、エラーはログのみ。
 fn dispatch_push(
     state: AppState,
@@ -159,34 +160,160 @@ fn dispatch_push(
             }
         };
 
-        for pusher in pushers {
-            if pusher.kind != "http" {
+        if pushers.is_empty() {
+            return;
+        }
+
+        // ルームメンバー数を取得（room_member_count 条件用）
+        let member_count = db::rooms::count_joined_members(&state.pool, &room_id)
+            .await
+            .unwrap_or(0);
+
+        // push rule 評価用イベントオブジェクト
+        let event_obj = serde_json::json!({
+            "type": event_type,
+            "sender": sender,
+            "content": content,
+            "room_id": room_id,
+        });
+
+        // pusher をユーザー単位にまとめる
+        let mut by_user: std::collections::HashMap<String, Vec<db::pushers::Pusher>> =
+            std::collections::HashMap::new();
+        for p in pushers {
+            by_user.entry(p.user_id.clone()).or_default().push(p);
+        }
+
+        for (user_id, user_pushers) in by_user {
+            // ユーザーのプッシュルールをロード
+            let rules = if let Ok(Some(v)) =
+                db::account_data::get(&state.pool, &user_id, "", "m.push_rules").await
+            {
+                if v.get("global").map(|g| g.is_object()).unwrap_or(false) {
+                    v
+                } else {
+                    default_push_rules_for(&user_id)
+                }
+            } else {
+                default_push_rules_for(&user_id)
+            };
+
+            // 表示名を取得（contains_display_name 条件用）
+            let display_name: Option<String> = db::profile::get(&state.pool, &user_id)
+                .await
+                .ok()
+                .flatten()
+                .and_then(|p| p["displayname"].as_str().map(|s| s.to_string()));
+
+            // push rule 評価
+            let actions = crate::push_eval::eval_push_rules(
+                &rules,
+                &event_obj,
+                member_count,
+                display_name.as_deref(),
+            );
+            let should_notify = actions
+                .as_ref()
+                .map(|a| crate::push_eval::actions_notify(a))
+                .unwrap_or(false);
+
+            if !should_notify {
                 continue;
             }
-            let data: serde_json::Value = serde_json::from_str(&pusher.data).unwrap_or_default();
-            let Some(url) = data.get("url").and_then(|v| v.as_str()) else {
-                continue;
-            };
-            let payload = serde_json::json!({
-                "notification": {
-                    "event_id": event_id,
-                    "room_id": room_id,
-                    "type": event_type,
-                    "sender": sender,
-                    "content": content,
-                    "devices": [{
-                        "app_id": pusher.app_id,
-                        "pushkey": pusher.pushkey,
-                        "pushkey_ts": 0,
-                        "data": data,
-                    }],
+
+            for pusher in user_pushers {
+                if pusher.kind != "http" {
+                    continue;
                 }
-            });
-            if let Err(e) = state.http.post(url).json(&payload).send().await {
-                tracing::warn!(url, error = %e, "http push failed");
+                let data: serde_json::Value =
+                    serde_json::from_str(&pusher.data).unwrap_or_default();
+                let Some(url) = data.get("url").and_then(|v| v.as_str()) else {
+                    continue;
+                };
+                let payload = serde_json::json!({
+                    "notification": {
+                        "event_id": event_id,
+                        "room_id": room_id,
+                        "type": event_type,
+                        "sender": sender,
+                        "content": content,
+                        "devices": [{
+                            "app_id": pusher.app_id,
+                            "pushkey": pusher.pushkey,
+                            "pushkey_ts": 0,
+                            "data": data,
+                        }],
+                    }
+                });
+                if let Err(e) = state.http.post(url).json(&payload).send().await {
+                    tracing::warn!(url, error = %e, "http push failed");
+                }
             }
         }
     });
+}
+
+/// ユーザーのデフォルト push rules を生成する（account_data がない場合のフォールバック）
+fn default_push_rules_for(user_id: &str) -> serde_json::Value {
+    let localpart = user_id
+        .split(':')
+        .next()
+        .unwrap_or(user_id)
+        .trim_start_matches('@');
+    serde_json::json!({
+        "global": {
+            "override": [
+                {
+                    "rule_id": ".m.rule.master",
+                    "default": true,
+                    "enabled": false,
+                    "conditions": [],
+                    "actions": ["dont_notify"]
+                },
+                {
+                    "rule_id": ".m.rule.suppress_notices",
+                    "default": true,
+                    "enabled": true,
+                    "conditions": [{"kind": "event_match", "key": "content.msgtype", "pattern": "m.notice"}],
+                    "actions": ["dont_notify"]
+                },
+                {
+                    "rule_id": ".m.rule.contains_display_name",
+                    "default": true,
+                    "enabled": true,
+                    "conditions": [{"kind": "contains_display_name"}],
+                    "actions": ["notify", {"set_tweak": "sound", "value": "default"}, {"set_tweak": "highlight"}]
+                }
+            ],
+            "content": [
+                {
+                    "rule_id": ".m.rule.contains_user_name",
+                    "default": true,
+                    "enabled": true,
+                    "pattern": localpart,
+                    "actions": ["notify", {"set_tweak": "sound", "value": "default"}, {"set_tweak": "highlight"}]
+                }
+            ],
+            "room": [],
+            "sender": [],
+            "underride": [
+                {
+                    "rule_id": ".m.rule.message",
+                    "default": true,
+                    "enabled": true,
+                    "conditions": [{"kind": "event_match", "key": "type", "pattern": "m.room.message"}],
+                    "actions": ["notify"]
+                },
+                {
+                    "rule_id": ".m.rule.encrypted",
+                    "default": true,
+                    "enabled": true,
+                    "conditions": [{"kind": "event_match", "key": "type", "pattern": "m.room.encrypted"}],
+                    "actions": ["notify"]
+                }
+            ]
+        }
+    })
 }
 
 async fn get_messages(

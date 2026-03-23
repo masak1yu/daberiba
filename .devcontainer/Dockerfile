@@ -1,8 +1,7 @@
 FROM mcr.microsoft.com/devcontainers/rust:1-bookworm
 
-# Node.js LTS
-RUN curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - \
-    && apt-get install -y nodejs
+# Bun (JavaScript runtime)
+RUN curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash
 
 # just (タスクランナー)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
