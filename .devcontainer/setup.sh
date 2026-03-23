@@ -4,9 +4,6 @@ set -e
 # podman -> docker ブリッジ（Codespaces は Docker 環境）
 sudo ln -sf "$(which docker)" /usr/local/bin/podman
 
-# bun -> node の旧シムリンクを削除（残っている場合）
-sudo unlink /usr/local/bin/node 2>/dev/null || true
-
 # Claude Code のインストール（公式ネイティブバイナリ、Node.js 不要）
 curl -fsSL https://claude.ai/install.sh | bash
 
