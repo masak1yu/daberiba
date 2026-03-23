@@ -1,11 +1,12 @@
-# Handover — v0.12.0 → v0.13.0
+# Handover — v0.13.0 → v0.14.0
 
-## v0.12.0 でやったこと
+## v0.13.0 でやったこと
 
-- **sync state 差分**: 初回 sync（since なし）で `room_state` JOIN `events` から現在のステートスナップショットを `state.events` に返すよう修正。増分 sync（since あり）は従来どおり空配列（ステート変更は timeline に含まれる）。
-- **E2EE 鍵バックアップ** (`/_matrix/client/v3/room_keys/`): Megolm セッションキーのサーバー保管を実装。新規 DB テーブル `room_key_backup_versions` + `room_key_backup_sessions`。バージョン管理、全・ルーム・セッション単位の GET/PUT/DELETE をすべて実装。`first_message_index` が小さい方を優先する upsert ロジック付き。
-- **push_rules サーバーサイド評価**: イベント送信時に受信者ごとの push rules を評価し、notify アクションがある場合のみ HTTP pusher へ配送。評価する条件種別: `event_match`（glob）、`contains_display_name`、`room_member_count`、`sender_notification_permission`（簡易許可）。ルームメンバー数取得に `db::rooms::count_joined_members` を追加。
-- **Federation 基盤**: Ed25519 署名鍵を起動時生成（`ed25519-dalek` 2.x）。`GET /_matrix/key/v2/server` でサーバー公開鍵を返却（レスポンス自体を署名）。`GET /_matrix/federation/v1/version` でサーバーバージョン返却。`GET /_matrix/federation/v1/query/directory` でルームエイリアス解決（他サーバーからの問い合わせ対応）。
+- **Federation 署名鍵の永続化**: Ed25519 鍵ペアを DB (`server_signing_key` テーブル) に保存。再起動後も同じ鍵を使用。DB 障害時はエフェメラル鍵にフォールバック（`SigningKey::load_or_generate`）。
+- **X-Matrix 認証検証**: 受信 federation リクエストの署名を検証。他サーバーの公開鍵を `/_matrix/key/v2/server/<server_name>` で取得し `DashMap` にキャッシュ。`crates/server/src/xmatrix.rs` として独立モジュール化。`verify_request()` ヘルパーで各ハンドラから 1 行呼び出し可能。
+- **Federation make_join / send_join**: `GET /_matrix/federation/v1/make_join/:room_id/:user_id` で join event テンプレート返却。`PUT /_matrix/federation/v2/send_join/:room_id/:event_id` で PDU を受け取り DB に格納、現在のルームステート + servers_in_room を返却。
+- **Federation send_transaction**: `PUT /_matrix/federation/v1/send/:txn_id` で PDU を受信。`room_cache: HashMap<String, bool>` で N+1 クエリを回避。`m.room.member` 受信時にメンバーシップを更新。
+- **sync timeline limited / prev_batch**: LIMIT 51 で 51 件取得し 50 件超えなら `limited: true`、`prev_batch` を最古イベントの `stream_ordering` トークンで設定。`ordering_to_token()` を `pub` に変更。
 
 ## 既知の課題・技術的負債
 
@@ -13,21 +14,21 @@
 |---|---|
 | UIA ステージ m.login.password のみ | Matrix 仕様では他ステージ（m.login.sso 等）も定義されているが未対応 |
 | TypingStore はサーバー再起動でリセット | インメモリのため永続化なし（Matrix 仕様上は許容範囲） |
-| 非マクロ sqlx クエリ | receipts / room_aliases / presence / unread / room_tags / filters / to_device / keys / account_data / room_keys は `sqlx::query()` 非マクロを使用 |
+| 非マクロ sqlx クエリ | receipts / room_aliases / presence / unread / room_tags / filters / to_device / keys / account_data / room_keys / server_signing_key は `sqlx::query()` 非マクロを使用 |
 | highlight_count は LIKE 検索 | content に user_id 文字列が含まれるかどうかの簡易実装 |
 | プレゼンスは登録ユーザーのみ | `PUT /presence` を一度も呼んでいないユーザーは sync の presence.events に出現しない |
 | E2EE は鍵交換のみ | Olm セッション確立や Megolm グループセッション管理はクライアント側実装 |
-| Federation 署名鍵は起動時生成 | 再起動のたびに鍵が変わる。永続化（DB またはファイル）は未実装 |
-| Federation X-Matrix 認証は未検証 | 受信リクエストの署名検証なし（構造チェックのみ） |
+| Federation 状態解決未実装 | send_join でルームステートをそのまま返却（state resolution アルゴリズム v2 未実装） |
+| Federation PDU 署名検証が浅い | send_transaction / send_join で PDU の content 署名を検証していない（送信元サーバー認証のみ） |
 | account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
 
-## v0.13.0 候補
+## v0.14.0 候補
 
-1. **Federation 署名鍵の永続化** — DB またはファイルに Ed25519 鍵ペアを保存（再起動しても鍵が変わらない）
-2. **X-Matrix 認証検証** — 受信 federation リクエストの署名を検証（他サーバーの公開鍵を `/_matrix/key/v2/server/<server_name>` で取得してキャッシュ）
-3. **Federation send_join / make_join** — 他サーバーのルームへの参加フロー
-4. **Federation send transaction** — `PUT /_matrix/federation/v1/send/{txnId}` でイベント受信
-5. **sync timeline limited** — 大量イベントがある場合に `limited: true` と `prev_batch` を正しく設定
+1. **Federation 状態解決** — Matrix state resolution algorithm v2 を実装（`send_join` 受信時に正しい auth_chain / state を計算）
+2. **PDU 署名検証** — `send_transaction` / `send_join` 受信時に PDU 自体の Ed25519 署名を検証
+3. **Federation `/event` エンドポイント** — `GET /_matrix/federation/v1/event/:event_id` でイベント取得（バックフィル対応）
+4. **Room Version 対応** — room_version フィールドを DB に保持し、v1〜v10 のどのルームでも動作するよう対応
+5. **Sync フィルタ適用強化** — `room.timeline.limit` / `room.state.limit` をフィルタ JSON から読んで適用
 
 ## 開発フロー（おさらい）
 
@@ -50,7 +51,7 @@ cargo run --bin server
 DATABASE_URL=... cargo sqlx prepare --workspace
 
 # テスト
-cargo test
+SQLX_OFFLINE=true cargo test
 
 # フォーマット
 cargo fmt

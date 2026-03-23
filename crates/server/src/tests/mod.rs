@@ -14,7 +14,7 @@ async fn test_server() -> TestServer {
             .await
             .unwrap(),
     );
-    let state = AppState::new(pool, media);
+    let state = AppState::new(pool, media).await;
     let app = router::build(state);
     TestServer::new(app).unwrap()
 }
