@@ -4,6 +4,9 @@ set -e
 # podman -> docker ブリッジ（Codespaces は Docker 環境）
 sudo ln -sf "$(which docker)" /usr/local/bin/podman
 
+# node -> bun シンボリックリンク（claude の shebang が #!/usr/bin/env node のため）
+sudo ln -sf /usr/local/bin/bun /usr/local/bin/node
+
 # Claude Code のインストール（BUN_INSTALL=/usr/local で /usr/local/bin/claude に配置）
 sudo env BUN_INSTALL=/usr/local bun install -g @anthropic-ai/claude-code
 
