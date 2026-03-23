@@ -34,7 +34,10 @@
       "Bash(docker compose:*)",
       "Read(//home/vscode/.cargo/bin/**)",
       "Bash(grep -n \"db::rooms::get_version\" /workspaces/daberiba/crates/server/src/api/federation/*.rs)",
-      "Bash(SQLX_OFFLINE=true cargo fmt)"
+      "Bash(SQLX_OFFLINE=true cargo fmt)",
+      "Bash(/home/vscode/.local/bin/gh pr:*)",
+      "Read(//home/**)",
+      "Bash(curl -s -X POST -H \"Authorization: token $GITHUB_TOKEN\" -H \"Accept: application/vnd.github+json\" https://api.github.com/repos/masak1yu/daberiba/pulls -d '{:*)"
     ]
   },
   "hooks": {
