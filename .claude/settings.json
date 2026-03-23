@@ -30,7 +30,9 @@
       "Bash(export GH_TOKEN=\"$GITHUB_TOKEN\")",
       "Bash(git fetch:*)",
       "Bash(git merge:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(docker compose:*)",
+      "Read(//home/vscode/.cargo/bin/**)"
     ]
   },
   "hooks": {

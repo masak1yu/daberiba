@@ -24,7 +24,7 @@ async fn send_transaction(
     uri: Uri,
     Json(body): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    crate::xmatrix::verify_request(&state, &headers, "PUT", &uri, Some(&body)).await?;
+    let claims = crate::xmatrix::verify_request(&state, &headers, "PUT", &uri, Some(&body)).await?;
 
     let pdus = body["pdus"]
         .as_array()
@@ -38,7 +38,7 @@ async fn send_transaction(
     let mut pdu_results = serde_json::Map::new();
     for pdu in pdus {
         let event_id = pdu["event_id"].as_str().unwrap_or("").to_string();
-        match process_pdu(&state, pdu, &server_name, &mut room_cache).await {
+        match process_pdu(&state, pdu, &server_name, &claims.origin, &mut room_cache).await {
             Ok(()) => {
                 pdu_results.insert(event_id, json!({}));
             }
@@ -59,8 +59,12 @@ async fn process_pdu(
     state: &AppState,
     pdu: &serde_json::Value,
     server_name: &str,
+    origin: &str,
     room_cache: &mut HashMap<String, bool>,
 ) -> anyhow::Result<()> {
+    // PDU 自体の Ed25519 署名を検証
+    crate::xmatrix::verify_pdu_signatures(state, pdu, origin).await?;
+
     let room_id = pdu["room_id"]
         .as_str()
         .ok_or_else(|| anyhow::anyhow!("missing room_id"))?;
@@ -72,6 +76,10 @@ async fn process_pdu(
         .ok_or_else(|| anyhow::anyhow!("missing type"))?;
     let content = pdu.get("content").cloned().unwrap_or_default();
     let state_key: Option<&str> = pdu["state_key"].as_str();
+    let origin_server_ts = pdu["origin_server_ts"]
+        .as_i64()
+        .unwrap_or_else(|| chrono::Utc::now().timestamp_millis());
+    let pdu_event_id = pdu["event_id"].as_str().unwrap_or("").to_string();
 
     let we_are_in_room = match room_cache.get(room_id) {
         Some(&v) => v,
@@ -90,13 +98,17 @@ async fn process_pdu(
         return Ok(());
     }
 
-    db::events::send(
+    db::events::store_pdu(
         &state.pool,
-        room_id,
-        sender,
-        event_type,
-        state_key,
-        &content,
+        &db::events::PduMeta {
+            event_id: &pdu_event_id,
+            room_id,
+            sender,
+            event_type,
+            state_key,
+            content: &content,
+            origin_server_ts,
+        },
     )
     .await?;
 

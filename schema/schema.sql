@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS access_tokens (
 CREATE TABLE IF NOT EXISTS rooms (
     room_id         VARCHAR(255)  NOT NULL COMMENT '!opaque:server_name',
     creator_user_id VARCHAR(255)  NOT NULL,
+    room_version    VARCHAR(16)   NOT NULL DEFAULT '10' COMMENT 'Matrix room version (1-10)',
     name            VARCHAR(255)  NULL,
     topic           TEXT          NULL,
     created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -44,14 +45,15 @@ CREATE TABLE IF NOT EXISTS room_memberships (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS events (
-    event_id        VARCHAR(255)    NOT NULL COMMENT '$opaque:server_name',
-    room_id         VARCHAR(255)    NOT NULL,
-    sender          VARCHAR(255)    NOT NULL,
-    event_type      VARCHAR(255)    NOT NULL,
-    state_key       VARCHAR(255)    NULL COMMENT 'NULLはtimeline event',
-    content         MEDIUMTEXT      NOT NULL,
-    created_at      DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    stream_ordering BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    event_id          VARCHAR(255)    NOT NULL COMMENT '$opaque:server_name',
+    room_id           VARCHAR(255)    NOT NULL,
+    sender            VARCHAR(255)    NOT NULL,
+    event_type        VARCHAR(255)    NOT NULL,
+    state_key         VARCHAR(255)    NULL COMMENT 'NULLはtimeline event',
+    content           MEDIUMTEXT      NOT NULL,
+    origin_server_ts  BIGINT          NULL COMMENT 'federation PDU のオリジナルタイムスタンプ (ms)。ローカルイベントは NULL',
+    created_at        DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    stream_ordering   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     PRIMARY KEY (event_id),
     UNIQUE KEY uq_events_stream_ordering (stream_ordering),
     INDEX idx_events_room_id (room_id, stream_ordering),

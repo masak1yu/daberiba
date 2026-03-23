@@ -32,6 +32,12 @@ async fn make_join(
         return Err(crate::error::AppError::NotFound);
     }
 
+    let room_version = db::rooms::get_version(&state.pool, &room_id)
+        .await
+        .ok()
+        .flatten()
+        .unwrap_or_else(|| "10".to_string());
+
     let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
     let now_ms = chrono::Utc::now().timestamp_millis() as u64;
 
@@ -49,7 +55,7 @@ async fn make_join(
     });
 
     Ok(Json(serde_json::json!({
-        "room_version": "10",
+        "room_version": room_version,
         "event": event,
     })))
 }
