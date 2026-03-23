@@ -18,6 +18,9 @@
   },
   "postCreateCommand": "bash .devcontainer/setup.sh",
   "postStartCommand": "docker compose up -d db",
+  "mounts": [
+    "source=daberiba-claude-credentials,target=/home/vscode/.claude,type=volume"
+  ],
   "remoteUser": "vscode",
   "customizations": {
     "vscode": {
