@@ -41,7 +41,10 @@ pub fn build(state: AppState) -> Router {
     // Federation ルート（認証不要 — X-Matrix 検証は各ハンドラで行う）
     let federation = Router::new()
         .merge(api::federation::version::routes())
-        .merge(api::federation::query::routes());
+        .merge(api::federation::query::routes())
+        .merge(api::federation::make_join::routes())
+        .merge(api::federation::send_join::routes())
+        .merge(api::federation::send_transaction::routes());
 
     // サーバー公開鍵（認証不要）
     let server_keys = api::server_keys::routes();

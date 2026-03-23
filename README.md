@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.12.0 — Client-Server API Phase 12 + Federation foundation (functional, not production-ready)
+**Status:** v0.13.0 — Client-Server API Phase 12 + Federation Phase 2 (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -96,9 +96,12 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 ### Federation
 | Method | Path | Description |
 |---|---|---|
-| GET | `/_matrix/key/v2/server` | Server signing keys |
+| GET | `/_matrix/key/v2/server` | Server signing keys (persistent Ed25519, X-Matrix verified) |
 | GET | `/_matrix/federation/v1/version` | Server version |
 | GET | `/_matrix/federation/v1/query/directory` | Room alias lookup |
+| GET | `/_matrix/federation/v1/make_join/:room_id/:user_id` | Join event template |
+| PUT | `/_matrix/federation/v2/send_join/:room_id/:event_id` | Submit join event |
+| PUT | `/_matrix/federation/v1/send/:txn_id` | Receive transaction (PDUs) |
 
 ## Getting Started
 
@@ -110,7 +113,7 @@ Codespace を開くだけで以下が自動セットアップされます。
 
 - Rust toolchain、`just`、`mysqldef` インストール済み
 - MariaDB 起動済み
-- Bun + `claude` コマンド (`@anthropic-ai/claude-code`) インストール済み
+- `claude` コマンド（公式ネイティブバイナリ）インストール済み
 - ポート `8448` を自動フォワード
 - zsh プロンプトにブランチ名・変更状態を表示 (Oh My Zsh `robbyrussell`)
 
@@ -467,7 +470,7 @@ User-defined rules and overrides are persisted in `account_data` as `m.push_rule
 
 ## Not Yet Implemented
 
-- Full Matrix federation (room join/send, state resolution, signature verification)
+- Full Matrix federation (state resolution, cross-server room membership)
 - E2EE Olm/Megolm session management (key exchange only)
 
 ## License

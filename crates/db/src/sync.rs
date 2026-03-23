@@ -24,17 +24,23 @@ pub async fn sync(
     for room_row in &rooms {
         let room_id = &room_row.room_id;
 
-        let event_rows = sqlx::query!(
+        // 51 件取得して 50 件超なら limited = true
+        let mut event_rows = sqlx::query!(
             r#"SELECT event_id, sender, event_type, state_key, content, created_at, stream_ordering
                FROM events
                WHERE room_id = ? AND stream_ordering > ?
                ORDER BY stream_ordering ASC
-               LIMIT 100"#,
+               LIMIT 51"#,
             room_id,
             since_ordering
         )
         .fetch_all(pool)
         .await?;
+
+        let limited = event_rows.len() > 50;
+        if limited {
+            event_rows.truncate(50);
+        }
 
         if let Some(last) = event_rows.last() {
             let ord = last.stream_ordering;
@@ -43,7 +49,16 @@ pub async fn sync(
             }
         }
 
-        let prev_batch = since_ordering.to_string();
+        // prev_batch: クライアントは GET /messages?dir=b&from=prev_batch で遡れる
+        let prev_batch = if limited {
+            event_rows
+                .first()
+                .map(|e| crate::events::ordering_to_token(e.stream_ordering))
+                .unwrap_or_else(|| crate::events::ordering_to_token(since_ordering))
+        } else {
+            crate::events::ordering_to_token(since_ordering)
+        };
+
         let timeline_events: Vec<serde_json::Value> = event_rows
             .iter()
             .map(|e| {
@@ -107,7 +122,7 @@ pub async fn sync(
             serde_json::json!({
                 "timeline": {
                     "events": timeline_events,
-                    "limited": false,
+                    "limited": limited,
                     "prev_batch": prev_batch,
                 },
                 "state": { "events": state_events },

@@ -2,6 +2,7 @@ use crate::media_store::MediaStore;
 use crate::signing_key::ServerSigningKey;
 use crate::typing_store::TypingStore;
 use crate::uia::UiaStore;
+use dashmap::DashMap;
 use sqlx::MySqlPool;
 use std::sync::Arc;
 
@@ -14,17 +15,21 @@ pub struct AppState {
     pub http: reqwest::Client,
     /// サーバー署名鍵（Federation 用）
     pub signing_key: Arc<ServerSigningKey>,
+    /// Federation 公開鍵キャッシュ: "{server_name}/{key_id}" -> (key_bytes, valid_until_ms)
+    pub fed_key_cache: Arc<DashMap<String, (Vec<u8>, u64)>>,
 }
 
 impl AppState {
-    pub fn new(pool: MySqlPool, media: Arc<dyn MediaStore>) -> Self {
+    pub async fn new(pool: MySqlPool, media: Arc<dyn MediaStore>) -> Self {
+        let signing_key = Arc::new(ServerSigningKey::load_or_generate(&pool).await);
         Self {
             pool,
             media,
             uia: UiaStore::new(),
             typing: TypingStore::new(),
             http: reqwest::Client::new(),
-            signing_key: Arc::new(ServerSigningKey::generate()),
+            signing_key,
+            fed_key_cache: Arc::new(DashMap::new()),
         }
     }
 }

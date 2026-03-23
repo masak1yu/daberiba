@@ -219,6 +219,13 @@ CREATE TABLE IF NOT EXISTS room_key_backup_versions (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+CREATE TABLE IF NOT EXISTS server_signing_key (
+    key_id      VARCHAR(255) NOT NULL COMMENT 'e.g. ed25519:auto',
+    private_key VARCHAR(512) NOT NULL COMMENT 'unpadded base64 encoded 32-byte private key',
+    created_at  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (key_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS room_key_backup_sessions (
     version             BIGINT UNSIGNED NOT NULL,
     user_id             VARCHAR(255)    NOT NULL,
