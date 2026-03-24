@@ -1,20 +1,14 @@
-# Handover — v0.21.0 → v0.22.0
+# Handover — v0.22.0 → v0.23.0
 
-## v0.21.0 でやったこと
+## v0.22.0 でやったこと
 
-- **depth / prev_events 追跡** (`db::events` 拡張 + schema 変更):
-  - `events` テーブルに `depth BIGINT NOT NULL DEFAULT 0` カラムを追加。
-  - `db::events::get_room_tip()` 新設: ルームの最新イベントの depth と event_id を返す（次イベントの depth = max + 1、prev_events = [最新 event_id]）。
-  - `db::events::send()` が内部で `get_room_tip()` を呼び、depth / prev_events を自動計算して保存する。戻り値を `(depth, prev_event_ids)` に変更。
-  - `db::events::PduMeta` に `depth: i64` フィールドを追加。federation 受信 PDU も depth を保存。
-  - `send_event` / `send_state_event` / `send_state_event_with_key` の各ハンドラが `get_room_tip()` を使って depth / prev_events を含む正確な PDU を組み立てるようになった。
+- **送信 PDU の auth_events 設定** (`send_event` / `send_state_event` / `send_state_event_with_key`):
+  - 各イベント送信ハンドラで `tokio::join!` を使って `get_room_tip` と `get_auth_event_ids` を並列実行。
+  - PDU の `auth_events` フィールドに `m.room.create` / `m.room.join_rules` / `m.room.power_levels` の event_id を含めるようになった（従来は `[]` 固定）。
 
-- **`make_join` テンプレートの auth_events / depth / prev_events 設定**:
-  - `db::room_state::get_auth_event_ids()` 新設: m.room.create / join_rules / power_levels の event_id を返す。
-  - `make_join` がテンプレートに `auth_events`・`depth`・`prev_events` を正しく含めるようになった。
-
-- **`preset: "public_chat"` 対応** (`rooms.rs create_room`):
-  - `createRoom` リクエストで `preset: "public_chat"` を指定すると、`m.room.join_rules` の `join_rule` が `"invite"` ではなく `"public"` になる。
+- **`/sync` の state delta 最適化** (`db::sync`):
+  - 増分 sync で `limited=true` の場合、`since_ordering` ～ タイムライン先頭の gap に含まれる state イベントを返すようになった。
+  - 従来は limited 時も gap state を返さず、クライアントが state 変化を見逃す可能性があった。
 
 ## 既知の課題・技術的負債
 
@@ -30,14 +24,14 @@
 | 状態解決アルゴリズム v2 未完全 | auth_events / prev_events は DB に保存されるが、グラフを使った完全な conflict resolution は未実装 |
 | account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
 | depth の競合リスク | get_room_tip() と send() の間に他のイベントが挿入された場合、depth が重複する可能性（シングルスレッド的な運用では許容範囲） |
-| auth_events が空のまま | 送信 PDU の auth_events=[]（make_join テンプレートは auth_event_ids を含むが、送信側 PDU 自体はまだ空） |
+| store_state_event の auth_events | rooms.rs の `store_state_event` ヘルパーはまだ auth_events を含めていない（ルーム作成時の初期イベント群） |
 
-## v0.22.0 候補
+## v0.23.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **送信 PDU の auth_events 設定** — ローカルイベント送信時に正しい auth_events を含める
-3. **federation send_join の room_version 伝播** — ローカルルームの room_version を send_join レスポンスで正確に返す（現在は rooms テーブルの値を返しているが、m.room.create の content と一致しているかを確認）
-4. **`/sync` の state delta 最適化** — since 指定時に変更のあった state イベントのみ返す
+2. **rooms.rs `store_state_event` の auth_events 設定** — ルーム作成時の初期イベント群にも正しい auth_events を含める
+3. **federation send_join の room_version 伝播確認** — ローカルルームの room_version を send_join レスポンスで正確に返す
+4. **`/sync` の presence 永続化** — presence イベントを DB に保存し、未 PUT ユーザーも返せるようにする
 
 ## 開発フロー（おさらい）
 
