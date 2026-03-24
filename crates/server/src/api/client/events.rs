@@ -28,6 +28,10 @@ pub fn routes() -> Router<AppState> {
             "/_matrix/client/v3/rooms/{roomId}/context/{eventId}",
             get(get_context),
         )
+        .route(
+            "/_matrix/client/v3/rooms/{roomId}/event/{eventId}",
+            get(get_event),
+        )
 }
 
 #[derive(Deserialize)]
@@ -462,4 +466,15 @@ async fn get_context(
         "events_after": ctx.events_after,
         "state": [],
     })))
+}
+
+async fn get_event(
+    State(state): State<AppState>,
+    axum::Extension(_user): axum::Extension<AuthUser>,
+    Path((_room_id, event_id)): Path<(String, String)>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let event = db::events::get_by_id(&state.pool, &event_id)
+        .await?
+        .ok_or(crate::error::AppError::NotFound)?;
+    Ok(Json(event))
 }

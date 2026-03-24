@@ -223,12 +223,61 @@ pub async fn sync(
         );
     }
 
+    // rooms.leave: 増分 sync 時、since_ordering より後に leave になったルームを返す
+    let mut leave_map = serde_json::Map::new();
+    if !is_initial {
+        let leave_room_ids = crate::rooms::leave_rooms_since(pool, user_id, since_ordering).await?;
+        for room_id in leave_room_ids {
+            // leave イベント（m.room.member / state_key = user_id）を取得
+            let leave_events: Vec<serde_json::Value> = sqlx::query(
+                r#"SELECT event_id, sender, event_type, state_key, content, created_at
+                   FROM events
+                   WHERE room_id = ? AND event_type = 'm.room.member' AND state_key = ?
+                     AND stream_ordering > ?
+                     AND content LIKE '%"membership":"leave"%'
+                   ORDER BY stream_ordering DESC LIMIT 1"#,
+            )
+            .bind(&room_id)
+            .bind(user_id)
+            .bind(since_ordering)
+            .fetch_all(pool)
+            .await
+            .unwrap_or_default()
+            .iter()
+            .map(|r| {
+                use sqlx::Row;
+                let content_str: String = r.get("content");
+                serde_json::json!({
+                    "event_id": r.get::<String, _>("event_id"),
+                    "sender": r.get::<String, _>("sender"),
+                    "type": r.get::<String, _>("event_type"),
+                    "state_key": r.get::<Option<String>, _>("state_key"),
+                    "content": serde_json::from_str::<serde_json::Value>(&content_str)
+                        .unwrap_or_default(),
+                    "origin_server_ts": r.get::<chrono::NaiveDateTime, _>("created_at")
+                        .and_utc()
+                        .timestamp_millis(),
+                    "room_id": room_id,
+                })
+            })
+            .collect();
+
+            leave_map.insert(
+                room_id,
+                serde_json::json!({
+                    "timeline": { "events": leave_events, "limited": false },
+                    "state": { "events": [] },
+                }),
+            );
+        }
+    }
+
     Ok(serde_json::json!({
         "next_batch": latest_ordering.to_string(),
         "rooms": {
             "join": join_map,
             "invite": invite_map,
-            "leave": {},
+            "leave": leave_map,
         },
         "presence": { "events": [] },
     }))
