@@ -1,29 +1,14 @@
-# Handover — v0.16.0 → v0.17.0
+# Handover — v0.17.0 → v0.18.0
 
-## v0.16.0 でやったこと
+## v0.17.0 でやったこと
 
-- **make_leave エンドポイント** (`federation/make_leave.rs`):
-  - `GET /_matrix/federation/v1/make_leave/:room_id/:user_id` を新規実装。
-  - ルームが存在し参加メンバーがいることを確認してから leave イベントテンプレートを返す。
-  - make_join と対称的な実装。
-
-- **Federation invite エンドポイント** (`federation/invite.rs`):
-  - `PUT /_matrix/federation/v2/invite/:room_id/:event_id` を新規実装。
-  - X-Matrix 署名検証 + PDU Ed25519 署名検証を実施。
-  - invitee が自サーバーのローカルユーザーであることを確認（`db::users::exists()` 追加）。
-  - ルームが未登録の場合は `db::rooms::ensure_placeholder()` でプレースホルダー挿入。
-  - `room_memberships` に invite を記録し、PDU に自サーバーの Ed25519 署名を追加して返す。
-
-- **rooms.creator_user_id を NULL 許容に変更**:
-  - `schema/schema.sql` の `creator_user_id VARCHAR(255) NOT NULL` → `NULL`。
-  - federation から招待されたルームをプレースホルダーとして登録可能にした。
-  - FK は `ON DELETE SET NULL` に変更。
-
-- **prev_events 保存**:
-  - `schema/schema.sql` の `events` テーブルに `prev_events TEXT NULL`（JSON 配列）カラムを追加。
-  - `db::events::PduMeta` に `prev_events: Option<&serde_json::Value>` フィールドを追加。
-  - `store_pdu()` が `prev_events` を保存するように更新。
-  - `send_join` / `send_transaction` / `send_leave` の `PduMeta` 構築で `prev_events` を渡すように更新。
+- **Federation 送信側の実装** (`federation_client.rs` 新規追加):
+  - `POST /_matrix/client/v3/join/{roomId}` で外部ルームを検出した場合、make_join → sign PDU → send_join フローを自動実行するようにした。
+  - `is_local_room()`: room_id の server 部分が自サーバー名と一致するかどうかで内外を判定。
+  - `join_remote_room()`: GET make_join でテンプレート取得 → Ed25519 署名付与 → event_id 計算（room version 3+, SHA-256 ハッシュ）→ PUT send_join 送信 → レスポンスの state/auth_chain PDU を DB に保存。
+  - X-Matrix 送信ヘッダーは `xmatrix::make_auth_header()` で生成（既存の X-Matrix 検証コードと対称的な実装）。
+  - `signing_key::compute_event_id()` 追加: signatures/unsigned/event_id/hashes を除いたカノニカル JSON の SHA-256 を URL-safe unpadded base64 エンコード。
+  - `db::rooms::set_version()` 追加: send_join レスポンスの room_version を DB に保存。
 
 ## 既知の課題・技術的負債
 
@@ -38,14 +23,14 @@
 | 状態解決が浅い | auth_events DAG の完全なグラフトラバーサルは未実装。`send_join` の auth_chain は m.room.create/join_rules/power_levels のみ |
 | 状態解決アルゴリズム v2 未完全 | auth_events / prev_events は DB に保存されるようになったが、グラフを使った完全な conflict resolution は未実装 |
 | account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
-| Federation 送信側が未実装 | 自サーバーから他サーバーへの make_join → send_join フローがない |
+| Federation 送信 send_transaction 未実装 | 自サーバーで発生したイベントを他サーバーへ PUT send_transaction で配送する機能がない |
 
-## v0.17.0 候補
+## v0.18.0 候補
 
-1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **Federation 送信側の実装** — 自サーバーのユーザーが外部ルームに参加する際 make_join → send_join を発行する
-3. **Federation notify_push_gateway** — 他サーバーのユーザーへの push 配送（send_transaction の送信）
-4. **invite の sync 反映** — federation 経由で invite された場合も `/sync` の `rooms.invite` に出現させる
+1. **Federation 送信 send_transaction** — ローカルイベント送信時に、同じルームの他サーバーメンバーへ PUT `/_matrix/federation/v1/send/{txnId}` でイベントを配送する
+2. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
+3. **Federation leave 送信側** — ローカルユーザーが外部ルームを退出する際に make_leave → send_leave を発行する
+4. **notify_push_gateway (federation 経由)** — send_transaction で届いたイベントに対して、ローカルユーザーへの push 配送
 
 ## 開発フロー（おさらい）
 

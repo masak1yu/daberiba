@@ -136,6 +136,16 @@ pub async fn get_version(pool: &MySqlPool, room_id: &str) -> Result<Option<Strin
     Ok(row.map(|(v,)| v))
 }
 
+/// ルームの room_version を更新する。
+pub async fn set_version(pool: &MySqlPool, room_id: &str, version: &str) -> Result<()> {
+    sqlx::query("UPDATE rooms SET room_version = ? WHERE room_id = ?")
+        .bind(version)
+        .bind(room_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 /// ルームの参加メンバー数を返す
 pub async fn count_joined_members(pool: &MySqlPool, room_id: &str) -> Result<u64> {
     let row: (i64,) = sqlx::query_as(

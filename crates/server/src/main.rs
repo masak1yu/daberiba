@@ -5,6 +5,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod api;
 mod error;
+mod federation_client;
 mod filter;
 mod media_store;
 mod middleware;
