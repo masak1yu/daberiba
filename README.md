@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.14.0 — Client-Server API Phase 12 + Federation Phase 3 (functional, not production-ready)
+**Status:** v0.15.0 — Client-Server API Phase 12 + Federation Phase 4 (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -101,8 +101,10 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET | `/_matrix/federation/v1/query/directory` | Room alias lookup |
 | GET | `/_matrix/federation/v1/make_join/:room_id/:user_id` | Join event template (with room_version) |
 | PUT | `/_matrix/federation/v2/send_join/:room_id/:event_id` | Submit join event (PDU sig verified, auth_chain returned) |
+| PUT | `/_matrix/federation/v2/send_leave/:room_id/:event_id` | Submit leave event (PDU sig verified) |
 | PUT | `/_matrix/federation/v1/send/:txn_id` | Receive transaction (PDU sig verified, state resolution) |
-| GET | `/_matrix/federation/v1/event/:event_id` | Fetch event by ID (backfill) |
+| GET | `/_matrix/federation/v1/event/:event_id` | Fetch event by ID |
+| GET | `/_matrix/federation/v1/backfill/:room_id` | Fetch historical events (backfill) |
 
 ## Getting Started
 

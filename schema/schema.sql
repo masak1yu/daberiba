@@ -51,6 +51,7 @@ CREATE TABLE IF NOT EXISTS events (
     event_type        VARCHAR(255)    NOT NULL,
     state_key         VARCHAR(255)    NULL COMMENT 'NULLはtimeline event',
     content           MEDIUMTEXT      NOT NULL,
+    auth_events       TEXT            NULL COMMENT 'federation PDU の auth_events（JSON 配列）',
     origin_server_ts  BIGINT          NULL COMMENT 'federation PDU のオリジナルタイムスタンプ (ms)。ローカルイベントは NULL',
     created_at        DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     stream_ordering   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

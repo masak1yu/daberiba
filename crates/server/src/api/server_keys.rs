@@ -11,7 +11,7 @@ pub fn routes() -> Router<AppState> {
 }
 
 async fn get_server_keys(State(state): State<AppState>) -> Json<serde_json::Value> {
-    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
+    let server_name = &*state.server_name;
 
     let now_ms = chrono::Utc::now().timestamp_millis() as u64;
     // 24 時間有効

@@ -71,18 +71,21 @@ async fn register(
     validate_username(&body.username)?;
     validate_password(&body.password)?;
 
-    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
-    let (user_id, access_token, device_id) =
-        db::users::register(&state.pool, &body.username, &body.password, &server_name)
-            .await
-            .map_err(|e| {
-                // 重複ユーザー
-                if e.to_string().contains("Duplicate") || e.to_string().contains("duplicate") {
-                    AppError::BadRequest("username already taken".into())
-                } else {
-                    AppError::Internal(e)
-                }
-            })?;
+    let (user_id, access_token, device_id) = db::users::register(
+        &state.pool,
+        &body.username,
+        &body.password,
+        &state.server_name,
+    )
+    .await
+    .map_err(|e| {
+        // 重複ユーザー
+        if e.to_string().contains("Duplicate") || e.to_string().contains("duplicate") {
+            AppError::BadRequest("username already taken".into())
+        } else {
+            AppError::Internal(e)
+        }
+    })?;
 
     Ok(Json(RegisterResponse {
         user_id,
@@ -130,9 +133,8 @@ async fn login(
         .password
         .ok_or_else(|| AppError::BadRequest("missing password".into()))?;
 
-    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
     let (user_id, access_token, device_id) =
-        db::users::login(&state.pool, &username, &password, &server_name)
+        db::users::login(&state.pool, &username, &password, &state.server_name)
             .await
             .map_err(|_| AppError::Unauthorized)?;
 
