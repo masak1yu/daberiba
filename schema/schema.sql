@@ -246,6 +246,21 @@ CREATE TABLE IF NOT EXISTS unread_highlights (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- プッシュ通知履歴テーブル。dispatch_push で notify アクションが発火した際に挿入する。
+-- GET /notifications の応答源。read_at は receipt POST 時に更新する。
+CREATE TABLE IF NOT EXISTS notifications (
+    id          BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    user_id     VARCHAR(255)    NOT NULL,
+    room_id     VARCHAR(255)    NOT NULL,
+    event_id    VARCHAR(255)    NOT NULL,
+    read_at     BIGINT          NULL,
+    notified_at BIGINT          NOT NULL,
+    PRIMARY KEY (id),
+    INDEX idx_notifications_user (user_id, id),
+    INDEX idx_notifications_room_event (room_id, event_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS room_key_backup_sessions (
     version             BIGINT UNSIGNED NOT NULL,
     user_id             VARCHAR(255)    NOT NULL,

@@ -75,3 +75,39 @@ pub async fn get_for_room(pool: &MySqlPool, room_id: &str, user_id: &str) -> Res
         highlight_count: highlight_row.0,
     })
 }
+
+/// 指定イベントがユーザーにとってハイライトかどうかを確認する。
+pub async fn is_highlight(
+    pool: &MySqlPool,
+    room_id: &str,
+    user_id: &str,
+    event_id: &str,
+) -> Result<bool> {
+    let row: (i64,) = sqlx::query_as(
+        "SELECT COUNT(*) FROM unread_highlights WHERE room_id = ? AND user_id = ? AND event_id = ?",
+    )
+    .bind(room_id)
+    .bind(user_id)
+    .bind(event_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(row.0 > 0)
+}
+
+/// receipt POST 時に、指定 stream_ordering 以前のハイライトレコードを削除する。
+pub async fn delete_highlights_up_to(
+    pool: &MySqlPool,
+    room_id: &str,
+    user_id: &str,
+    up_to_ordering: i64,
+) -> Result<()> {
+    sqlx::query(
+        "DELETE FROM unread_highlights WHERE room_id = ? AND user_id = ? AND stream_ordering <= ?",
+    )
+    .bind(room_id)
+    .bind(user_id)
+    .bind(up_to_ordering)
+    .execute(pool)
+    .await?;
+    Ok(())
+}

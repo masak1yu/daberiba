@@ -6,6 +6,7 @@ pub mod devices;
 pub mod events;
 pub mod filters;
 pub mod keys;
+pub mod notifications;
 pub mod presence;
 pub mod profile;
 pub mod public_rooms;

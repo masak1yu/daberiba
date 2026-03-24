@@ -101,6 +101,7 @@ async fn send_event(
         user.user_id,
         path.event_type,
         content,
+        now_ms,
     );
 
     Ok(Json(serde_json::json!({ "event_id": event_id })))
@@ -254,6 +255,7 @@ fn dispatch_push(
     sender: String,
     event_type: String,
     content: serde_json::Value,
+    now_ms: i64,
 ) {
     tokio::spawn(async move {
         let pushers = match db::pushers::get_for_room_members(&state.pool, &room_id, &sender).await
@@ -328,6 +330,10 @@ fn dispatch_push(
             if !should_notify {
                 continue;
             }
+
+            // 通知履歴テーブルに記録（ベストエフォート）
+            let _ =
+                db::notifications::record(&state.pool, &user_id, &room_id, &event_id, now_ms).await;
 
             // ハイライトを unread_highlights テーブルに記録（ベストエフォート）
             if is_highlight {
