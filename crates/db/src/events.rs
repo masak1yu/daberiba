@@ -3,7 +3,9 @@ use sqlx::MySqlPool;
 
 /// ローカルイベントのメタデータ。
 ///
-/// event_id と origin_server_ts は呼び出し元が計算して渡す（room v3+ ハッシュベース推奨）。
+/// event_id・depth・prev_events・origin_server_ts はすべて呼び出し元が計算して渡す。
+/// get_room_tip() で depth/prev_events を取得してから PDU ハッシュを計算し、
+/// その値をそのままここに設定することで event_id と保存済みフィールドが一致する。
 pub struct LocalEvent<'a> {
     pub event_id: &'a str,
     pub room_id: &'a str,
@@ -12,6 +14,8 @@ pub struct LocalEvent<'a> {
     pub state_key: Option<&'a str>,
     pub content: &'a serde_json::Value,
     pub origin_server_ts: i64,
+    pub depth: i64,
+    pub prev_events: &'a [String],
 }
 
 /// ルームの現在の "tip" 情報を返す。
@@ -41,12 +45,11 @@ pub async fn get_room_tip(pool: &MySqlPool, room_id: &str) -> Result<(i64, Vec<S
 
 /// ローカルイベントを保存する。
 ///
-/// depth はルームの現在の最大 depth + 1 として自動計算する。
-/// 戻り値: 保存したイベントの depth と prev_event_ids（federation PDU 構築に使用）。
-pub async fn send(pool: &MySqlPool, ev: &LocalEvent<'_>) -> Result<(i64, Vec<String>)> {
-    let (depth, prev_event_ids) = get_room_tip(pool, ev.room_id).await?;
+/// depth と prev_events は呼び出し元が get_room_tip() で取得して渡す。
+/// これにより event_id（呼び出し元で PDU ハッシュから計算）と保存フィールドが一致する。
+pub async fn send(pool: &MySqlPool, ev: &LocalEvent<'_>) -> Result<()> {
     let content_str = serde_json::to_string(ev.content)?;
-    let prev_events_str = serde_json::to_string(&prev_event_ids)?;
+    let prev_events_str = serde_json::to_string(ev.prev_events)?;
 
     sqlx::query(
         r#"INSERT INTO events (event_id, room_id, sender, event_type, state_key, content, origin_server_ts, depth, prev_events)
@@ -59,7 +62,7 @@ pub async fn send(pool: &MySqlPool, ev: &LocalEvent<'_>) -> Result<(i64, Vec<Str
     .bind(ev.state_key)
     .bind(&content_str)
     .bind(ev.origin_server_ts)
-    .bind(depth)
+    .bind(ev.depth)
     .bind(&prev_events_str)
     .execute(pool)
     .await?;
@@ -78,7 +81,7 @@ pub async fn send(pool: &MySqlPool, ev: &LocalEvent<'_>) -> Result<(i64, Vec<Str
         .await?;
     }
 
-    Ok((depth, prev_event_ids))
+    Ok(())
 }
 
 /// federation PDU のメタデータ

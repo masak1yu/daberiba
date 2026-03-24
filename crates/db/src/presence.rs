@@ -51,12 +51,17 @@ pub async fn get(pool: &MySqlPool, user_id: &str) -> Result<Option<PresenceStatu
     ))
 }
 
-/// ルームのメンバー全員のプレゼンスを取得（sync 用）
+/// ルームのメンバー全員のプレゼンスを取得（sync 用）。
+/// presence レコードがないユーザーは "offline" をデフォルトとして返す。
 pub async fn get_for_room_members(pool: &MySqlPool, room_id: &str) -> Result<Vec<PresenceStatus>> {
-    let rows: Vec<(String, String, Option<String>, i64)> = sqlx::query_as(
-        r#"SELECT p.user_id, p.presence, p.status_msg, p.last_active_ts
-           FROM presence p
-           INNER JOIN room_memberships rm ON rm.user_id = p.user_id
+    use sqlx::Row;
+    let rows = sqlx::query(
+        r#"SELECT rm.user_id,
+                  COALESCE(p.presence, 'offline') AS presence,
+                  p.status_msg,
+                  COALESCE(p.last_active_ts, 0) AS last_active_ts
+           FROM room_memberships rm
+           LEFT JOIN presence p ON p.user_id = rm.user_id
            WHERE rm.room_id = ? AND rm.membership = 'join'"#,
     )
     .bind(room_id)
@@ -65,13 +70,11 @@ pub async fn get_for_room_members(pool: &MySqlPool, room_id: &str) -> Result<Vec
 
     Ok(rows
         .into_iter()
-        .map(
-            |(user_id, presence, status_msg, last_active_ts)| PresenceStatus {
-                user_id,
-                presence,
-                status_msg,
-                last_active_ts,
-            },
-        )
+        .map(|r| PresenceStatus {
+            user_id: r.get("user_id"),
+            presence: r.get("presence"),
+            status_msg: r.get("status_msg"),
+            last_active_ts: r.get("last_active_ts"),
+        })
         .collect())
 }
