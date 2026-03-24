@@ -142,6 +142,101 @@ pub async fn join_remote_room(state: &AppState, room_id: &str, user_id: &str) ->
     Ok(())
 }
 
+/// Federation leave フロー: make_leave → 署名 → send_leave。
+///
+/// 1. リモートサーバーに GET make_leave を送り、leave イベントテンプレートを取得する。
+/// 2. テンプレートに自サーバーの Ed25519 署名を付与し event_id を計算する。
+/// 3. リモートサーバーに PUT send_leave を送る。
+/// 4. DB のメンバーシップを 'leave' に更新する。
+pub async fn leave_remote_room(state: &AppState, room_id: &str, user_id: &str) -> Result<()> {
+    let remote_server =
+        server_from_room_id(room_id).ok_or_else(|| anyhow!("invalid room_id: {room_id}"))?;
+
+    // 1. make_leave
+    let make_leave_uri = format!(
+        "/_matrix/federation/v1/make_leave/{}/{}",
+        url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>(),
+        url::form_urlencoded::byte_serialize(user_id.as_bytes()).collect::<String>()
+    );
+    let make_leave_url = format!("https://{}{}", remote_server, make_leave_uri);
+    let auth = crate::xmatrix::make_auth_header(state, remote_server, "GET", &make_leave_uri, None);
+
+    let resp: serde_json::Value = state
+        .http
+        .get(&make_leave_url)
+        .header("Authorization", &auth)
+        .send()
+        .await
+        .map_err(|e| anyhow!("make_leave HTTP error: {e}"))?
+        .json()
+        .await
+        .map_err(|e| anyhow!("make_leave parse error: {e}"))?;
+
+    let mut event = resp["event"]
+        .as_object()
+        .cloned()
+        .ok_or_else(|| anyhow!("make_leave: missing event"))?;
+
+    event.insert(
+        "origin_server_ts".to_string(),
+        serde_json::Value::Number(chrono::Utc::now().timestamp_millis().into()),
+    );
+    event.insert(
+        "origin".to_string(),
+        serde_json::Value::String(state.server_name.to_string()),
+    );
+
+    // 2. 署名を付与
+    let event_val = serde_json::Value::Object(event.clone());
+    let mut event_for_signing = event.clone();
+    event_for_signing.remove("signatures");
+    let canonical =
+        crate::signing_key::canonical_json(&serde_json::Value::Object(event_for_signing));
+    let sig = state.signing_key.sign(canonical.as_bytes());
+    let key_id = &state.signing_key.key_id;
+    event
+        .entry("signatures")
+        .or_insert_with(|| serde_json::json!({}));
+    event["signatures"][&*state.server_name][key_id] = serde_json::Value::String(sig);
+
+    let event_id = crate::signing_key::compute_event_id(&event_val);
+    event.insert(
+        "event_id".to_string(),
+        serde_json::Value::String(event_id.clone()),
+    );
+
+    let signed_event = serde_json::Value::Object(event);
+
+    // 3. send_leave
+    let send_leave_uri = format!(
+        "/_matrix/federation/v2/send_leave/{}/{}",
+        url::form_urlencoded::byte_serialize(room_id.as_bytes()).collect::<String>(),
+        url::form_urlencoded::byte_serialize(event_id.as_bytes()).collect::<String>()
+    );
+    let send_leave_url = format!("https://{}{}", remote_server, send_leave_uri);
+    let auth = crate::xmatrix::make_auth_header(
+        state,
+        remote_server,
+        "PUT",
+        &send_leave_uri,
+        Some(&signed_event),
+    );
+
+    state
+        .http
+        .put(&send_leave_url)
+        .header("Authorization", &auth)
+        .json(&signed_event)
+        .send()
+        .await
+        .map_err(|e| anyhow!("send_leave HTTP error: {e}"))?;
+
+    // 4. メンバーシップを leave に更新
+    db::rooms::leave(&state.pool, user_id, room_id).await?;
+
+    Ok(())
+}
+
 /// ローカルイベントを外部サーバーへ配送する（背景タスク、ベストエフォート）。
 ///
 /// ルーム内の外部サーバー一覧を取得し、各サーバーへ

@@ -1,51 +1,52 @@
 use anyhow::Result;
 use sqlx::MySqlPool;
-use uuid::Uuid;
 
-pub async fn send(
-    pool: &MySqlPool,
-    server_name: &str,
-    room_id: &str,
-    sender: &str,
-    event_type: &str,
-    state_key: Option<&str>,
-    content: &serde_json::Value,
-) -> Result<String> {
-    let event_id = format!(
-        "${}:{}",
-        Uuid::new_v4().to_string().replace('-', ""),
-        server_name
-    );
-    let content_str = serde_json::to_string(content)?;
+/// ローカルイベントのメタデータ。
+///
+/// event_id と origin_server_ts は呼び出し元が計算して渡す（room v3+ ハッシュベース推奨）。
+pub struct LocalEvent<'a> {
+    pub event_id: &'a str,
+    pub room_id: &'a str,
+    pub sender: &'a str,
+    pub event_type: &'a str,
+    pub state_key: Option<&'a str>,
+    pub content: &'a serde_json::Value,
+    pub origin_server_ts: i64,
+}
 
-    sqlx::query!(
-        r#"INSERT INTO events (event_id, room_id, sender, event_type, state_key, content)
-           VALUES (?, ?, ?, ?, ?, ?)"#,
-        event_id,
-        room_id,
-        sender,
-        event_type,
-        state_key,
-        content_str
+/// ローカルイベントを保存する。
+pub async fn send(pool: &MySqlPool, ev: &LocalEvent<'_>) -> Result<()> {
+    let content_str = serde_json::to_string(ev.content)?;
+
+    sqlx::query(
+        r#"INSERT INTO events (event_id, room_id, sender, event_type, state_key, content, origin_server_ts)
+           VALUES (?, ?, ?, ?, ?, ?, ?)"#,
     )
+    .bind(ev.event_id)
+    .bind(ev.room_id)
+    .bind(ev.sender)
+    .bind(ev.event_type)
+    .bind(ev.state_key)
+    .bind(&content_str)
+    .bind(ev.origin_server_ts)
     .execute(pool)
     .await?;
 
-    if let Some(sk) = state_key {
-        sqlx::query!(
+    if let Some(sk) = ev.state_key {
+        sqlx::query(
             r#"INSERT INTO room_state (room_id, event_type, state_key, event_id)
                VALUES (?, ?, ?, ?)
                ON DUPLICATE KEY UPDATE event_id = VALUES(event_id)"#,
-            room_id,
-            event_type,
-            sk,
-            event_id
         )
+        .bind(ev.room_id)
+        .bind(ev.event_type)
+        .bind(sk)
+        .bind(ev.event_id)
         .execute(pool)
         .await?;
     }
 
-    Ok(event_id)
+    Ok(())
 }
 
 /// federation PDU のメタデータ

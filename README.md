@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.18.0 — Client-Server API Phase 12 + Federation Phase 7 (functional, not production-ready)
+**Status:** v0.19.0 — Client-Server API Phase 12 + Federation Phase 8 (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
