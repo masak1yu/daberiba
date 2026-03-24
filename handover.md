@@ -1,23 +1,25 @@
-# Handover — v0.27.0 → v0.28.0
+# Handover — v0.28.0 → v0.29.0
 
-## v0.27.0 でやったこと
+## v0.28.0 でやったこと
 
-- **パワーレベルチェック** (`db/room_state.rs`, `api/client/rooms.rs`):
-  - `get_user_power_level()` — ユーザーのパワーレベルを m.room.power_levels から取得。
-  - `get_required_power_level()` — アクション（kick/ban/redact/state_default 等）の必要 PL を取得。
-  - kick/ban/unban: 呼び出し元が必要 PL 未満の場合 403 Forbidden を返すよう変更。
-  - redact: 自分のイベント以外を redact する場合は redact PL チェックを追加。
+- **highlight_count の正確化** (`db/unread.rs`, `server/push_eval.rs`, `server/api/client/events.rs`):
+  - `push_eval::actions_highlight()` を新設し、`set_tweak: highlight` を検出。
+  - `dispatch_push` でハイライト判定されたイベントを `unread_highlights` テーブルに記録。
+  - `db::unread::record_highlight()` 新設 — INSERT IGNORE で冪等な記録。
+  - `get_for_room()` の `highlight_count` を LIKE 検索から `unread_highlights` テーブル参照に変更。
+  - `schema.sql` に `unread_highlights` テーブルを追加。
 
-- **`POST /rooms/{roomId}/upgrade`** (`api/client/rooms.rs`):
-  - state_default PL チェック後、新ルームを作成してバージョンを設定。
-  - 新ルームに m.room.create（predecessor 付き）/ join_rules / power_levels / member イベントを保存。
-  - 旧ルームに m.room.tombstone を保存して replacement_room を示す。
-  - レスポンス: `{ "replacement_room": "<new_room_id>" }`。
+- **`POST /search`** (`server/api/client/search.rs`, `db/events.rs`):
+  - ユーザーが参加しているルームの `m.room.message` イベントを body フィールドで LIKE 検索。
+  - `filter.rooms` で対象ルームを絞り込み可能。`filter.limit` でページサイズ指定（最大 100）。
+  - `db::events::search_room_events()` 新設。
 
-- **`POST /account/deactivate`** (`api/client/account.rs`, `db/users.rs`):
-  - UIA（m.login.password）でパスワード確認後、全トークンを失効。
-  - `db::users::deactivate()` — password_hash を空文字列に設定してログイン不能化。
-  - レスポンス: `{ "id_server_unbind_result": "no-support" }`。
+- **`/upgrade` の predecessor event_id 修正** (`server/api/client/rooms.rs`):
+  - 旧ルームの最終 event_id を `get_room_tip()` で取得して `m.room.create.predecessor.event_id` に設定。
+  - 旧ルームにイベントがない場合は空文字列にフォールバック。
+
+- **`db::events::get_stream_ordering()`** 新設:
+  - event_id から stream_ordering を取得するユーティリティ関数。
 
 ## 既知の課題・技術的負債
 
@@ -26,21 +28,21 @@
 | UIA ステージ m.login.password のみ | Matrix 仕様では他ステージ（m.login.sso 等）も定義されているが未対応 |
 | TypingStore はサーバー再起動でリセット | インメモリのため永続化なし（Matrix 仕様上は許容範囲） |
 | 非マクロ sqlx クエリ | 多数のモジュールが `sqlx::query()` 非マクロを使用（`.sqlx/` メタデータ未生成） |
-| highlight_count は localpart LIKE | display name メンションや push rule の highlight tweak には未対応 |
 | E2EE は鍵交換のみ | Olm セッション確立や Megolm グループセッション管理はクライアント側実装 |
 | 状態解決アルゴリズム v2 未完全 | auth_events / prev_events は DB に保存されるが、グラフを使った完全な conflict resolution は未実装 |
 | account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
 | depth の競合リスク | get_room_tip() と send() の間に他のイベントが挿入された場合、depth が重複する可能性 |
 | /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
-| upgrade の predecessor event_id | m.room.create の predecessor.event_id は空文字列（旧ルームの最終 event_id を取得していない） |
+| /search はページネーションなし | next_batch は常に null（全件一括取得のみ） |
+| unread_highlights の cleanup なし | 既読送信後も行が残る（COUNT は receipts と結合して絞るため実害はない） |
 
-## v0.28.0 候補
+## v0.29.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **push rule の `highlight` tweak** — `dispatch_push` でのハイライト評価結果を `unread_highlights` テーブルに記録して highlight_count を正確化
-3. **`/rooms/{roomId}/upgrade` の predecessor event_id** — 旧ルームの最終 event_id を取得して設定
-4. **`/search` エンドポイント** — 全文検索（MariaDB LIKE または FTS）
-5. **`/rooms/{roomId}/threads` エンドポイント** — MSC スレッド対応
+2. **`/search` のページネーション** — next_batch トークンによる続き取得
+3. **`/rooms/{roomId}/threads` エンドポイント** — MSC スレッド対応（m.thread rel_type）
+4. **`/notifications` エンドポイント** — push notification 履歴の取得
+5. **`unread_highlights` の cleanup** — `POST /receipt` 時に古い highlight を削除
 
 ## 開発フロー（おさらい）
 

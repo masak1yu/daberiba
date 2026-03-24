@@ -169,3 +169,12 @@ pub fn eval_push_rules(
 pub fn actions_notify(actions: &[serde_json::Value]) -> bool {
     actions.iter().any(|a| a.as_str() == Some("notify"))
 }
+
+/// アクション一覧に highlight tweak が含まれるかどうか
+/// `{"set_tweak": "highlight"}` または `{"set_tweak": "highlight", "value": true}` を検出する。
+pub fn actions_highlight(actions: &[serde_json::Value]) -> bool {
+    actions.iter().any(|a| {
+        a.get("set_tweak").and_then(|v| v.as_str()) == Some("highlight")
+            && a.get("value").and_then(|v| v.as_bool()).unwrap_or(true)
+    })
+}
