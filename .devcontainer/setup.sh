@@ -5,6 +5,9 @@ set -e
 sudo ln -sf "$(which docker)" /usr/local/bin/podman
 
 # Claude Code のインストール（公式ネイティブバイナリ、Node.js 不要）
+# ボリュームマウント時に root 所有になるため、先に vscode へ chown する
+sudo mkdir -p ~/.claude/downloads
+sudo chown -R "$(id -u):$(id -g)" ~/.claude
 curl -fsSL https://claude.ai/install.sh | bash
 
 # mysqldef (sqldef) のインストール — MariaDB 互換
