@@ -87,6 +87,36 @@ pub async fn get_auth_event_ids(pool: &MySqlPool, room_id: &str) -> Result<Vec<S
         .collect())
 }
 
+/// ルーム内のユーザーのパワーレベルを返す。
+/// power_levels イベントが存在しない場合はデフォルト値（0）を返す。
+pub async fn get_user_power_level(pool: &MySqlPool, room_id: &str, user_id: &str) -> Result<i64> {
+    let pl = get_event(pool, room_id, "m.room.power_levels", "").await?;
+    Ok(pl
+        .map(|v| {
+            // users マップから個別設定を優先し、なければ users_default
+            let user_pl = v
+                .get("users")
+                .and_then(|u| u.get(user_id))
+                .and_then(|p| p.as_i64());
+            let default_pl = v.get("users_default").and_then(|p| p.as_i64()).unwrap_or(0);
+            user_pl.unwrap_or(default_pl)
+        })
+        .unwrap_or(0))
+}
+
+/// ルームのアクションに必要なパワーレベルを返す（kick, ban, redact, invite 等）。
+/// power_levels イベントが存在しない場合はデフォルト値（50）を返す。
+pub async fn get_required_power_level(
+    pool: &MySqlPool,
+    room_id: &str,
+    action: &str,
+) -> Result<i64> {
+    let pl = get_event(pool, room_id, "m.room.power_levels", "").await?;
+    Ok(pl
+        .map(|v| v.get(action).and_then(|p| p.as_i64()).unwrap_or(50))
+        .unwrap_or(50))
+}
+
 pub async fn get_event(
     pool: &MySqlPool,
     room_id: &str,

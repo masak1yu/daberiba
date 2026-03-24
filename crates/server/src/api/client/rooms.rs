@@ -23,6 +23,10 @@ pub fn routes() -> Router<AppState> {
             "/_matrix/client/v3/rooms/{roomId}/forget",
             post(forget_room),
         )
+        .route(
+            "/_matrix/client/v3/rooms/{roomId}/upgrade",
+            post(upgrade_room),
+        )
 }
 
 #[derive(Deserialize)]
@@ -316,6 +320,24 @@ async fn redact_event(
     Path((room_id, target_event_id, _txn_id)): Path<(String, String, String)>,
     Json(body): Json<RedactRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    // 自分のイベントでなければ redact パワーレベルが必要
+    let target_event = db::events::get_by_id(&state.pool, &target_event_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+    let target_sender = target_event
+        .get("sender")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if target_sender != user.user_id {
+        let (caller_pl, required_pl) = tokio::join!(
+            db::room_state::get_user_power_level(&state.pool, &room_id, &user.user_id),
+            db::room_state::get_required_power_level(&state.pool, &room_id, "redact"),
+        );
+        if caller_pl? < required_pl? {
+            return Err(AppError::Forbidden);
+        }
+    }
+
     let mut content = serde_json::json!({ "redacts": target_event_id });
     if let Some(reason) = body.reason {
         content["reason"] = serde_json::Value::String(reason);
@@ -341,10 +363,19 @@ struct ModerationRequest {
 /// POST /_matrix/client/v3/rooms/{roomId}/kick
 async fn kick_user(
     State(state): State<AppState>,
-    axum::Extension(_user): axum::Extension<AuthUser>,
+    axum::Extension(user): axum::Extension<AuthUser>,
     Path(room_id): Path<String>,
     Json(body): Json<ModerationRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    // パワーレベルチェック
+    let (caller_pl, required_pl) = tokio::join!(
+        db::room_state::get_user_power_level(&state.pool, &room_id, &user.user_id),
+        db::room_state::get_required_power_level(&state.pool, &room_id, "kick"),
+    );
+    if caller_pl? < required_pl? {
+        return Err(AppError::Forbidden);
+    }
+
     let mut content = serde_json::json!({ "membership": "leave" });
     if let Some(reason) = body.reason {
         content["reason"] = serde_json::Value::String(reason);
@@ -365,10 +396,19 @@ async fn kick_user(
 /// POST /_matrix/client/v3/rooms/{roomId}/ban
 async fn ban_user(
     State(state): State<AppState>,
-    axum::Extension(_user): axum::Extension<AuthUser>,
+    axum::Extension(user): axum::Extension<AuthUser>,
     Path(room_id): Path<String>,
     Json(body): Json<ModerationRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    // パワーレベルチェック
+    let (caller_pl, required_pl) = tokio::join!(
+        db::room_state::get_user_power_level(&state.pool, &room_id, &user.user_id),
+        db::room_state::get_required_power_level(&state.pool, &room_id, "ban"),
+    );
+    if caller_pl? < required_pl? {
+        return Err(AppError::Forbidden);
+    }
+
     let mut content = serde_json::json!({ "membership": "ban" });
     if let Some(reason) = body.reason {
         content["reason"] = serde_json::Value::String(reason);
@@ -389,10 +429,19 @@ async fn ban_user(
 /// POST /_matrix/client/v3/rooms/{roomId}/unban
 async fn unban_user(
     State(state): State<AppState>,
-    axum::Extension(_user): axum::Extension<AuthUser>,
+    axum::Extension(user): axum::Extension<AuthUser>,
     Path(room_id): Path<String>,
     Json(body): Json<ModerationRequest>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    // パワーレベルチェック（ban 権限が必要）
+    let (caller_pl, required_pl) = tokio::join!(
+        db::room_state::get_user_power_level(&state.pool, &room_id, &user.user_id),
+        db::room_state::get_required_power_level(&state.pool, &room_id, "ban"),
+    );
+    if caller_pl? < required_pl? {
+        return Err(AppError::Forbidden);
+    }
+
     db::rooms::unban(&state.pool, &room_id, &body.user_id).await?;
     Ok(Json(serde_json::json!({})))
 }
@@ -405,6 +454,107 @@ async fn forget_room(
 ) -> ApiResult<Json<serde_json::Value>> {
     db::rooms::forget(&state.pool, &room_id, &user.user_id).await?;
     Ok(Json(serde_json::json!({})))
+}
+
+#[derive(Deserialize)]
+struct UpgradeRoomRequest {
+    new_version: String,
+}
+
+/// POST /_matrix/client/v3/rooms/{roomId}/upgrade
+/// ルームバージョンをアップグレードする。
+/// 旧ルームを tombstone 状態にし、新ルームを作成して m.room.create に predecessor を設定する。
+async fn upgrade_room(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+    Path(room_id): Path<String>,
+    Json(body): Json<UpgradeRoomRequest>,
+) -> ApiResult<Json<serde_json::Value>> {
+    // パワーレベルチェック（state_default = 50 が必要）
+    let (caller_pl, state_default) = tokio::join!(
+        db::room_state::get_user_power_level(&state.pool, &room_id, &user.user_id),
+        db::room_state::get_required_power_level(&state.pool, &room_id, "state_default"),
+    );
+    if caller_pl? < state_default? {
+        return Err(AppError::Forbidden);
+    }
+
+    // 新ルームを作成
+    let new_room_id =
+        db::rooms::create(&state.pool, &user.user_id, None, None, &state.server_name).await?;
+
+    // 新ルームのバージョンを設定
+    db::rooms::set_version(&state.pool, &new_room_id, &body.new_version).await?;
+
+    // 新ルームに必須状態イベントを生成（m.room.create に predecessor を含む）
+    store_state_event(
+        &state,
+        &new_room_id,
+        &user.user_id,
+        "m.room.create",
+        "",
+        &serde_json::json!({
+            "creator": user.user_id,
+            "room_version": body.new_version,
+            "predecessor": { "room_id": room_id, "event_id": "" },
+        }),
+    )
+    .await?;
+
+    store_state_event(
+        &state,
+        &new_room_id,
+        &user.user_id,
+        "m.room.join_rules",
+        "",
+        &serde_json::json!({ "join_rule": "invite" }),
+    )
+    .await?;
+
+    store_state_event(
+        &state,
+        &new_room_id,
+        &user.user_id,
+        "m.room.power_levels",
+        "",
+        &serde_json::json!({
+            "users": { &user.user_id: 100 },
+            "users_default": 0,
+            "events_default": 0,
+            "state_default": 50,
+            "ban": 50,
+            "kick": 50,
+            "redact": 50,
+            "invite": 50,
+        }),
+    )
+    .await?;
+
+    store_state_event(
+        &state,
+        &new_room_id,
+        &user.user_id,
+        "m.room.member",
+        &user.user_id,
+        &serde_json::json!({ "membership": "join" }),
+    )
+    .await?;
+
+    // 旧ルームに m.room.tombstone を保存してアップグレード済みにする
+    store_state_event(
+        &state,
+        &room_id,
+        &user.user_id,
+        "m.room.tombstone",
+        "",
+        &serde_json::json!({
+            "body": "This room has been upgraded",
+            "replacement_room": new_room_id,
+        }),
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({ "replacement_room": new_room_id })))
 }
 
 /// メッセージイベント（state_key なし）を保存する共通ヘルパー。

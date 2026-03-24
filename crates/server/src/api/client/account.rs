@@ -16,6 +16,10 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/_matrix/client/v3/account/whoami", get(whoami))
         .route("/_matrix/client/v3/account/password", post(change_password))
+        .route(
+            "/_matrix/client/v3/account/deactivate",
+            post(deactivate_account),
+        )
         .route("/_matrix/client/v3/logout", post(logout))
         .route("/_matrix/client/v3/logout/all", post(logout_all))
 }
@@ -65,6 +69,48 @@ async fn change_password(
         Ok(()) => Json(serde_json::json!({})).into_response(),
         Err(_) => AppError::Forbidden.into_response(),
     }
+}
+
+#[derive(Deserialize)]
+struct DeactivateBody {
+    #[serde(default)]
+    auth: Option<serde_json::Value>,
+}
+
+/// POST /_matrix/client/v3/account/deactivate
+/// アカウントを無効化する。全トークンを失効させ、パスワードを無効化する。
+async fn deactivate_account(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+    Json(body): Json<DeactivateBody>,
+) -> impl IntoResponse {
+    // auth がない → UIA チャレンジ
+    let auth = match &body.auth {
+        Some(a) => a,
+        None => return state.uia.challenge().into_response(),
+    };
+
+    let session = auth.get("session").and_then(|v| v.as_str()).unwrap_or("");
+    if !state.uia.validate(session) {
+        return state.uia.challenge().into_response();
+    }
+
+    let password = match uia::extract_password(auth) {
+        Some(p) => p.to_string(),
+        None => return state.uia.challenge().into_response(),
+    };
+
+    // パスワード確認
+    match db::users::verify(&state.pool, &user.user_id, &password).await {
+        Ok(true) => {}
+        _ => return AppError::Forbidden.into_response(),
+    }
+
+    // 全トークン失効 + アカウント無効化
+    let _ = db::access_tokens::revoke_all(&state.pool, &user.user_id).await;
+    let _ = db::users::deactivate(&state.pool, &user.user_id).await;
+
+    Json(serde_json::json!({ "id_server_unbind_result": "no-support" })).into_response()
 }
 
 async fn logout(
