@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.27.0 — Client-Server API Phase 18 (power level enforcement, room upgrade, account deactivate) (functional, not production-ready)
+**Status:** v0.28.0 — Client-Server API Phase 19 (highlight tracking, /search, upgrade predecessor fix) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -81,6 +81,7 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET | `/_matrix/client/v3/user/{userId}/rooms/{roomId}/tags` | Get room tags |
 | PUT | `/_matrix/client/v3/user/{userId}/rooms/{roomId}/tags/{tag}` | Set room tag |
 | DELETE | `/_matrix/client/v3/user/{userId}/rooms/{roomId}/tags/{tag}` | Delete room tag |
+| POST | `/_matrix/client/v3/search` | Full-text search (LIKE, joined rooms only) |
 | POST | `/_matrix/client/v3/user/{userId}/filter` | Create filter |
 | GET | `/_matrix/client/v3/user/{userId}/filter/{filterId}` | Get filter |
 | PUT | `/_matrix/client/v3/sendToDevice/{eventType}/{txnId}` | Send to-device message |

@@ -1,6 +1,28 @@
 use anyhow::Result;
 use sqlx::MySqlPool;
 
+/// dispatch_push でハイライトと判定されたイベントを記録する。
+/// 重複挿入は無視する（INSERT IGNORE）。
+pub async fn record_highlight(
+    pool: &MySqlPool,
+    room_id: &str,
+    user_id: &str,
+    event_id: &str,
+    stream_ordering: i64,
+) -> Result<()> {
+    sqlx::query(
+        r#"INSERT IGNORE INTO unread_highlights (room_id, user_id, event_id, stream_ordering)
+           VALUES (?, ?, ?, ?)"#,
+    )
+    .bind(room_id)
+    .bind(user_id)
+    .bind(event_id)
+    .bind(stream_ordering)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub struct UnreadCounts {
     pub notification_count: i64,
     pub highlight_count: i64,
@@ -36,28 +58,15 @@ pub async fn get_for_room(pool: &MySqlPool, room_id: &str, user_id: &str) -> Res
     .fetch_one(pool)
     .await?;
 
-    // ハイライト数: body フィールドまたは formatted_body フィールドに user_id が含まれるイベント
-    // JSON_EXTRACT で body/formatted_body を抽出してから LIKE 検索することで
-    // content 全体への誤ヒットを防ぐ
-    let localpart = user_id
-        .split(':')
-        .next()
-        .unwrap_or(user_id)
-        .trim_start_matches('@');
+    // ハイライト数: push rule 評価でハイライトと記録されたイベント数
+    // （dispatch_push が unread_highlights に挿入したもの）
     let highlight_row: (i64,) = sqlx::query_as(
-        r#"SELECT COUNT(*) FROM events
-           WHERE room_id = ? AND stream_ordering > ? AND state_key IS NULL
-             AND sender != ?
-             AND (
-               JSON_UNQUOTE(JSON_EXTRACT(content, '$.body')) LIKE CONCAT('%', ?, '%')
-               OR JSON_UNQUOTE(JSON_EXTRACT(content, '$.formatted_body')) LIKE CONCAT('%', ?, '%')
-             )"#,
+        r#"SELECT COUNT(*) FROM unread_highlights
+           WHERE room_id = ? AND user_id = ? AND stream_ordering > ?"#,
     )
     .bind(room_id)
-    .bind(since_ordering)
     .bind(user_id)
-    .bind(localpart)
-    .bind(localpart)
+    .bind(since_ordering)
     .fetch_one(pool)
     .await?;
 

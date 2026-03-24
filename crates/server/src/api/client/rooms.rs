@@ -479,6 +479,15 @@ async fn upgrade_room(
         return Err(AppError::Forbidden);
     }
 
+    // 旧ルームの最終 event_id を取得（predecessor に設定するため）
+    let (predecessor_depth, predecessor_event_ids) =
+        db::events::get_room_tip(&state.pool, &room_id).await?;
+    let predecessor_event_id = if predecessor_depth > 0 {
+        predecessor_event_ids.first().cloned().unwrap_or_default()
+    } else {
+        String::new()
+    };
+
     // 新ルームを作成
     let new_room_id =
         db::rooms::create(&state.pool, &user.user_id, None, None, &state.server_name).await?;
@@ -496,7 +505,7 @@ async fn upgrade_room(
         &serde_json::json!({
             "creator": user.user_id,
             "room_version": body.new_version,
-            "predecessor": { "room_id": room_id, "event_id": "" },
+            "predecessor": { "room_id": room_id, "event_id": predecessor_event_id },
         }),
     )
     .await?;
