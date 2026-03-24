@@ -37,7 +37,6 @@ async fn make_join(
         .flatten()
         .unwrap_or_else(|| "10".to_string());
 
-    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
     let now_ms = chrono::Utc::now().timestamp_millis() as u64;
 
     // 参加イベントテンプレート（送信側が署名してから send_join に送る）
@@ -47,7 +46,7 @@ async fn make_join(
         "sender": user_id,
         "state_key": user_id,
         "content": { "membership": "join" },
-        "origin": server_name,
+        "origin": &*state.server_name,
         "origin_server_ts": now_ms,
         "auth_events": [],
         "prev_events": [],

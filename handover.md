@@ -1,27 +1,27 @@
-# Handover — v0.14.0 → v0.15.0
+# Handover — v0.15.0 → v0.16.0
 
-## v0.14.0 でやったこと
+## v0.15.0 でやったこと
 
-- **PDU 署名検証** (`xmatrix.rs`): `verify_pdu_signatures()` を追加。`send_transaction` / `send_join` で受信 PDU の Ed25519 署名を検証するようになった。`signatures` フィールドを除いたカノニカル JSON に対して origin サーバーの公開鍵（`fed_key_cache` 活用）で検証。
+- **SERVER_NAME キャッシュ化**:
+  - `AppState` に `server_name: Arc<str>` フィールドを追加し、起動時に一度だけ env から読む。
+  - 従来 15 箇所以上に散在していた `std::env::var("SERVER_NAME")` を `state.server_name` に統一。
+  - `db::events::send()` の署名に `server_name: &str` を追加（呼び出し側から渡すように変更）。
 
-- **Federation `/event` エンドポイント** (`federation/get_event.rs`): `GET /_matrix/federation/v1/event/:event_id` を新規実装。バックフィル対応。`db::events::get_by_id()` で DB から取得して PDU 形式で返す。
+- **PDU auth_events の保存**:
+  - `schema/schema.sql` の `events` テーブルに `auth_events TEXT NULL`（JSON 配列）カラムを追加。
+  - `db::events::PduMeta` に `auth_events: Option<&serde_json::Value>` フィールドを追加。
+  - `store_pdu()` が INSERT 時に `auth_events` を保存するように更新。
+  - `send_join` / `send_transaction` の `PduMeta` 構築で `auth_events` を渡すように更新。
 
-- **状態解決 (State Resolution v2 簡易版)**:
-  - `events` テーブルに `origin_server_ts BIGINT NULL` を追加
-  - `db::events::store_pdu()`: federation PDU 専用の保存関数。INSERT IGNORE でべき等性を保証。状態イベントは `origin_server_ts` が新しい方を採用し、同一 ts なら event_id の辞書順（先着優先）で解決。
-  - `send_join` レスポンスに `auth_chain` を追加（`m.room.create` / `m.room.join_rules` / `m.room.power_levels`）。
-  - `state_res.rs`: Rust で同じ解決ルールを表現したヘルパー関数（テスト・将来の拡張用）。
+- **Federation Backfill エンドポイント** (`federation/backfill.rs`):
+  - `GET /_matrix/federation/v1/backfill/:room_id` を新規実装。
+  - クエリパラメータ `v`（起点 event_id、複数可）と `limit`（最大 100、デフォルト 10）に対応。
+  - `db::events::get_backfill()` を追加: 起点 event_id の最小 stream_ordering を取得し、それより古いイベントを降順で返す。
 
-- **Room Version** (`rooms` テーブルに `room_version VARCHAR(16) DEFAULT '10'` を追加):
-  - `make_join` / `send_join` が DB の `room_version` を参照して返すようになった。
-
-- **Sync フィルタ limit 適用**:
-  - `FilterDef` に `timeline_limit` / `state_limit` フィールドを追加。
-  - `db::sync::sync()` が `timeline_limit` を受け取り `LIMIT` 句に反映。デフォルト 50 件、フィルターで上書き可能。
-
-- **パフォーマンス改善**:
-  - `send_join`: `store_pdu()` 後の 4 独立 DB クエリを `tokio::join!` で並列化。
-  - `make_join`: `count_joined_members()` と `get_version()` を並列化。
+- **Federation send_leave エンドポイント** (`federation/send_leave.rs`):
+  - `PUT /_matrix/federation/v2/send_leave/:room_id/:event_id` を新規実装。
+  - X-Matrix 署名検証 + PDU Ed25519 署名検証を実施。
+  - `m.room.member` / `membership: leave` イベントを DB に保存し、`db::rooms::leave()` を呼び出す。
 
 ## 既知の課題・技術的負債
 
@@ -34,17 +34,16 @@
 | プレゼンスは登録ユーザーのみ | `PUT /presence` を一度も呼んでいないユーザーは sync の presence.events に出現しない |
 | E2EE は鍵交換のみ | Olm セッション確立や Megolm グループセッション管理はクライアント側実装 |
 | 状態解決が浅い | auth_events DAG の完全なグラフトラバーサルは未実装。`send_join` の auth_chain は m.room.create/join_rules/power_levels のみ |
-| PDU の auth_events 未保存 | events テーブルに auth_events カラムがないため、完全な状態解決アルゴリズム v2 は不可 |
+| 状態解決アルゴリズム v2 未完全 | auth_events は DB に保存されるようになったが、グラフを使った完全な conflict resolution は未実装 |
 | account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
-| SERVER_NAME を毎回 env::var で読む | 起動時にキャッシュすべきだが 15 箇所以上に散在している |
 
-## v0.15.0 候補
+## v0.16.0 候補
 
-1. **PDU auth_events の保存** — `events` テーブルに `auth_events TEXT NULL`（JSON 配列）を追加し、auth chain の完全なトラバーサルを可能にする
-2. **状態解決アルゴリズム v2 完全実装** — auth_events グラフを使った完全な conflict resolution
-3. **Backfill 実装** — `GET /backfill` エンドポイントで過去イベントを取得
-4. **Federation send_leave** — `PUT /_matrix/federation/v2/send_leave/:room_id/:event_id`
-5. **SERVER_NAME キャッシュ化** — 起動時に一度読んで `AppState` に保持
+1. **状態解決アルゴリズム v2 完全実装** — auth_events グラフを使った完全な conflict resolution（`auth_events` カラムが揃ったので実装可能に）
+2. **make_leave エンドポイント** — `GET /_matrix/federation/v1/make_leave/:room_id/:user_id`（leave イベントテンプレートを返す）
+3. **invite エンドポイント（Federation）** — `PUT /_matrix/federation/v2/invite/:room_id/:event_id`
+4. **prev_events の連鎖管理** — events テーブルに `prev_events` を保存し、DAG の正確なトラバーサルを可能にする
+5. **Federation 送信側の実装** — 他サーバーのルームへの参加時に make_join → send_join を自サーバーから発行する
 
 ## 開発フロー（おさらい）
 

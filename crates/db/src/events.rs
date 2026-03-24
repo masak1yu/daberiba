@@ -4,13 +4,13 @@ use uuid::Uuid;
 
 pub async fn send(
     pool: &MySqlPool,
+    server_name: &str,
     room_id: &str,
     sender: &str,
     event_type: &str,
     state_key: Option<&str>,
     content: &serde_json::Value,
 ) -> Result<String> {
-    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
     let event_id = format!(
         "${}:{}",
         Uuid::new_v4().to_string().replace('-', ""),
@@ -56,6 +56,8 @@ pub struct PduMeta<'a> {
     pub event_type: &'a str,
     pub state_key: Option<&'a str>,
     pub content: &'a serde_json::Value,
+    /// auth_events フィールド（JSON 配列）。None の場合は保存しない。
+    pub auth_events: Option<&'a serde_json::Value>,
     pub origin_server_ts: i64,
 }
 
@@ -66,11 +68,12 @@ pub struct PduMeta<'a> {
 /// state_key が Some の場合は状態解決ルールに基づいて room_state を更新する。
 pub async fn store_pdu(pool: &MySqlPool, pdu: &PduMeta<'_>) -> Result<()> {
     let content_str = serde_json::to_string(pdu.content)?;
+    let auth_events_str = pdu.auth_events.map(serde_json::to_string).transpose()?;
 
     let affected = sqlx::query(
         r#"INSERT IGNORE INTO events
-           (event_id, room_id, sender, event_type, state_key, content, origin_server_ts)
-           VALUES (?, ?, ?, ?, ?, ?, ?)"#,
+           (event_id, room_id, sender, event_type, state_key, content, auth_events, origin_server_ts)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
     )
     .bind(pdu.event_id)
     .bind(pdu.room_id)
@@ -78,6 +81,7 @@ pub async fn store_pdu(pool: &MySqlPool, pdu: &PduMeta<'_>) -> Result<()> {
     .bind(pdu.event_type)
     .bind(pdu.state_key)
     .bind(&content_str)
+    .bind(auth_events_str.as_deref())
     .bind(pdu.origin_server_ts)
     .execute(pool)
     .await?
@@ -148,6 +152,103 @@ pub async fn get_by_id(pool: &MySqlPool, event_id: &str) -> Result<Option<serde_
         }
         event
     }))
+}
+
+/// backfill 用: 指定 event_id より古いイベントを最大 limit 件取得する。
+///
+/// `v` クエリパラメータで指定された event_id を起点として、それより古い
+/// stream_ordering のイベントを降順で返す。
+pub async fn get_backfill(
+    pool: &MySqlPool,
+    room_id: &str,
+    from_event_ids: &[String],
+    limit: u32,
+) -> Result<Vec<serde_json::Value>> {
+    use sqlx::Row;
+
+    // from_event_ids の最小 stream_ordering を起点とする
+    let limit = limit.min(100) as i64;
+
+    // from_event_ids がある場合、それらの stream_ordering を取得して最小値を起点にする
+    let start_ordering: Option<u64> = if from_event_ids.is_empty() {
+        None
+    } else {
+        // IN 句は動的に構築
+        let placeholders = from_event_ids
+            .iter()
+            .map(|_| "?")
+            .collect::<Vec<_>>()
+            .join(",");
+        let sql = format!(
+            "SELECT MIN(stream_ordering) FROM events WHERE event_id IN ({})",
+            placeholders
+        );
+        let mut q = sqlx::query(&sql);
+        for id in from_event_ids {
+            q = q.bind(id);
+        }
+        q.fetch_one(pool).await?.get::<Option<u64>, _>(0)
+    };
+
+    let rows: Vec<sqlx::mysql::MySqlRow> = match start_ordering {
+        Some(ord) => {
+            sqlx::query(
+                "SELECT event_id, room_id, sender, event_type, state_key, content, \
+                 origin_server_ts, created_at, stream_ordering \
+                 FROM events \
+                 WHERE room_id = ? AND stream_ordering < ? \
+                 ORDER BY stream_ordering DESC LIMIT ?",
+            )
+            .bind(room_id)
+            .bind(ord)
+            .bind(limit)
+            .fetch_all(pool)
+            .await?
+        }
+        None => {
+            sqlx::query(
+                "SELECT event_id, room_id, sender, event_type, state_key, content, \
+                 origin_server_ts, created_at, stream_ordering \
+                 FROM events \
+                 WHERE room_id = ? \
+                 ORDER BY stream_ordering DESC LIMIT ?",
+            )
+            .bind(room_id)
+            .bind(limit)
+            .fetch_all(pool)
+            .await?
+        }
+    };
+
+    let events = rows
+        .iter()
+        .map(|r| {
+            let content_str: String = r.get("content");
+            let state_key: Option<String> = r.get("state_key");
+            let ts: i64 = r
+                .get::<Option<i64>, _>("origin_server_ts")
+                .unwrap_or_else(|| {
+                    r.get::<chrono::NaiveDateTime, _>("created_at")
+                        .and_utc()
+                        .timestamp_millis()
+                });
+            let mut event = serde_json::json!({
+                "event_id": r.get::<String, _>("event_id"),
+                "room_id": r.get::<String, _>("room_id"),
+                "sender": r.get::<String, _>("sender"),
+                "type": r.get::<String, _>("event_type"),
+                "content": serde_json::from_str::<serde_json::Value>(&content_str)
+                    .unwrap_or_default(),
+                "origin_server_ts": ts,
+            });
+            if let Some(sk) = state_key {
+                event["state_key"] = serde_json::Value::String(sk);
+            }
+            event
+        })
+        .collect();
+
+    Ok(events)
 }
 
 /// ページネーション結果。

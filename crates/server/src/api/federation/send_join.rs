@@ -58,6 +58,7 @@ async fn send_join(
     db::rooms::join(&state.pool, sender, &room_id).await?;
 
     let content = body["content"].clone();
+    let auth_events = body.get("auth_events");
     db::events::store_pdu(
         &state.pool,
         &db::events::PduMeta {
@@ -67,6 +68,7 @@ async fn send_join(
             event_type: "m.room.member",
             state_key: Some(sender),
             content: &content,
+            auth_events,
             origin_server_ts,
         },
     )
@@ -94,9 +96,8 @@ async fn send_join(
         .flatten()
         .unwrap_or_else(|| "10".to_string());
 
-    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
     Ok(Json(serde_json::json!({
-        "origin": server_name,
+        "origin": &*state.server_name,
         "room_version": room_version,
         "auth_chain": auth_chain,
         "state": state_events,

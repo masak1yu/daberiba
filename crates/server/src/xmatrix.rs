@@ -111,7 +111,7 @@ pub async fn verify(
 ) -> Result<XMatrixClaims> {
     let claims = parse(authorization).ok_or_else(|| anyhow::anyhow!("invalid X-Matrix header"))?;
 
-    let our_server = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
+    let our_server = &*state.server_name;
     if claims.destination != our_server {
         anyhow::bail!(
             "X-Matrix destination mismatch: expected {our_server}, got {}",
