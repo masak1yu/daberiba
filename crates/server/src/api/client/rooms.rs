@@ -40,7 +40,132 @@ async fn create_room(
     )
     .await?;
 
+    // ルーム作成時の必須状態イベントを生成・保存する。
+    // これらは federation make_join / send_join で auth_chain として返すために必要。
+
+    // m.room.create
+    store_state_event(
+        &state,
+        &room_id,
+        &user.user_id,
+        "m.room.create",
+        "",
+        &serde_json::json!({
+            "creator": user.user_id,
+            "room_version": "10",
+        }),
+    )
+    .await?;
+
+    // m.room.join_rules
+    store_state_event(
+        &state,
+        &room_id,
+        &user.user_id,
+        "m.room.join_rules",
+        "",
+        &serde_json::json!({ "join_rule": "invite" }),
+    )
+    .await?;
+
+    // m.room.power_levels
+    store_state_event(
+        &state,
+        &room_id,
+        &user.user_id,
+        "m.room.power_levels",
+        "",
+        &serde_json::json!({
+            "users": { &user.user_id: 100 },
+            "users_default": 0,
+            "events_default": 0,
+            "state_default": 50,
+            "ban": 50,
+            "kick": 50,
+            "redact": 50,
+            "invite": 50,
+        }),
+    )
+    .await?;
+
+    // m.room.member — creator の join
+    store_state_event(
+        &state,
+        &room_id,
+        &user.user_id,
+        "m.room.member",
+        &user.user_id,
+        &serde_json::json!({ "membership": "join" }),
+    )
+    .await?;
+
+    // m.room.name（指定時のみ）
+    if let Some(name) = body.name.as_deref() {
+        store_state_event(
+            &state,
+            &room_id,
+            &user.user_id,
+            "m.room.name",
+            "",
+            &serde_json::json!({ "name": name }),
+        )
+        .await?;
+    }
+
+    // m.room.topic（指定時のみ）
+    if let Some(topic) = body.topic.as_deref() {
+        store_state_event(
+            &state,
+            &room_id,
+            &user.user_id,
+            "m.room.topic",
+            "",
+            &serde_json::json!({ "topic": topic }),
+        )
+        .await?;
+    }
+
     Ok(Json(CreateRoomResponse { room_id }))
+}
+
+/// ローカルルームへ状態イベントを保存する共通ヘルパー。
+/// event_id を SHA-256 ハッシュで計算し、events・room_state テーブルに保存する。
+async fn store_state_event(
+    state: &AppState,
+    room_id: &str,
+    sender: &str,
+    event_type: &str,
+    state_key: &str,
+    content: &serde_json::Value,
+) -> anyhow::Result<()> {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let pdu_for_hash = serde_json::json!({
+        "room_id": room_id,
+        "sender": sender,
+        "type": event_type,
+        "state_key": state_key,
+        "content": content,
+        "origin_server_ts": now_ms,
+        "origin": &*state.server_name,
+        "depth": 0,
+        "auth_events": [],
+        "prev_events": [],
+    });
+    let event_id = crate::signing_key::compute_event_id(&pdu_for_hash);
+    db::events::send(
+        &state.pool,
+        &db::events::LocalEvent {
+            event_id: &event_id,
+            room_id,
+            sender,
+            event_type,
+            state_key: Some(state_key),
+            content,
+            origin_server_ts: now_ms,
+        },
+    )
+    .await?;
+    Ok(())
 }
 
 async fn join_room(
@@ -69,6 +194,39 @@ async fn join_room(
     }
 
     db::rooms::join(&state.pool, &user.user_id, &room_id).await?;
+
+    // join イベントを保存して外部サーバーへ配送
+    let join_content = serde_json::json!({ "membership": "join" });
+    if let Ok(()) = store_state_event(
+        &state,
+        &room_id,
+        &user.user_id,
+        "m.room.member",
+        &user.user_id,
+        &join_content,
+    )
+    .await
+    {
+        // join PDU を外部サーバーに配送（ベストエフォート）
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let pdu_for_hash = serde_json::json!({
+            "room_id": room_id,
+            "sender": user.user_id,
+            "type": "m.room.member",
+            "state_key": user.user_id,
+            "content": join_content,
+            "origin_server_ts": now_ms,
+            "origin": &*state.server_name,
+            "depth": 0,
+            "auth_events": [],
+            "prev_events": [],
+        });
+        let event_id = crate::signing_key::compute_event_id(&pdu_for_hash);
+        let mut pdu = pdu_for_hash;
+        pdu["event_id"] = serde_json::Value::String(event_id);
+        crate::federation_client::dispatch_send_transaction(state, room_id.clone(), pdu);
+    }
+
     Ok(Json(serde_json::json!({ "room_id": room_id })))
 }
 
@@ -88,7 +246,43 @@ async fn leave_room(
         return Ok(Json(serde_json::json!({})));
     }
 
+    // leave イベントを保存してメンバーシップを更新
+    let leave_content = serde_json::json!({ "membership": "leave" });
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let pdu_for_hash = serde_json::json!({
+        "room_id": room_id,
+        "sender": user.user_id,
+        "type": "m.room.member",
+        "state_key": user.user_id,
+        "content": leave_content,
+        "origin_server_ts": now_ms,
+        "origin": &*state.server_name,
+        "depth": 0,
+        "auth_events": [],
+        "prev_events": [],
+    });
+    let event_id = crate::signing_key::compute_event_id(&pdu_for_hash);
+    let _ = db::events::send(
+        &state.pool,
+        &db::events::LocalEvent {
+            event_id: &event_id,
+            room_id: &room_id,
+            sender: &user.user_id,
+            event_type: "m.room.member",
+            state_key: Some(&user.user_id),
+            content: &leave_content,
+            origin_server_ts: now_ms,
+        },
+    )
+    .await;
+
     db::rooms::leave(&state.pool, &user.user_id, &room_id).await?;
+
+    // leave PDU を外部サーバーに配送（ベストエフォート）
+    let mut pdu = pdu_for_hash;
+    pdu["event_id"] = serde_json::Value::String(event_id);
+    crate::federation_client::dispatch_send_transaction(state, room_id, pdu);
+
     Ok(Json(serde_json::json!({})))
 }
 
