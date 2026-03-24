@@ -44,6 +44,7 @@ async fn send_event(
 ) -> ApiResult<Json<serde_json::Value>> {
     let event_id = db::events::send(
         &state.pool,
+        &state.server_name,
         &path.room_id,
         &user.user_id,
         &path.event_type,
@@ -81,6 +82,7 @@ async fn send_state_event(
 ) -> ApiResult<Json<serde_json::Value>> {
     let event_id = db::events::send(
         &state.pool,
+        &state.server_name,
         &path.room_id,
         &user.user_id,
         &path.event_type,
@@ -110,6 +112,7 @@ async fn send_state_event_with_key(
 ) -> ApiResult<Json<serde_json::Value>> {
     let event_id = db::events::send(
         &state.pool,
+        &state.server_name,
         &path.room_id,
         &user.user_id,
         &path.event_type,

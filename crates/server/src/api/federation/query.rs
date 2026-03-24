@@ -34,10 +34,8 @@ async fn query_directory(
     let result = db::room_aliases::resolve(&state.pool, &q.room_alias).await?;
     let room_id = result.ok_or(crate::error::AppError::NotFound)?;
 
-    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
-
     Ok(Json(serde_json::json!({
         "room_id": room_id,
-        "servers": [server_name],
+        "servers": [&*state.server_name],
     })))
 }

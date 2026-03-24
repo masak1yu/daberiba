@@ -48,7 +48,6 @@ async fn upload(
         .unwrap_or("application/octet-stream")
         .to_string();
 
-    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
     let media_id = Uuid::new_v4().to_string().replace('-', "");
     let file_size = body.len() as i64;
 
@@ -57,7 +56,7 @@ async fn upload(
     db::media::insert(
         &state.pool,
         &media_id,
-        &server_name,
+        &state.server_name,
         &user.user_id,
         &content_type,
         query.filename.as_deref(),
@@ -66,7 +65,7 @@ async fn upload(
     )
     .await?;
 
-    let mxc_uri = format!("mxc://{}/{}", server_name, media_id);
+    let mxc_uri = format!("mxc://{}/{}", state.server_name, media_id);
     Ok(axum::Json(serde_json::json!({ "content_uri": mxc_uri })))
 }
 

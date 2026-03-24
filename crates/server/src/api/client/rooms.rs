@@ -31,13 +31,12 @@ async fn create_room(
     axum::Extension(user): axum::Extension<AuthUser>,
     Json(body): Json<CreateRoomRequest>,
 ) -> ApiResult<Json<CreateRoomResponse>> {
-    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
     let room_id = db::rooms::create(
         &state.pool,
         &user.user_id,
         body.name.as_deref(),
         body.topic.as_deref(),
-        &server_name,
+        &state.server_name,
     )
     .await?;
 

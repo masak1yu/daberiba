@@ -1,5 +1,5 @@
 use crate::state::AppState;
-use axum::{routing::get, Json, Router};
+use axum::{extract::State, routing::get, Json, Router};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -7,10 +7,9 @@ pub fn routes() -> Router<AppState> {
         .route("/.well-known/matrix/server", get(well_known_server))
 }
 
-async fn well_known_client() -> Json<serde_json::Value> {
-    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
+async fn well_known_client(State(state): State<AppState>) -> Json<serde_json::Value> {
     let base_url =
-        std::env::var("BASE_URL").unwrap_or_else(|_| format!("http://{}:8448", server_name));
+        std::env::var("BASE_URL").unwrap_or_else(|_| format!("http://{}:8448", state.server_name));
 
     Json(serde_json::json!({
         "m.homeserver": {
@@ -19,9 +18,8 @@ async fn well_known_client() -> Json<serde_json::Value> {
     }))
 }
 
-async fn well_known_server() -> Json<serde_json::Value> {
-    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
+async fn well_known_server(State(state): State<AppState>) -> Json<serde_json::Value> {
     Json(serde_json::json!({
-        "m.server": format!("{}:8448", server_name),
+        "m.server": format!("{}:8448", state.server_name),
     }))
 }

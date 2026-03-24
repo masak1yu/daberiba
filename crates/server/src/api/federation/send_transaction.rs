@@ -30,15 +30,21 @@ async fn send_transaction(
         .as_array()
         .ok_or_else(|| crate::error::AppError::BadRequest("missing pdus".into()))?;
 
-    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
-
     // ルームごとの参加確認結果をキャッシュして N+1 クエリを避ける
     let mut room_cache: HashMap<String, bool> = HashMap::new();
 
     let mut pdu_results = serde_json::Map::new();
     for pdu in pdus {
         let event_id = pdu["event_id"].as_str().unwrap_or("").to_string();
-        match process_pdu(&state, pdu, &server_name, &claims.origin, &mut room_cache).await {
+        match process_pdu(
+            &state,
+            pdu,
+            &state.server_name,
+            &claims.origin,
+            &mut room_cache,
+        )
+        .await
+        {
             Ok(()) => {
                 pdu_results.insert(event_id, json!({}));
             }
@@ -101,6 +107,7 @@ async fn process_pdu(
         return Ok(());
     }
 
+    let auth_events = pdu.get("auth_events");
     db::events::store_pdu(
         &state.pool,
         &db::events::PduMeta {
@@ -110,6 +117,7 @@ async fn process_pdu(
             event_type,
             state_key,
             content: &content,
+            auth_events,
             origin_server_ts,
         },
     )

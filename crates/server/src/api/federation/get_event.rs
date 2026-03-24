@@ -28,11 +28,10 @@ async fn get_event(
         .map_err(AppError::Internal)?
         .ok_or(AppError::NotFound)?;
 
-    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
     let origin_server_ts = event["origin_server_ts"].as_i64().unwrap_or(0);
 
     Ok(Json(serde_json::json!({
-        "origin": server_name,
+        "origin": &*state.server_name,
         "origin_server_ts": origin_server_ts,
         "pdus": [event],
     })))
