@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.26.0 — Client-Server API Phase 17 + Federation Phase 12 (functional, not production-ready)
+**Status:** v0.27.0 — Client-Server API Phase 18 (power level enforcement, room upgrade, account deactivate) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -35,6 +35,7 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 |---|---|---|
 | GET | `/_matrix/client/v3/account/whoami` | Current user |
 | POST | `/_matrix/client/v3/account/password` | Change password (UIA) |
+| POST | `/_matrix/client/v3/account/deactivate` | Deactivate account (UIA) |
 | POST | `/_matrix/client/v3/logout` | Logout |
 | POST | `/_matrix/client/v3/logout/all` | Logout all devices |
 | GET | `/_matrix/client/v3/sync` | Sync (stream_ordering cursor, ephemeral events) |
@@ -58,11 +59,12 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET | `/_matrix/client/v3/rooms/{roomId}/members` | Room members |
 | GET | `/_matrix/client/v3/rooms/{roomId}/joined_members` | Joined members |
 | POST | `/_matrix/client/v3/rooms/{roomId}/invite` | Invite user |
-| POST | `/_matrix/client/v3/rooms/{roomId}/kick` | Kick user from room |
-| POST | `/_matrix/client/v3/rooms/{roomId}/ban` | Ban user from room |
-| POST | `/_matrix/client/v3/rooms/{roomId}/unban` | Unban user |
+| POST | `/_matrix/client/v3/rooms/{roomId}/kick` | Kick user from room (power level enforced) |
+| POST | `/_matrix/client/v3/rooms/{roomId}/ban` | Ban user from room (power level enforced) |
+| POST | `/_matrix/client/v3/rooms/{roomId}/unban` | Unban user (power level enforced) |
 | POST | `/_matrix/client/v3/rooms/{roomId}/forget` | Forget room (after leave/ban) |
-| PUT | `/_matrix/client/v3/rooms/{roomId}/redact/{eventId}/{txnId}` | Redact event |
+| PUT | `/_matrix/client/v3/rooms/{roomId}/redact/{eventId}/{txnId}` | Redact event (power level enforced) |
+| POST | `/_matrix/client/v3/rooms/{roomId}/upgrade` | Upgrade room version (tombstone + new room) |
 | POST | `/_matrix/client/v3/rooms/{roomId}/receipt/{type}/{eventId}` | Send read receipt |
 | PUT | `/_matrix/client/v3/rooms/{roomId}/typing/{userId}` | Set typing indicator |
 | GET/PUT | `/_matrix/client/v3/profile/{userId}` | User profile |

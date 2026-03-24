@@ -1,20 +1,23 @@
-# Handover — v0.26.0 → v0.27.0
+# Handover — v0.27.0 → v0.28.0
 
-## v0.26.0 でやったこと
+## v0.27.0 でやったこと
 
-- **モデレーション系エンドポイント** (`rooms.rs`):
-  - `POST /rooms/{roomId}/kick` — 対象ユーザーの m.room.member leave イベントを保存し、membership を 'leave' に更新。
-  - `POST /rooms/{roomId}/ban` — 対象ユーザーの m.room.member ban イベントを保存し、membership を 'ban' に更新。
-  - `POST /rooms/{roomId}/unban` — membership を 'ban' → 'leave' に戻す（再招待可能状態）。
-  - `POST /rooms/{roomId}/forget` — leave/ban 状態のユーザーがルームの記録を削除。
+- **パワーレベルチェック** (`db/room_state.rs`, `api/client/rooms.rs`):
+  - `get_user_power_level()` — ユーザーのパワーレベルを m.room.power_levels から取得。
+  - `get_required_power_level()` — アクション（kick/ban/redact/state_default 等）の必要 PL を取得。
+  - kick/ban/unban: 呼び出し元が必要 PL 未満の場合 403 Forbidden を返すよう変更。
+  - redact: 自分のイベント以外を redact する場合は redact PL チェックを追加。
 
-- **Redaction エンドポイント** (`rooms.rs`, `db::events`):
-  - `PUT /rooms/{roomId}/redact/{eventId}/{txnId}` — m.room.redaction メッセージイベントを保存し、対象イベントの content を `{}` に置換。
-  - `db::events::redact_event()` 新設: `UPDATE events SET content = '{}'`。
+- **`POST /rooms/{roomId}/upgrade`** (`api/client/rooms.rs`):
+  - state_default PL チェック後、新ルームを作成してバージョンを設定。
+  - 新ルームに m.room.create（predecessor 付き）/ join_rules / power_levels / member イベントを保存。
+  - 旧ルームに m.room.tombstone を保存して replacement_room を示す。
+  - レスポンス: `{ "replacement_room": "<new_room_id>" }`。
 
-- **`store_message_event` ヘルパー追加** (`rooms.rs`):
-  - state_key なしのメッセージイベントを保存する共通ヘルパー（`store_state_event` の非 state_key 版）。
-  - redaction に使用。
+- **`POST /account/deactivate`** (`api/client/account.rs`, `db/users.rs`):
+  - UIA（m.login.password）でパスワード確認後、全トークンを失効。
+  - `db::users::deactivate()` — password_hash を空文字列に設定してログイン不能化。
+  - レスポンス: `{ "id_server_unbind_result": "no-support" }`。
 
 ## 既知の課題・技術的負債
 
@@ -25,20 +28,19 @@
 | 非マクロ sqlx クエリ | 多数のモジュールが `sqlx::query()` 非マクロを使用（`.sqlx/` メタデータ未生成） |
 | highlight_count は localpart LIKE | display name メンションや push rule の highlight tweak には未対応 |
 | E2EE は鍵交換のみ | Olm セッション確立や Megolm グループセッション管理はクライアント側実装 |
-| 状態解決が浅い | auth_events DAG の完全なグラフトラバーサルは未実装 |
 | 状態解決アルゴリズム v2 未完全 | auth_events / prev_events は DB に保存されるが、グラフを使った完全な conflict resolution は未実装 |
 | account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
-| depth の競合リスク | get_room_tip() と send() の間に他のイベントが挿入された場合、depth が重複する可能性（シングルスレッド的な運用では許容範囲） |
+| depth の競合リスク | get_room_tip() と send() の間に他のイベントが挿入された場合、depth が重複する可能性 |
 | /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
-| kick/ban の権限チェックなし | 送信者の power_level を検証していない |
-| redaction の権限チェックなし | 自分のイベントか管理者権限かの確認が未実装 |
+| upgrade の predecessor event_id | m.room.create の predecessor.event_id は空文字列（旧ルームの最終 event_id を取得していない） |
 
-## v0.27.0 候補
+## v0.28.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **`/rooms/{roomId}/upgrade` エンドポイント** — room version アップグレード
-3. **push rule の `highlight` tweak による正確な highlight_count** — `dispatch_push` でのハイライト評価結果を `unread_highlights` テーブルに記録
-4. **モデレーション権限チェック** — kick/ban/redact 時の power_level 検証
+2. **push rule の `highlight` tweak** — `dispatch_push` でのハイライト評価結果を `unread_highlights` テーブルに記録して highlight_count を正確化
+3. **`/rooms/{roomId}/upgrade` の predecessor event_id** — 旧ルームの最終 event_id を取得して設定
+4. **`/search` エンドポイント** — 全文検索（MariaDB LIKE または FTS）
+5. **`/rooms/{roomId}/threads` エンドポイント** — MSC スレッド対応
 
 ## 開発フロー（おさらい）
 

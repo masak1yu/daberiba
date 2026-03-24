@@ -91,6 +91,16 @@ pub async fn exists(pool: &MySqlPool, user_id: &str) -> Result<bool> {
     Ok(row.is_some())
 }
 
+/// アカウントを無効化する: password_hash を空文字列に設定してログイン不能にする。
+/// アクセストークンは呼び出し元で revoke_all() すること。
+pub async fn deactivate(pool: &MySqlPool, user_id: &str) -> Result<()> {
+    sqlx::query("UPDATE users SET password_hash = '' WHERE user_id = ?")
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 pub async fn verify(pool: &MySqlPool, user_id: &str, password: &str) -> Result<bool> {
     let row = sqlx::query!("SELECT password_hash FROM users WHERE user_id = ?", user_id)
         .fetch_optional(pool)
