@@ -228,6 +228,26 @@ pub struct InvitedRoom {
     pub invited_by: Option<String>,
 }
 
+/// ルーム内で join 中の外部サーバー名一覧を返す（自サーバーを除く）。
+/// federation send_transaction の送信先決定に使用する。
+pub async fn remote_servers_in_room(
+    pool: &MySqlPool,
+    room_id: &str,
+    local_server: &str,
+) -> Result<Vec<String>> {
+    let rows: Vec<(String,)> = sqlx::query_as(
+        r#"SELECT DISTINCT SUBSTRING_INDEX(user_id, ':', -1) AS server
+           FROM room_memberships
+           WHERE room_id = ? AND membership = 'join'
+             AND user_id NOT LIKE ?"#,
+    )
+    .bind(room_id)
+    .bind(format!("%:{}", local_server))
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|(s,)| s).collect())
+}
+
 pub async fn invited_rooms(pool: &MySqlPool, user_id: &str) -> Result<Vec<InvitedRoom>> {
     let rows: Vec<(String, Option<String>)> = sqlx::query_as(
         "SELECT room_id, invited_by FROM room_memberships WHERE user_id = ? AND membership = 'invite'",

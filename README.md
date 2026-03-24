@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.17.0 — Client-Server API Phase 12 + Federation Phase 6 (functional, not production-ready)
+**Status:** v0.18.0 — Client-Server API Phase 12 + Federation Phase 7 (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -477,7 +477,6 @@ User-defined rules and overrides are persisted in `account_data` as `m.push_rule
 ## Not Yet Implemented
 
 - Full Matrix federation state resolution (auth_events DAG traversal, state resolution algorithm v2 full implementation)
-- Federation outbound send_transaction (pushing local events to remote servers)
 - E2EE Olm/Megolm session management (key exchange only)
 
 ## License

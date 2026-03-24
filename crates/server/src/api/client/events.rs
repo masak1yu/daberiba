@@ -42,6 +42,7 @@ async fn send_event(
     Path(path): Path<SendEventPath>,
     Json(content): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    let now_ms = chrono::Utc::now().timestamp_millis();
     let event_id = db::events::send(
         &state.pool,
         &state.server_name,
@@ -52,6 +53,21 @@ async fn send_event(
         &content,
     )
     .await?;
+
+    // federation 配送（背景タスク、ベストエフォート）
+    let pdu = serde_json::json!({
+        "event_id": event_id,
+        "room_id": path.room_id,
+        "sender": user.user_id,
+        "type": path.event_type,
+        "content": content,
+        "origin_server_ts": now_ms,
+        "origin": &*state.server_name,
+        "depth": 0,
+        "auth_events": [],
+        "prev_events": [],
+    });
+    crate::federation_client::dispatch_send_transaction(state.clone(), path.room_id.clone(), pdu);
 
     // HTTP pusher への通知（背景タスク、ベストエフォート）
     dispatch_push(
@@ -80,6 +96,7 @@ async fn send_state_event(
     Path(path): Path<StateEventPath>,
     Json(content): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    let now_ms = chrono::Utc::now().timestamp_millis();
     let event_id = db::events::send(
         &state.pool,
         &state.server_name,
@@ -90,6 +107,21 @@ async fn send_state_event(
         &content,
     )
     .await?;
+
+    let pdu = serde_json::json!({
+        "event_id": event_id,
+        "room_id": path.room_id,
+        "sender": user.user_id,
+        "type": path.event_type,
+        "state_key": "",
+        "content": content,
+        "origin_server_ts": now_ms,
+        "origin": &*state.server_name,
+        "depth": 0,
+        "auth_events": [],
+        "prev_events": [],
+    });
+    crate::federation_client::dispatch_send_transaction(state, path.room_id.clone(), pdu);
 
     Ok(Json(serde_json::json!({ "event_id": event_id })))
 }
@@ -110,6 +142,7 @@ async fn send_state_event_with_key(
     Path(path): Path<StateEventWithKeyPath>,
     Json(content): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    let now_ms = chrono::Utc::now().timestamp_millis();
     let event_id = db::events::send(
         &state.pool,
         &state.server_name,
@@ -120,6 +153,21 @@ async fn send_state_event_with_key(
         &content,
     )
     .await?;
+
+    let pdu = serde_json::json!({
+        "event_id": event_id,
+        "room_id": path.room_id,
+        "sender": user.user_id,
+        "type": path.event_type,
+        "state_key": path.state_key,
+        "content": content,
+        "origin_server_ts": now_ms,
+        "origin": &*state.server_name,
+        "depth": 0,
+        "auth_events": [],
+        "prev_events": [],
+    });
+    crate::federation_client::dispatch_send_transaction(state, path.room_id.clone(), pdu);
 
     Ok(Json(serde_json::json!({ "event_id": event_id })))
 }

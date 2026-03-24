@@ -1,14 +1,14 @@
-# Handover — v0.17.0 → v0.18.0
+# Handover — v0.18.0 → v0.19.0
 
-## v0.17.0 でやったこと
+## v0.18.0 でやったこと
 
-- **Federation 送信側の実装** (`federation_client.rs` 新規追加):
-  - `POST /_matrix/client/v3/join/{roomId}` で外部ルームを検出した場合、make_join → sign PDU → send_join フローを自動実行するようにした。
-  - `is_local_room()`: room_id の server 部分が自サーバー名と一致するかどうかで内外を判定。
-  - `join_remote_room()`: GET make_join でテンプレート取得 → Ed25519 署名付与 → event_id 計算（room version 3+, SHA-256 ハッシュ）→ PUT send_join 送信 → レスポンスの state/auth_chain PDU を DB に保存。
-  - X-Matrix 送信ヘッダーは `xmatrix::make_auth_header()` で生成（既存の X-Matrix 検証コードと対称的な実装）。
-  - `signing_key::compute_event_id()` 追加: signatures/unsigned/event_id/hashes を除いたカノニカル JSON の SHA-256 を URL-safe unpadded base64 エンコード。
-  - `db::rooms::set_version()` 追加: send_join レスポンスの room_version を DB に保存。
+- **Federation 送信 send_transaction** (`federation_client.rs` に追加):
+  - ローカルユーザーがイベントを送信した際、同じルームに join している外部サーバーへ `PUT /_matrix/federation/v1/send/{txnId}` でイベントを配送するようにした。
+  - `db::rooms::remote_servers_in_room()` 追加: ルーム内で join 中の外部サーバー名一覧を取得（`SUBSTRING_INDEX` で user_id からサーバー名を抽出）。
+  - `federation_client::dispatch_send_transaction()` 追加: 背景 tokio タスクとしてベストエフォートで配送（失敗は warning ログのみ）。
+  - `federation_client::sign_pdu()` 追加: 送信前に PDU へ自サーバーの Ed25519 署名を付与。
+  - `events.rs` の `send_event` / `send_state_event` / `send_state_event_with_key` の各ハンドラから `dispatch_send_transaction` を呼び出し。
+  - dispatch_push（HTTP pusher）と同様の非同期パターン。
 
 ## 既知の課題・技術的負債
 
@@ -20,17 +20,18 @@
 | highlight_count は LIKE 検索 | content に user_id 文字列が含まれるかどうかの簡易実装 |
 | プレゼンスは登録ユーザーのみ | `PUT /presence` を一度も呼んでいないユーザーは sync の presence.events に出現しない |
 | E2EE は鍵交換のみ | Olm セッション確立や Megolm グループセッション管理はクライアント側実装 |
-| 状態解決が浅い | auth_events DAG の完全なグラフトラバーサルは未実装。`send_join` の auth_chain は m.room.create/join_rules/power_levels のみ |
+| 状態解決が浅い | auth_events DAG の完全なグラフトラバーサルは未実装 |
 | 状態解決アルゴリズム v2 未完全 | auth_events / prev_events は DB に保存されるようになったが、グラフを使った完全な conflict resolution は未実装 |
 | account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
-| Federation 送信 send_transaction 未実装 | 自サーバーで発生したイベントを他サーバーへ PUT send_transaction で配送する機能がない |
+| PDU event_id が UUID ベース | ローカル生成イベントの event_id が `$uuid:server` 形式（room v1/v2 相当）で、room v3+ のハッシュベース形式ではない |
+| send_transaction PDU に depth/auth_events/prev_events がない | 送信 PDU の depth=0、auth_events=[] は仕様上不正確。strict な受信側で拒否される可能性がある |
 
-## v0.18.0 候補
+## v0.19.0 候補
 
-1. **Federation 送信 send_transaction** — ローカルイベント送信時に、同じルームの他サーバーメンバーへ PUT `/_matrix/federation/v1/send/{txnId}` でイベントを配送する
-2. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-3. **Federation leave 送信側** — ローカルユーザーが外部ルームを退出する際に make_leave → send_leave を発行する
-4. **notify_push_gateway (federation 経由)** — send_transaction で届いたイベントに対して、ローカルユーザーへの push 配送
+1. **Federation leave 送信側** — ローカルユーザーが外部ルームを退出する際に make_leave → send_leave を発行する
+2. **PDU event_id をハッシュベース (room v3+) に移行** — `db::events::send()` で UUID 形式をやめ SHA-256 ハッシュベースの event_id を生成する
+3. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
+4. **Federation send_transaction の depth / prev_events 追跡** — 送信 PDU に正確な depth・prev_events を付与する
 
 ## 開発フロー（おさらい）
 
