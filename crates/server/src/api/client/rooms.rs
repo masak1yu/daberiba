@@ -57,6 +57,17 @@ async fn join_room(
         room_id_or_alias.clone()
     };
 
+    // 外部ルームの場合は federation join フロー（make_join → send_join）を実行する
+    if !crate::federation_client::is_local_room(&state, &room_id) {
+        crate::federation_client::join_remote_room(&state, &room_id, &user.user_id)
+            .await
+            .map_err(|e| {
+                tracing::warn!(room_id, error = %e, "federation join 失敗");
+                AppError::BadRequest(format!("federation join failed: {e}"))
+            })?;
+        return Ok(Json(serde_json::json!({ "room_id": room_id })));
+    }
+
     db::rooms::join(&state.pool, &user.user_id, &room_id).await?;
     Ok(Json(serde_json::json!({ "room_id": room_id })))
 }

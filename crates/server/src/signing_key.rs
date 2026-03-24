@@ -62,6 +62,27 @@ impl ServerSigningKey {
     }
 }
 
+/// room version 3+ の event_id を計算する。
+///
+/// `signatures`, `unsigned`, `event_id` を除いたカノニカル JSON の SHA-256 を
+/// URL-safe unpadded base64 でエンコードして `$` を付けたものが event_id。
+pub fn compute_event_id(event: &serde_json::Value) -> String {
+    use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    use base64::Engine;
+    use sha2::{Digest, Sha256};
+
+    let mut redacted = event.clone();
+    if let Some(obj) = redacted.as_object_mut() {
+        obj.remove("signatures");
+        obj.remove("unsigned");
+        obj.remove("event_id");
+        obj.remove("hashes");
+    }
+    let canonical = canonical_json(&redacted);
+    let hash = Sha256::digest(canonical.as_bytes());
+    format!("${}", URL_SAFE_NO_PAD.encode(hash))
+}
+
 /// Matrix 仕様のカノニカル JSON（キーをソートして余分な空白なし）
 pub fn canonical_json(v: &serde_json::Value) -> String {
     match v {

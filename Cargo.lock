@@ -952,7 +952,7 @@ dependencies = [
 
 [[package]]
 name = "db"
-version = "0.15.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "argon2",
@@ -2781,7 +2781,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.15.0"
+version = "0.17.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2800,6 +2800,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "sqlx",
  "thiserror 1.0.69",
  "tokio",
