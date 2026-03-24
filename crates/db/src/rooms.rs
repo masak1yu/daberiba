@@ -290,3 +290,42 @@ pub async fn invited_rooms(pool: &MySqlPool, user_id: &str) -> Result<Vec<Invite
         })
         .collect())
 }
+
+/// membership を 'ban' に設定する。
+pub async fn ban(pool: &MySqlPool, room_id: &str, user_id: &str) -> Result<()> {
+    sqlx::query(
+        r#"INSERT INTO room_memberships (room_id, user_id, membership)
+           VALUES (?, ?, 'ban')
+           ON DUPLICATE KEY UPDATE membership = 'ban'"#,
+    )
+    .bind(room_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// ban を解除して membership = 'leave' に戻す（再招待可能状態）。
+pub async fn unban(pool: &MySqlPool, room_id: &str, user_id: &str) -> Result<()> {
+    sqlx::query(
+        "UPDATE room_memberships SET membership = 'leave' WHERE room_id = ? AND user_id = ? AND membership = 'ban'",
+    )
+    .bind(room_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// ルームの記録をユーザーの視点から削除する（forget）。
+/// leave / ban 状態のユーザーのみ実行可能（join 中は削除しない）。
+pub async fn forget(pool: &MySqlPool, room_id: &str, user_id: &str) -> Result<()> {
+    sqlx::query(
+        "DELETE FROM room_memberships WHERE room_id = ? AND user_id = ? AND membership != 'join'",
+    )
+    .bind(room_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}

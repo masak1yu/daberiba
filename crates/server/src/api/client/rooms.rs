@@ -1,7 +1,7 @@
 use crate::{error::ApiResult, error::AppError, middleware::auth::AuthUser, state::AppState};
 use axum::{
     extract::{Path, State},
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -12,6 +12,17 @@ pub fn routes() -> Router<AppState> {
         .route("/_matrix/client/v3/join/{roomIdOrAlias}", post(join_room))
         .route("/_matrix/client/v3/rooms/{roomId}/leave", post(leave_room))
         .route("/_matrix/client/v3/joined_rooms", get(joined_rooms))
+        .route(
+            "/_matrix/client/v3/rooms/{roomId}/redact/{eventId}/{txnId}",
+            put(redact_event),
+        )
+        .route("/_matrix/client/v3/rooms/{roomId}/kick", post(kick_user))
+        .route("/_matrix/client/v3/rooms/{roomId}/ban", post(ban_user))
+        .route("/_matrix/client/v3/rooms/{roomId}/unban", post(unban_user))
+        .route(
+            "/_matrix/client/v3/rooms/{roomId}/forget",
+            post(forget_room),
+        )
 }
 
 #[derive(Deserialize)]
@@ -291,4 +302,154 @@ async fn joined_rooms(
 ) -> ApiResult<Json<serde_json::Value>> {
     let rooms = db::rooms::joined_rooms(&state.pool, &user.user_id).await?;
     Ok(Json(serde_json::json!({ "joined_rooms": rooms })))
+}
+
+#[derive(Deserialize)]
+struct RedactRequest {
+    reason: Option<String>,
+}
+
+/// PUT /_matrix/client/v3/rooms/{roomId}/redact/{eventId}/{txnId}
+async fn redact_event(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+    Path((room_id, target_event_id, _txn_id)): Path<(String, String, String)>,
+    Json(body): Json<RedactRequest>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let mut content = serde_json::json!({ "redacts": target_event_id });
+    if let Some(reason) = body.reason {
+        content["reason"] = serde_json::Value::String(reason);
+    }
+    let (redaction_event_id, _pdu) = store_message_event(
+        &state,
+        &room_id,
+        &user.user_id,
+        "m.room.redaction",
+        &content,
+    )
+    .await?;
+    db::events::redact_event(&state.pool, &target_event_id).await?;
+    Ok(Json(serde_json::json!({ "event_id": redaction_event_id })))
+}
+
+#[derive(Deserialize)]
+struct ModerationRequest {
+    user_id: String,
+    reason: Option<String>,
+}
+
+/// POST /_matrix/client/v3/rooms/{roomId}/kick
+async fn kick_user(
+    State(state): State<AppState>,
+    axum::Extension(_user): axum::Extension<AuthUser>,
+    Path(room_id): Path<String>,
+    Json(body): Json<ModerationRequest>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let mut content = serde_json::json!({ "membership": "leave" });
+    if let Some(reason) = body.reason {
+        content["reason"] = serde_json::Value::String(reason);
+    }
+    store_state_event(
+        &state,
+        &room_id,
+        &body.user_id,
+        "m.room.member",
+        &body.user_id,
+        &content,
+    )
+    .await?;
+    db::rooms::leave(&state.pool, &body.user_id, &room_id).await?;
+    Ok(Json(serde_json::json!({})))
+}
+
+/// POST /_matrix/client/v3/rooms/{roomId}/ban
+async fn ban_user(
+    State(state): State<AppState>,
+    axum::Extension(_user): axum::Extension<AuthUser>,
+    Path(room_id): Path<String>,
+    Json(body): Json<ModerationRequest>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let mut content = serde_json::json!({ "membership": "ban" });
+    if let Some(reason) = body.reason {
+        content["reason"] = serde_json::Value::String(reason);
+    }
+    store_state_event(
+        &state,
+        &room_id,
+        &body.user_id,
+        "m.room.member",
+        &body.user_id,
+        &content,
+    )
+    .await?;
+    db::rooms::ban(&state.pool, &room_id, &body.user_id).await?;
+    Ok(Json(serde_json::json!({})))
+}
+
+/// POST /_matrix/client/v3/rooms/{roomId}/unban
+async fn unban_user(
+    State(state): State<AppState>,
+    axum::Extension(_user): axum::Extension<AuthUser>,
+    Path(room_id): Path<String>,
+    Json(body): Json<ModerationRequest>,
+) -> ApiResult<Json<serde_json::Value>> {
+    db::rooms::unban(&state.pool, &room_id, &body.user_id).await?;
+    Ok(Json(serde_json::json!({})))
+}
+
+/// POST /_matrix/client/v3/rooms/{roomId}/forget
+async fn forget_room(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+    Path(room_id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    db::rooms::forget(&state.pool, &room_id, &user.user_id).await?;
+    Ok(Json(serde_json::json!({})))
+}
+
+/// メッセージイベント（state_key なし）を保存する共通ヘルパー。
+/// 戻り値: (event_id, pdu)
+async fn store_message_event(
+    state: &AppState,
+    room_id: &str,
+    sender: &str,
+    event_type: &str,
+    content: &serde_json::Value,
+) -> anyhow::Result<(String, serde_json::Value)> {
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let (tip_result, auth_result) = tokio::join!(
+        db::events::get_room_tip(&state.pool, room_id),
+        db::room_state::get_auth_event_ids(&state.pool, room_id),
+    );
+    let (depth, prev_event_ids) = tip_result?;
+    let auth_event_ids = auth_result.unwrap_or_default();
+
+    let pdu_for_hash = serde_json::json!({
+        "room_id": room_id,
+        "sender": sender,
+        "type": event_type,
+        "content": content,
+        "origin_server_ts": now_ms,
+        "origin": &*state.server_name,
+        "depth": depth,
+        "auth_events": auth_event_ids,
+        "prev_events": prev_event_ids,
+    });
+    let event_id = crate::signing_key::compute_event_id(&pdu_for_hash);
+    db::events::send(
+        &state.pool,
+        &db::events::LocalEvent {
+            event_id: &event_id,
+            room_id,
+            sender,
+            event_type,
+            state_key: None,
+            content,
+            origin_server_ts: now_ms,
+            depth,
+            prev_events: &prev_event_ids,
+        },
+    )
+    .await?;
+    Ok((event_id, pdu_for_hash))
 }

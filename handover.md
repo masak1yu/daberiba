@@ -1,20 +1,20 @@
-# Handover — v0.25.0 → v0.26.0
+# Handover — v0.26.0 → v0.27.0
 
-## v0.25.0 でやったこと
+## v0.26.0 でやったこと
 
-- **`GET /rooms/{roomId}/event/{eventId}` エンドポイント** (`events.rs`):
-  - 既存の `db::events::get_by_id()` を利用して単一イベントを返す。
-  - イベントが存在しない場合は 404。
+- **モデレーション系エンドポイント** (`rooms.rs`):
+  - `POST /rooms/{roomId}/kick` — 対象ユーザーの m.room.member leave イベントを保存し、membership を 'leave' に更新。
+  - `POST /rooms/{roomId}/ban` — 対象ユーザーの m.room.member ban イベントを保存し、membership を 'ban' に更新。
+  - `POST /rooms/{roomId}/unban` — membership を 'ban' → 'leave' に戻す（再招待可能状態）。
+  - `POST /rooms/{roomId}/forget` — leave/ban 状態のユーザーがルームの記録を削除。
 
-- **`/sync` の `rooms.leave` 対応** (`db::sync`, `db::rooms`):
-  - `db::rooms::leave_rooms_since()` 新設: since_ordering より後に leave になったルームを返す。
-  - 増分 sync 時に `rooms.leave` を正しく埋めるようになった（leave イベントを timeline に含む）。
-  - 初回 sync（since なし）は従来通り空。
+- **Redaction エンドポイント** (`rooms.rs`, `db::events`):
+  - `PUT /rooms/{roomId}/redact/{eventId}/{txnId}` — m.room.redaction メッセージイベントを保存し、対象イベントの content を `{}` に置換。
+  - `db::events::redact_event()` 新設: `UPDATE events SET content = '{}'`。
 
-- **`highlight_count` の改善** (`db::unread`):
-  - content 全体への LIKE 検索から `JSON_EXTRACT(content, '$.body')` + `JSON_EXTRACT(content, '$.formatted_body')` への LIKE 検索に変更。
-  - ユーザーの localpart で検索することで `@alice:server` 形式のメンションに対応。
-  - content 全体への誤ヒット（room_id などが content に含まれる場合）を防止。
+- **`store_message_event` ヘルパー追加** (`rooms.rs`):
+  - state_key なしのメッセージイベントを保存する共通ヘルパー（`store_state_event` の非 state_key 版）。
+  - redaction に使用。
 
 ## 既知の課題・技術的負債
 
@@ -30,13 +30,15 @@
 | account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
 | depth の競合リスク | get_room_tip() と send() の間に他のイベントが挿入された場合、depth が重複する可能性（シングルスレッド的な運用では許容範囲） |
 | /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
+| kick/ban の権限チェックなし | 送信者の power_level を検証していない |
+| redaction の権限チェックなし | 自分のイベントか管理者権限かの確認が未実装 |
 
-## v0.26.0 候補
+## v0.27.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **`/rooms/{roomId}/redact/{eventId}/{txnId}` エンドポイント** — イベント削除（redaction）
-3. **`/rooms/{roomId}/upgrade` エンドポイント** — room version アップグレード
-4. **push rule の `highlight` tweak による正確な highlight_count** — `dispatch_push` でのハイライト評価結果を `unread_highlights` テーブルに記録
+2. **`/rooms/{roomId}/upgrade` エンドポイント** — room version アップグレード
+3. **push rule の `highlight` tweak による正確な highlight_count** — `dispatch_push` でのハイライト評価結果を `unread_highlights` テーブルに記録
+4. **モデレーション権限チェック** — kick/ban/redact 時の power_level 検証
 
 ## 開発フロー（おさらい）
 
