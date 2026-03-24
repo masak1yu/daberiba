@@ -235,3 +235,33 @@ pub async fn verify_request(
         .await
         .map_err(|_| AppError::Unauthorized)
 }
+
+/// 送信側の X-Matrix Authorization ヘッダー値を生成する。
+///
+/// 自サーバーの秘密鍵でリクエストに署名し、
+/// `X-Matrix origin="...",destination="...",key="...",sig="..."` 形式の文字列を返す。
+pub fn make_auth_header(
+    state: &AppState,
+    destination: &str,
+    method: &str,
+    uri: &str,
+    body: Option<&serde_json::Value>,
+) -> String {
+    let mut signed_obj = serde_json::json!({
+        "method": method,
+        "uri": uri,
+        "origin": &*state.server_name,
+        "destination": destination,
+    });
+    if let Some(b) = body {
+        signed_obj["content"] = b.clone();
+    }
+    let canonical = canonical_json(&signed_obj);
+    let sig = state.signing_key.sign(canonical.as_bytes());
+    let key_id = &state.signing_key.key_id;
+
+    format!(
+        r#"X-Matrix origin="{}",destination="{}",key="{}",sig="{}""#,
+        state.server_name, destination, key_id, sig
+    )
+}
