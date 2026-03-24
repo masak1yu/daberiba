@@ -317,13 +317,32 @@ fn dispatch_push(
                 member_count,
                 display_name.as_deref(),
             );
-            let should_notify = actions
-                .as_ref()
-                .map(|a| crate::push_eval::actions_notify(a))
-                .unwrap_or(false);
+            let (should_notify, is_highlight) = match &actions {
+                Some(a) => (
+                    crate::push_eval::actions_notify(a),
+                    crate::push_eval::actions_highlight(a),
+                ),
+                None => (false, false),
+            };
 
             if !should_notify {
                 continue;
+            }
+
+            // ハイライトを unread_highlights テーブルに記録（ベストエフォート）
+            if is_highlight {
+                if let Ok(Some(ordering)) =
+                    db::events::get_stream_ordering(&state.pool, &event_id).await
+                {
+                    let _ = db::unread::record_highlight(
+                        &state.pool,
+                        &room_id,
+                        &user_id,
+                        &event_id,
+                        ordering,
+                    )
+                    .await;
+                }
             }
 
             for pusher in user_pushers {

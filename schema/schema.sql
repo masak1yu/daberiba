@@ -231,6 +231,21 @@ CREATE TABLE IF NOT EXISTS server_signing_key (
     PRIMARY KEY (key_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- push rule ハイライト評価結果を記録するテーブル。
+-- dispatch_push で highlight tweak が付いた場合に挿入し、unread_highlights の
+-- highlight_count 計算に使用する。既読送信時は receipt テーブルで管理するため
+-- このテーブルの cleanup は行わない（COUNT は receipts との結合で絞り込む）。
+CREATE TABLE IF NOT EXISTS unread_highlights (
+    room_id          VARCHAR(255) NOT NULL,
+    user_id          VARCHAR(255) NOT NULL,
+    event_id         VARCHAR(255) NOT NULL,
+    stream_ordering  BIGINT       NOT NULL,
+    PRIMARY KEY (room_id, user_id, event_id),
+    INDEX idx_uh_room_user_ordering (room_id, user_id, stream_ordering),
+    FOREIGN KEY (room_id) REFERENCES rooms(room_id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS room_key_backup_sessions (
     version             BIGINT UNSIGNED NOT NULL,
     user_id             VARCHAR(255)    NOT NULL,

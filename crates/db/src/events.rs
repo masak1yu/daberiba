@@ -197,6 +197,16 @@ pub async fn get_by_id(pool: &MySqlPool, event_id: &str) -> Result<Option<serde_
     }))
 }
 
+/// イベントの stream_ordering を取得する。存在しない場合は None。
+pub async fn get_stream_ordering(pool: &MySqlPool, event_id: &str) -> Result<Option<i64>> {
+    let row: Option<(i64,)> =
+        sqlx::query_as("SELECT stream_ordering FROM events WHERE event_id = ?")
+            .bind(event_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(o,)| o))
+}
+
 /// backfill 用: 指定 event_id より古いイベントを最大 limit 件取得する。
 ///
 /// `v` クエリパラメータで指定された event_id を起点として、それより古い
@@ -511,4 +521,89 @@ pub async fn get_context(
         start,
         end,
     }))
+}
+
+/// ルームイベントの全文検索（LIKE ベース）。
+/// ユーザーが参加しているルームのうち、search_term を body フィールドに含む
+/// m.room.message イベントを返す。
+pub async fn search_room_events(
+    pool: &MySqlPool,
+    user_id: &str,
+    search_term: &str,
+    rooms: Option<&[String]>,
+    order_by: Option<&str>,
+    limit: i64,
+) -> Result<Vec<serde_json::Value>> {
+    use sqlx::Row;
+
+    // 参加ルームに絞り込む（指定がある場合はさらに絞る）
+    let order_clause = if order_by == Some("recent") {
+        "ORDER BY e.stream_ordering DESC"
+    } else {
+        // デフォルト: rank（LIKE 検索のため固定ランク = stream_ordering 降順）
+        "ORDER BY e.stream_ordering DESC"
+    };
+
+    let like_pattern = format!("%{}%", search_term.replace('%', "\\%").replace('_', "\\_"));
+
+    let rows = if let Some(room_list) = rooms {
+        if room_list.is_empty() {
+            return Ok(vec![]);
+        }
+        // room_list を IN 句に展開（可変長のため動的クエリ）
+        let placeholders = room_list.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+        let sql = format!(
+            r#"SELECT e.event_id, e.room_id, e.sender, e.event_type, e.content, e.created_at
+               FROM events e
+               INNER JOIN room_memberships rm ON rm.room_id = e.room_id
+                 AND rm.user_id = ? AND rm.membership = 'join'
+               WHERE e.event_type = 'm.room.message'
+                 AND e.state_key IS NULL
+                 AND e.room_id IN ({placeholders})
+                 AND JSON_UNQUOTE(JSON_EXTRACT(e.content, '$.body')) LIKE ?
+               {order_clause}
+               LIMIT ?"#,
+        );
+        let mut q = sqlx::query(&sql).bind(user_id);
+        for r in room_list {
+            q = q.bind(r);
+        }
+        q.bind(&like_pattern).bind(limit).fetch_all(pool).await?
+    } else {
+        let sql = format!(
+            r#"SELECT e.event_id, e.room_id, e.sender, e.event_type, e.content, e.created_at
+               FROM events e
+               INNER JOIN room_memberships rm ON rm.room_id = e.room_id
+                 AND rm.user_id = ? AND rm.membership = 'join'
+               WHERE e.event_type = 'm.room.message'
+                 AND e.state_key IS NULL
+                 AND JSON_UNQUOTE(JSON_EXTRACT(e.content, '$.body')) LIKE ?
+               {order_clause}
+               LIMIT ?"#,
+        );
+        sqlx::query(&sql)
+            .bind(user_id)
+            .bind(&like_pattern)
+            .bind(limit)
+            .fetch_all(pool)
+            .await?
+    };
+
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let content_str: String = r.get("content");
+            serde_json::json!({
+                "event_id": r.get::<String, _>("event_id"),
+                "room_id": r.get::<String, _>("room_id"),
+                "sender": r.get::<String, _>("sender"),
+                "type": r.get::<String, _>("event_type"),
+                "content": serde_json::from_str::<serde_json::Value>(&content_str)
+                    .unwrap_or_default(),
+                "origin_server_ts": r.get::<chrono::NaiveDateTime, _>("created_at")
+                    .and_utc()
+                    .timestamp_millis(),
+            })
+        })
+        .collect())
 }
