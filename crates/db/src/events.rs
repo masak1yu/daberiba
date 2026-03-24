@@ -401,6 +401,16 @@ pub async fn get_messages(
     Ok(MessagePage { events, start, end })
 }
 
+/// イベントの content を `{}` に置き換える（redaction 用）。
+/// 対象イベントが存在しない場合は何もしない（べき等）。
+pub async fn redact_event(pool: &MySqlPool, event_id: &str) -> Result<()> {
+    sqlx::query("UPDATE events SET content = '{}' WHERE event_id = ?")
+        .bind(event_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 /// `/context` レスポンス
 pub struct EventContextResult {
     pub event: serde_json::Value,
