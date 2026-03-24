@@ -25,9 +25,11 @@ async fn make_join(
 ) -> ApiResult<Json<serde_json::Value>> {
     crate::xmatrix::verify_request(&state, &headers, "GET", &uri, None).await?;
 
-    let (count, room_version) = tokio::join!(
+    let (count, room_version, auth_event_ids, tip) = tokio::join!(
         db::rooms::count_joined_members(&state.pool, &room_id),
         db::rooms::get_version(&state.pool, &room_id),
+        db::room_state::get_auth_event_ids(&state.pool, &room_id),
+        db::events::get_room_tip(&state.pool, &room_id),
     );
     if count.unwrap_or(0) == 0 {
         return Err(crate::error::AppError::NotFound);
@@ -36,6 +38,8 @@ async fn make_join(
         .ok()
         .flatten()
         .unwrap_or_else(|| "10".to_string());
+    let auth_event_ids = auth_event_ids.unwrap_or_default();
+    let (next_depth, prev_event_ids) = tip.unwrap_or((1, vec![]));
 
     let now_ms = chrono::Utc::now().timestamp_millis() as u64;
 
@@ -48,8 +52,9 @@ async fn make_join(
         "content": { "membership": "join" },
         "origin": &*state.server_name,
         "origin_server_ts": now_ms,
-        "auth_events": [],
-        "prev_events": [],
+        "auth_events": auth_event_ids,
+        "prev_events": prev_event_ids,
+        "depth": next_depth,
     });
 
     Ok(Json(serde_json::json!({
