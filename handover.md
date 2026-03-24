@@ -1,15 +1,20 @@
-# Handover — v0.24.0 → v0.25.0
+# Handover — v0.25.0 → v0.26.0
 
-## v0.24.0 でやったこと
+## v0.25.0 でやったこと
 
-- **`createRoom` の `room_alias_name` 対応** (`rooms.rs`):
-  - `CreateRoomRequest` に `room_alias_name: Option<String>` を追加。
-  - 指定された場合、`#<alias_name>:<server_name>` 形式のエイリアスを `room_aliases` テーブルに登録し、`m.room.canonical_alias` 状態イベントを保存する。
+- **`GET /rooms/{roomId}/event/{eventId}` エンドポイント** (`events.rs`):
+  - 既存の `db::events::get_by_id()` を利用して単一イベントを返す。
+  - イベントが存在しない場合は 404。
 
-- **`/rooms/{roomId}/context/{eventId}` エンドポイント** (`events.rs` + `db::events`):
-  - `GET /_matrix/client/v3/rooms/{roomId}/context/{eventId}?limit=10` を新規実装。
-  - 指定イベントの前後 `limit/2` 件ずつのイベントを返す（`events_before` / `events_after`）。
-  - `start` / `end` トークン（`s{stream_ordering}` 形式）付き。
+- **`/sync` の `rooms.leave` 対応** (`db::sync`, `db::rooms`):
+  - `db::rooms::leave_rooms_since()` 新設: since_ordering より後に leave になったルームを返す。
+  - 増分 sync 時に `rooms.leave` を正しく埋めるようになった（leave イベントを timeline に含む）。
+  - 初回 sync（since なし）は従来通り空。
+
+- **`highlight_count` の改善** (`db::unread`):
+  - content 全体への LIKE 検索から `JSON_EXTRACT(content, '$.body')` + `JSON_EXTRACT(content, '$.formatted_body')` への LIKE 検索に変更。
+  - ユーザーの localpart で検索することで `@alice:server` 形式のメンションに対応。
+  - content 全体への誤ヒット（room_id などが content に含まれる場合）を防止。
 
 ## 既知の課題・技術的負債
 
@@ -18,7 +23,7 @@
 | UIA ステージ m.login.password のみ | Matrix 仕様では他ステージ（m.login.sso 等）も定義されているが未対応 |
 | TypingStore はサーバー再起動でリセット | インメモリのため永続化なし（Matrix 仕様上は許容範囲） |
 | 非マクロ sqlx クエリ | 多数のモジュールが `sqlx::query()` 非マクロを使用（`.sqlx/` メタデータ未生成） |
-| highlight_count は LIKE 検索 | content に user_id 文字列が含まれるかどうかの簡易実装 |
+| highlight_count は localpart LIKE | display name メンションや push rule の highlight tweak には未対応 |
 | E2EE は鍵交換のみ | Olm セッション確立や Megolm グループセッション管理はクライアント側実装 |
 | 状態解決が浅い | auth_events DAG の完全なグラフトラバーサルは未実装 |
 | 状態解決アルゴリズム v2 未完全 | auth_events / prev_events は DB に保存されるが、グラフを使った完全な conflict resolution は未実装 |
@@ -26,12 +31,12 @@
 | depth の競合リスク | get_room_tip() と send() の間に他のイベントが挿入された場合、depth が重複する可能性（シングルスレッド的な運用では許容範囲） |
 | /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
 
-## v0.25.0 候補
+## v0.26.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **`/rooms/{roomId}/event/{eventId}` エンドポイント** — 単一イベント取得
-3. **`/rooms/{roomId}/initialSync` または `/sync` の rooms.leave 対応** — 退出ルームの差分を返す
-4. **push rule の `set_tweak: highlight` による highlight_count カウント** — 現在の LIKE 検索から push rule 評価ベースに移行
+2. **`/rooms/{roomId}/redact/{eventId}/{txnId}` エンドポイント** — イベント削除（redaction）
+3. **`/rooms/{roomId}/upgrade` エンドポイント** — room version アップグレード
+4. **push rule の `highlight` tweak による正確な highlight_count** — `dispatch_push` でのハイライト評価結果を `unread_highlights` テーブルに記録
 
 ## 開発フロー（おさらい）
 

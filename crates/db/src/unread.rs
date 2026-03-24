@@ -36,16 +36,28 @@ pub async fn get_for_room(pool: &MySqlPool, room_id: &str, user_id: &str) -> Res
     .fetch_one(pool)
     .await?;
 
-    // ハイライト数（content に user_id が含まれるイベント）
+    // ハイライト数: body フィールドまたは formatted_body フィールドに user_id が含まれるイベント
+    // JSON_EXTRACT で body/formatted_body を抽出してから LIKE 検索することで
+    // content 全体への誤ヒットを防ぐ
+    let localpart = user_id
+        .split(':')
+        .next()
+        .unwrap_or(user_id)
+        .trim_start_matches('@');
     let highlight_row: (i64,) = sqlx::query_as(
         r#"SELECT COUNT(*) FROM events
            WHERE room_id = ? AND stream_ordering > ? AND state_key IS NULL
-             AND sender != ? AND content LIKE CONCAT('%', ?, '%')"#,
+             AND sender != ?
+             AND (
+               JSON_UNQUOTE(JSON_EXTRACT(content, '$.body')) LIKE CONCAT('%', ?, '%')
+               OR JSON_UNQUOTE(JSON_EXTRACT(content, '$.formatted_body')) LIKE CONCAT('%', ?, '%')
+             )"#,
     )
     .bind(room_id)
     .bind(since_ordering)
     .bind(user_id)
-    .bind(user_id)
+    .bind(localpart)
+    .bind(localpart)
     .fetch_one(pool)
     .await?;
 

@@ -248,6 +248,33 @@ pub async fn remote_servers_in_room(
     Ok(rows.into_iter().map(|(s,)| s).collect())
 }
 
+/// since_ordering より後に leave になったルームの room_id 一覧を返す（sync の rooms.leave 用）。
+/// membership = 'leave' で、かつ leave イベント（m.room.member / state_key = user_id）が
+/// since_ordering より後に存在するルームを返す。
+pub async fn leave_rooms_since(
+    pool: &MySqlPool,
+    user_id: &str,
+    since_ordering: u64,
+) -> Result<Vec<String>> {
+    use sqlx::Row;
+    let rows = sqlx::query(
+        r#"SELECT DISTINCT rm.room_id
+           FROM room_memberships rm
+           INNER JOIN events e ON e.room_id = rm.room_id
+             AND e.event_type = 'm.room.member'
+             AND e.state_key = ?
+             AND e.stream_ordering > ?
+             AND e.content LIKE '%"membership":"leave"%'
+           WHERE rm.user_id = ? AND rm.membership = 'leave'"#,
+    )
+    .bind(user_id)
+    .bind(since_ordering)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|r| r.get("room_id")).collect())
+}
+
 pub async fn invited_rooms(pool: &MySqlPool, user_id: &str) -> Result<Vec<InvitedRoom>> {
     let rows: Vec<(String, Option<String>)> = sqlx::query_as(
         "SELECT room_id, invited_by FROM room_memberships WHERE user_id = ? AND membership = 'invite'",

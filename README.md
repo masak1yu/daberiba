@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.24.0 — Client-Server API Phase 15 + Federation Phase 12 (functional, not production-ready)
+**Status:** v0.25.0 — Client-Server API Phase 16 + Federation Phase 12 (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -50,6 +50,7 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | PUT | `/_matrix/client/v3/rooms/{roomId}/send/{type}/{txnId}` | Send event |
 | GET | `/_matrix/client/v3/rooms/{roomId}/messages` | Message history (paginated) |
 | GET | `/_matrix/client/v3/rooms/{roomId}/context/{eventId}` | Event context (events before/after) |
+| GET | `/_matrix/client/v3/rooms/{roomId}/event/{eventId}` | Get single event |
 | PUT | `/_matrix/client/v3/rooms/{roomId}/state/{type}` | Send state event |
 | PUT | `/_matrix/client/v3/rooms/{roomId}/state/{type}/{key}` | Send state event (with key) |
 | GET | `/_matrix/client/v3/rooms/{roomId}/state` | Get room state |
