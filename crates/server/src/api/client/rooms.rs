@@ -18,7 +18,7 @@ pub fn routes() -> Router<AppState> {
 struct CreateRoomRequest {
     name: Option<String>,
     topic: Option<String>,
-    _preset: Option<String>,
+    preset: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -57,14 +57,18 @@ async fn create_room(
     )
     .await?;
 
-    // m.room.join_rules
+    // m.room.join_rules（preset: "public_chat" の場合は public）
+    let join_rule = match body.preset.as_deref() {
+        Some("public_chat") => "public",
+        _ => "invite",
+    };
     store_state_event(
         &state,
         &room_id,
         &user.user_id,
         "m.room.join_rules",
         "",
-        &serde_json::json!({ "join_rule": "invite" }),
+        &serde_json::json!({ "join_rule": join_rule }),
     )
     .await?;
 

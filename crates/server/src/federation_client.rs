@@ -335,6 +335,7 @@ async fn store_state_pdu(state: &AppState, pdu: &serde_json::Value) {
             auth_events,
             prev_events,
             origin_server_ts,
+            depth: pdu["depth"].as_i64().unwrap_or(0),
         },
     )
     .await
