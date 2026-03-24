@@ -1,10 +1,32 @@
-// アプリのエントリポイント。Phase 2以降でルーティングを追加する
-function App() {
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { useAuthStore } from './stores/auth'
+import RequireAuth from './components/common/RequireAuth'
+import LoginPage from './pages/LoginPage'
+import HomePage from './pages/HomePage'
+
+export default function App() {
+  const hydrate = useAuthStore((s) => s.hydrate)
+
+  // アプリ起動時に localStorage から認証情報を復元する
+  useEffect(() => {
+    hydrate()
+  }, [hydrate])
+
   return (
-    <div className="flex h-full items-center justify-center bg-gray-950 text-white">
-      <p className="text-lg font-semibold">daberiba</p>
-    </div>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/*"
+          element={
+            <RequireAuth>
+              <HomePage />
+            </RequireAuth>
+          }
+        />
+        <Route path="/" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
-
-export default App
