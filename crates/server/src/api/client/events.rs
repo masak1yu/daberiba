@@ -24,6 +24,10 @@ pub fn routes() -> Router<AppState> {
             "/_matrix/client/v3/rooms/{roomId}/messages",
             get(get_messages),
         )
+        .route(
+            "/_matrix/client/v3/rooms/{roomId}/context/{eventId}",
+            get(get_context),
+        )
 }
 
 #[derive(Deserialize)]
@@ -430,4 +434,32 @@ async fn get_messages(
         start: page.start,
         end: page.end,
     }))
+}
+
+#[derive(Deserialize)]
+struct ContextQuery {
+    limit: Option<u32>,
+}
+
+async fn get_context(
+    State(state): State<AppState>,
+    axum::Extension(_user): axum::Extension<AuthUser>,
+    Path((room_id, event_id)): Path<(String, String)>,
+    Query(query): Query<ContextQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    use crate::error::AppError;
+
+    let limit = query.limit.unwrap_or(10).min(100);
+    let ctx = db::events::get_context(&state.pool, &room_id, &event_id, limit)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    Ok(Json(serde_json::json!({
+        "start": ctx.start,
+        "end": ctx.end,
+        "event": ctx.event,
+        "events_before": ctx.events_before,
+        "events_after": ctx.events_after,
+        "state": [],
+    })))
 }

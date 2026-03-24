@@ -19,6 +19,7 @@ struct CreateRoomRequest {
     name: Option<String>,
     topic: Option<String>,
     preset: Option<String>,
+    room_alias_name: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -125,6 +126,22 @@ async fn create_room(
             "m.room.topic",
             "",
             &serde_json::json!({ "topic": topic }),
+        )
+        .await?;
+    }
+
+    // room_alias_name が指定された場合: エイリアス登録 + m.room.canonical_alias 保存
+    if let Some(alias_name) = body.room_alias_name.as_deref() {
+        let alias = format!("#{}:{}", alias_name, &*state.server_name);
+        // 登録失敗（重複など）はルーム作成失敗として扱う
+        db::room_aliases::create(&state.pool, &alias, &room_id, &user.user_id).await?;
+        store_state_event(
+            &state,
+            &room_id,
+            &user.user_id,
+            "m.room.canonical_alias",
+            "",
+            &serde_json::json!({ "alias": alias }),
         )
         .await?;
     }
