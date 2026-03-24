@@ -1,17 +1,22 @@
 /**
  * ルームページ — タイムライン表示 + メッセージ送信
  */
-import { type FormEvent, useRef, useState } from 'react'
+import { type FormEvent, useCallback, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth'
 import { useRoomsStore } from '../stores/rooms'
 import { STORAGE_KEY } from '../api/client'
+import { useSwipeBack } from '../hooks/useSwipeBack'
 import AppShell from '../components/layout/AppShell'
 import Timeline from '../components/room/Timeline'
 
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>()
   const navigate = useNavigate()
+
+  // 左端スワイプで前の画面（ルーム一覧）に戻る
+  const goBack = useCallback(() => navigate('/'), [navigate])
+  useSwipeBack(goBack)
   const userId = useAuthStore((s) => s.userId)
   const client = useAuthStore((s) => s.client)
   const timelines = useRoomsStore((s) => s.timelines)

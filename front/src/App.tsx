@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/auth'
+import { useUiStore } from './stores/ui'
 import RequireAuth from './components/common/RequireAuth'
 import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
@@ -8,11 +9,14 @@ import RoomPage from './pages/RoomPage'
 
 export default function App() {
   const hydrate = useAuthStore((s) => s.hydrate)
+  const startNetworkWatch = useUiStore((s) => s.startNetworkWatch)
 
-  // アプリ起動時に localStorage から認証情報を復元する
   useEffect(() => {
     hydrate()
-  }, [hydrate])
+    // オンライン/オフライン監視を開始する
+    const stop = startNetworkWatch()
+    return stop
+  }, [hydrate, startNetworkWatch])
 
   return (
     <BrowserRouter>
