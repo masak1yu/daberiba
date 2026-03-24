@@ -43,6 +43,7 @@ async fn send_event(
     Json(content): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
     let now_ms = chrono::Utc::now().timestamp_millis();
+    let (depth, prev_event_ids) = db::events::get_room_tip(&state.pool, &path.room_id).await?;
 
     // PDU を組み立てて event_id（room v3+ SHA-256 ハッシュ）を計算する
     let pdu_for_hash = serde_json::json!({
@@ -52,9 +53,9 @@ async fn send_event(
         "content": content,
         "origin_server_ts": now_ms,
         "origin": &*state.server_name,
-        "depth": 0,
+        "depth": depth,
         "auth_events": [],
-        "prev_events": [],
+        "prev_events": prev_event_ids,
     });
     let event_id = crate::signing_key::compute_event_id(&pdu_for_hash);
 
@@ -105,6 +106,7 @@ async fn send_state_event(
     Json(content): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
     let now_ms = chrono::Utc::now().timestamp_millis();
+    let (depth, prev_event_ids) = db::events::get_room_tip(&state.pool, &path.room_id).await?;
 
     let pdu_for_hash = serde_json::json!({
         "room_id": path.room_id,
@@ -114,9 +116,9 @@ async fn send_state_event(
         "content": content,
         "origin_server_ts": now_ms,
         "origin": &*state.server_name,
-        "depth": 0,
+        "depth": depth,
         "auth_events": [],
-        "prev_events": [],
+        "prev_events": prev_event_ids,
     });
     let event_id = crate::signing_key::compute_event_id(&pdu_for_hash);
 
@@ -158,6 +160,7 @@ async fn send_state_event_with_key(
     Json(content): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
     let now_ms = chrono::Utc::now().timestamp_millis();
+    let (depth, prev_event_ids) = db::events::get_room_tip(&state.pool, &path.room_id).await?;
 
     let pdu_for_hash = serde_json::json!({
         "room_id": path.room_id,
@@ -167,9 +170,9 @@ async fn send_state_event_with_key(
         "content": content,
         "origin_server_ts": now_ms,
         "origin": &*state.server_name,
-        "depth": 0,
+        "depth": depth,
         "auth_events": [],
-        "prev_events": [],
+        "prev_events": prev_event_ids,
     });
     let event_id = crate::signing_key::compute_event_id(&pdu_for_hash);
 

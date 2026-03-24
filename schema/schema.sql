@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS events (
     content           MEDIUMTEXT      NOT NULL,
     auth_events       TEXT            NULL COMMENT 'federation PDU の auth_events（JSON 配列）',
     prev_events       TEXT            NULL COMMENT 'federation PDU の prev_events（JSON 配列）',
+    depth             BIGINT          NOT NULL DEFAULT 0 COMMENT 'DAG の深さ（m.room.create = 1、以降インクリメント）',
     origin_server_ts  BIGINT          NULL COMMENT 'federation PDU のオリジナルタイムスタンプ (ms)。ローカルイベントは NULL',
     created_at        DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     stream_ordering   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

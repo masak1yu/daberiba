@@ -68,6 +68,25 @@ pub async fn get_auth_events(pool: &MySqlPool, room_id: &str) -> Result<Vec<serd
         .collect())
 }
 
+/// make_join テンプレート用: auth_events として必要なイベントの ID を返す。
+/// m.room.create / m.room.join_rules / m.room.power_levels の event_id リスト。
+pub async fn get_auth_event_ids(pool: &MySqlPool, room_id: &str) -> Result<Vec<String>> {
+    use sqlx::Row;
+    let rows = sqlx::query(
+        r#"SELECT rs.event_id
+           FROM room_state rs
+           WHERE rs.room_id = ?
+             AND rs.event_type IN ('m.room.create', 'm.room.join_rules', 'm.room.power_levels')"#,
+    )
+    .bind(room_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| r.get::<String, _>("event_id"))
+        .collect())
+}
+
 pub async fn get_event(
     pool: &MySqlPool,
     room_id: &str,

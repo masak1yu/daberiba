@@ -14,13 +14,43 @@ pub struct LocalEvent<'a> {
     pub origin_server_ts: i64,
 }
 
+/// ルームの現在の "tip" 情報を返す。
+///
+/// 戻り値: (next_depth, prev_event_ids)
+/// - next_depth: 次に作成するイベントに使う depth（既存最大 + 1、初回は 1）
+/// - prev_event_ids: 直前イベントの event_id リスト（stream_ordering 最大のもの）
+pub async fn get_room_tip(pool: &MySqlPool, room_id: &str) -> Result<(i64, Vec<String>)> {
+    use sqlx::Row;
+
+    let row = sqlx::query(
+        "SELECT event_id, depth FROM events WHERE room_id = ? ORDER BY stream_ordering DESC LIMIT 1",
+    )
+    .bind(room_id)
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(match row {
+        Some(r) => {
+            let depth: i64 = r.get("depth");
+            let event_id: String = r.get("event_id");
+            (depth + 1, vec![event_id])
+        }
+        None => (1, vec![]),
+    })
+}
+
 /// ローカルイベントを保存する。
-pub async fn send(pool: &MySqlPool, ev: &LocalEvent<'_>) -> Result<()> {
+///
+/// depth はルームの現在の最大 depth + 1 として自動計算する。
+/// 戻り値: 保存したイベントの depth と prev_event_ids（federation PDU 構築に使用）。
+pub async fn send(pool: &MySqlPool, ev: &LocalEvent<'_>) -> Result<(i64, Vec<String>)> {
+    let (depth, prev_event_ids) = get_room_tip(pool, ev.room_id).await?;
     let content_str = serde_json::to_string(ev.content)?;
+    let prev_events_str = serde_json::to_string(&prev_event_ids)?;
 
     sqlx::query(
-        r#"INSERT INTO events (event_id, room_id, sender, event_type, state_key, content, origin_server_ts)
-           VALUES (?, ?, ?, ?, ?, ?, ?)"#,
+        r#"INSERT INTO events (event_id, room_id, sender, event_type, state_key, content, origin_server_ts, depth, prev_events)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     )
     .bind(ev.event_id)
     .bind(ev.room_id)
@@ -29,6 +59,8 @@ pub async fn send(pool: &MySqlPool, ev: &LocalEvent<'_>) -> Result<()> {
     .bind(ev.state_key)
     .bind(&content_str)
     .bind(ev.origin_server_ts)
+    .bind(depth)
+    .bind(&prev_events_str)
     .execute(pool)
     .await?;
 
@@ -46,7 +78,7 @@ pub async fn send(pool: &MySqlPool, ev: &LocalEvent<'_>) -> Result<()> {
         .await?;
     }
 
-    Ok(())
+    Ok((depth, prev_event_ids))
 }
 
 /// federation PDU のメタデータ
@@ -62,6 +94,8 @@ pub struct PduMeta<'a> {
     /// prev_events フィールド（JSON 配列）。None の場合は保存しない。
     pub prev_events: Option<&'a serde_json::Value>,
     pub origin_server_ts: i64,
+    /// DAG の深さ。PDU に含まれていない場合は 0。
+    pub depth: i64,
 }
 
 /// federation PDU を受信して保存する。
@@ -76,8 +110,8 @@ pub async fn store_pdu(pool: &MySqlPool, pdu: &PduMeta<'_>) -> Result<()> {
 
     let affected = sqlx::query(
         r#"INSERT IGNORE INTO events
-           (event_id, room_id, sender, event_type, state_key, content, auth_events, prev_events, origin_server_ts)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
+           (event_id, room_id, sender, event_type, state_key, content, auth_events, prev_events, origin_server_ts, depth)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     )
     .bind(pdu.event_id)
     .bind(pdu.room_id)
@@ -88,6 +122,7 @@ pub async fn store_pdu(pool: &MySqlPool, pdu: &PduMeta<'_>) -> Result<()> {
     .bind(auth_events_str.as_deref())
     .bind(prev_events_str.as_deref())
     .bind(pdu.origin_server_ts)
+    .bind(pdu.depth)
     .execute(pool)
     .await?
     .rows_affected();

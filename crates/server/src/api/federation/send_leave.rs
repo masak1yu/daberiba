@@ -74,6 +74,7 @@ async fn send_leave(
             auth_events,
             prev_events,
             origin_server_ts,
+            depth: body["depth"].as_i64().unwrap_or(0),
         },
     )
     .await
