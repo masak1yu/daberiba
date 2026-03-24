@@ -58,6 +58,8 @@ pub struct PduMeta<'a> {
     pub content: &'a serde_json::Value,
     /// auth_events フィールド（JSON 配列）。None の場合は保存しない。
     pub auth_events: Option<&'a serde_json::Value>,
+    /// prev_events フィールド（JSON 配列）。None の場合は保存しない。
+    pub prev_events: Option<&'a serde_json::Value>,
     pub origin_server_ts: i64,
 }
 
@@ -69,11 +71,12 @@ pub struct PduMeta<'a> {
 pub async fn store_pdu(pool: &MySqlPool, pdu: &PduMeta<'_>) -> Result<()> {
     let content_str = serde_json::to_string(pdu.content)?;
     let auth_events_str = pdu.auth_events.map(serde_json::to_string).transpose()?;
+    let prev_events_str = pdu.prev_events.map(serde_json::to_string).transpose()?;
 
     let affected = sqlx::query(
         r#"INSERT IGNORE INTO events
-           (event_id, room_id, sender, event_type, state_key, content, auth_events, origin_server_ts)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)"#,
+           (event_id, room_id, sender, event_type, state_key, content, auth_events, prev_events, origin_server_ts)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"#,
     )
     .bind(pdu.event_id)
     .bind(pdu.room_id)
@@ -82,6 +85,7 @@ pub async fn store_pdu(pool: &MySqlPool, pdu: &PduMeta<'_>) -> Result<()> {
     .bind(pdu.state_key)
     .bind(&content_str)
     .bind(auth_events_str.as_deref())
+    .bind(prev_events_str.as_deref())
     .bind(pdu.origin_server_ts)
     .execute(pool)
     .await?

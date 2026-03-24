@@ -23,13 +23,13 @@ CREATE TABLE IF NOT EXISTS access_tokens (
 
 CREATE TABLE IF NOT EXISTS rooms (
     room_id         VARCHAR(255)  NOT NULL COMMENT '!opaque:server_name',
-    creator_user_id VARCHAR(255)  NOT NULL,
+    creator_user_id VARCHAR(255)  NULL COMMENT 'NULLはfederationから招待されたルーム（プレースホルダー）',
     room_version    VARCHAR(16)   NOT NULL DEFAULT '10' COMMENT 'Matrix room version (1-10)',
     name            VARCHAR(255)  NULL,
     topic           TEXT          NULL,
     created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (room_id),
-    FOREIGN KEY (creator_user_id) REFERENCES users(user_id)
+    FOREIGN KEY (creator_user_id) REFERENCES users(user_id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS room_memberships (
@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS events (
     state_key         VARCHAR(255)    NULL COMMENT 'NULLはtimeline event',
     content           MEDIUMTEXT      NOT NULL,
     auth_events       TEXT            NULL COMMENT 'federation PDU の auth_events（JSON 配列）',
+    prev_events       TEXT            NULL COMMENT 'federation PDU の prev_events（JSON 配列）',
     origin_server_ts  BIGINT          NULL COMMENT 'federation PDU のオリジナルタイムスタンプ (ms)。ローカルイベントは NULL',
     created_at        DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     stream_ordering   BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

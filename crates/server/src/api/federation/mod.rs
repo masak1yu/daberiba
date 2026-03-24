@@ -1,6 +1,8 @@
 pub mod backfill;
 pub mod get_event;
+pub mod invite;
 pub mod make_join;
+pub mod make_leave;
 pub mod query;
 pub mod send_join;
 pub mod send_leave;
