@@ -82,8 +82,10 @@ pub async fn sync(
             })
             .collect();
 
-        // 初回 sync: room_state から現在のステートスナップショットを返す
-        // 増分 sync: ステート変更は timeline に含まれるため state は空
+        // state イベント取得:
+        //  - 初回 sync: room_state から現在のスナップショット全体
+        //  - 増分 limited: gap（since ~ timeline 先頭）の state 変更
+        //  - 増分 non-limited: timeline に含まれるため空
         let state_events: Vec<serde_json::Value> = if is_initial {
             let rows = sqlx::query(
                 r#"SELECT e.event_id, e.sender, e.event_type, rs.state_key, e.content, e.created_at
@@ -103,6 +105,44 @@ pub async fn sync(
                         "sender": r.get::<String, _>("sender"),
                         "type": r.get::<String, _>("event_type"),
                         "state_key": r.get::<String, _>("state_key"),
+                        "content": serde_json::from_str::<serde_json::Value>(&content_str)
+                            .unwrap_or_default(),
+                        "origin_server_ts": r.get::<chrono::NaiveDateTime, _>("created_at")
+                            .and_utc()
+                            .timestamp_millis(),
+                        "room_id": room_id,
+                    })
+                })
+                .collect()
+        } else if limited {
+            // gap 内（since_ordering < ord < timeline 先頭）の state イベントを返す
+            let gap_end: u64 = event_rows
+                .first()
+                .map(|e| e.get("stream_ordering"))
+                .unwrap_or(since_ordering);
+            let rows = sqlx::query(
+                r#"SELECT event_id, sender, event_type, state_key, content, created_at
+                   FROM events
+                   WHERE room_id = ?
+                     AND state_key IS NOT NULL
+                     AND stream_ordering > ?
+                     AND stream_ordering < ?
+                   ORDER BY stream_ordering ASC"#,
+            )
+            .bind(room_id)
+            .bind(since_ordering)
+            .bind(gap_end)
+            .fetch_all(pool)
+            .await?;
+
+            rows.iter()
+                .map(|r| {
+                    let content_str: String = r.get("content");
+                    serde_json::json!({
+                        "event_id": r.get::<String, _>("event_id"),
+                        "sender": r.get::<String, _>("sender"),
+                        "type": r.get::<String, _>("event_type"),
+                        "state_key": r.get::<Option<String>, _>("state_key"),
                         "content": serde_json::from_str::<serde_json::Value>(&content_str)
                             .unwrap_or_default(),
                         "origin_server_ts": r.get::<chrono::NaiveDateTime, _>("created_at")

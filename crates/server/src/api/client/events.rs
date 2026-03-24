@@ -43,7 +43,12 @@ async fn send_event(
     Json(content): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
     let now_ms = chrono::Utc::now().timestamp_millis();
-    let (depth, prev_event_ids) = db::events::get_room_tip(&state.pool, &path.room_id).await?;
+    let (tip_result, auth_result) = tokio::join!(
+        db::events::get_room_tip(&state.pool, &path.room_id),
+        db::room_state::get_auth_event_ids(&state.pool, &path.room_id),
+    );
+    let (depth, prev_event_ids) = tip_result?;
+    let auth_event_ids = auth_result.unwrap_or_default();
 
     // PDU を組み立てて event_id（room v3+ SHA-256 ハッシュ）を計算する
     let pdu_for_hash = serde_json::json!({
@@ -54,7 +59,7 @@ async fn send_event(
         "origin_server_ts": now_ms,
         "origin": &*state.server_name,
         "depth": depth,
-        "auth_events": [],
+        "auth_events": auth_event_ids,
         "prev_events": prev_event_ids,
     });
     let event_id = crate::signing_key::compute_event_id(&pdu_for_hash);
@@ -106,7 +111,12 @@ async fn send_state_event(
     Json(content): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
     let now_ms = chrono::Utc::now().timestamp_millis();
-    let (depth, prev_event_ids) = db::events::get_room_tip(&state.pool, &path.room_id).await?;
+    let (tip_result, auth_result) = tokio::join!(
+        db::events::get_room_tip(&state.pool, &path.room_id),
+        db::room_state::get_auth_event_ids(&state.pool, &path.room_id),
+    );
+    let (depth, prev_event_ids) = tip_result?;
+    let auth_event_ids = auth_result.unwrap_or_default();
 
     let pdu_for_hash = serde_json::json!({
         "room_id": path.room_id,
@@ -117,7 +127,7 @@ async fn send_state_event(
         "origin_server_ts": now_ms,
         "origin": &*state.server_name,
         "depth": depth,
-        "auth_events": [],
+        "auth_events": auth_event_ids,
         "prev_events": prev_event_ids,
     });
     let event_id = crate::signing_key::compute_event_id(&pdu_for_hash);
@@ -160,7 +170,12 @@ async fn send_state_event_with_key(
     Json(content): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
     let now_ms = chrono::Utc::now().timestamp_millis();
-    let (depth, prev_event_ids) = db::events::get_room_tip(&state.pool, &path.room_id).await?;
+    let (tip_result, auth_result) = tokio::join!(
+        db::events::get_room_tip(&state.pool, &path.room_id),
+        db::room_state::get_auth_event_ids(&state.pool, &path.room_id),
+    );
+    let (depth, prev_event_ids) = tip_result?;
+    let auth_event_ids = auth_result.unwrap_or_default();
 
     let pdu_for_hash = serde_json::json!({
         "room_id": path.room_id,
@@ -171,7 +186,7 @@ async fn send_state_event_with_key(
         "origin_server_ts": now_ms,
         "origin": &*state.server_name,
         "depth": depth,
-        "auth_events": [],
+        "auth_events": auth_event_ids,
         "prev_events": prev_event_ids,
     });
     let event_id = crate::signing_key::compute_event_id(&pdu_for_hash);
