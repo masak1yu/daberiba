@@ -77,6 +77,17 @@ async fn leave_room(
     axum::Extension(user): axum::Extension<AuthUser>,
     Path(room_id): Path<String>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    // 外部ルームの場合は federation leave フロー（make_leave → send_leave）を実行する
+    if !crate::federation_client::is_local_room(&state, &room_id) {
+        crate::federation_client::leave_remote_room(&state, &room_id, &user.user_id)
+            .await
+            .map_err(|e| {
+                tracing::warn!(room_id, error = %e, "federation leave 失敗");
+                AppError::BadRequest(format!("federation leave failed: {e}"))
+            })?;
+        return Ok(Json(serde_json::json!({})));
+    }
+
     db::rooms::leave(&state.pool, &user.user_id, &room_id).await?;
     Ok(Json(serde_json::json!({})))
 }
