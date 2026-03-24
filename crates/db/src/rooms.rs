@@ -183,6 +183,16 @@ pub async fn get_public_rooms(pool: &MySqlPool) -> Result<Vec<PublicRoom>> {
         .collect())
 }
 
+/// federation invite 用: ルームが存在しない場合のみプレースホルダーとして rooms テーブルに挿入する。
+/// creator_user_id は NULL（federation 起源のルーム）。
+pub async fn ensure_placeholder(pool: &MySqlPool, room_id: &str) -> Result<()> {
+    sqlx::query("INSERT IGNORE INTO rooms (room_id, creator_user_id) VALUES (?, NULL)")
+        .bind(room_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 pub async fn invite(
     pool: &MySqlPool,
     room_id: &str,

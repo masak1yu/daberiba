@@ -59,6 +59,7 @@ async fn send_join(
 
     let content = body["content"].clone();
     let auth_events = body.get("auth_events");
+    let prev_events = body.get("prev_events");
     db::events::store_pdu(
         &state.pool,
         &db::events::PduMeta {
@@ -69,6 +70,7 @@ async fn send_join(
             state_key: Some(sender),
             content: &content,
             auth_events,
+            prev_events,
             origin_server_ts,
         },
     )
