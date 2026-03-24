@@ -1,16 +1,22 @@
-# Handover — v0.19.0 → v0.20.0
+# Handover — v0.20.0 → v0.21.0
 
-## v0.19.0 でやったこと
+## v0.20.0 でやったこと
 
-- **Federation leave 送信側** (`federation_client::leave_remote_room()` 追加):
-  - `POST /_matrix/client/v3/rooms/{roomId}/leave` で外部ルームを検出した場合、make_leave → 署名 → send_leave フローを実行するようにした。
-  - join_remote_room と対称的な実装。make_leave でテンプレートを取得し、Ed25519 署名 + event_id 計算 → send_leave 送信 → DB の membership を leave に更新。
+- **ルーム作成時の初期状態イベント自動生成** (`rooms.rs create_room` 拡張):
+  - `POST /createRoom` でルームを作成する際に、以下の状態イベントを events / room_state テーブルへ保存するようにした。
+    - `m.room.create` — creator + room_version: "10"
+    - `m.room.join_rules` — join_rule: "invite"
+    - `m.room.power_levels` — creator = 100、その他デフォルト値
+    - `m.room.member` — creator の join
+    - `m.room.name` / `m.room.topic`（リクエストで指定された場合のみ）
+  - これにより federation `send_join` レスポンスの `auth_chain` が正しく返されるようになった。
 
-- **PDU event_id をハッシュベース (room v3+) に移行** (`db::events::send()` API 変更):
-  - ローカルイベントの event_id が UUID 形式（`$uuid:server`）から SHA-256 ハッシュベース（`$base64hash`）に変更された。
-  - `db::events::LocalEvent` 構造体を新設し、event_id・origin_server_ts を呼び出し元（events.rs ハンドラ）が計算して渡す設計に変更。
-  - events ハンドラで PDU を組み立てて `signing_key::compute_event_id()` を呼び出し、その結果を DB に保存するとともに federation 配送 PDU にも使用するように統一。
-  - `origin_server_ts` がローカルイベントにも正確に記録されるようになった。
+- **ローカルルーム参加/退出時の federation 配送** (`rooms.rs join_room` / `leave_room` 拡張):
+  - ローカルルームへの `join` / `leave` 時に `m.room.member` イベントを events テーブルへ保存し、`dispatch_send_transaction` で外部サーバーへ配送するようにした。
+  - `leave_room` は leave イベントを保存してから `db::rooms::leave()` でメンバーシップを更新する順序に変更した。
+
+- **`store_state_event` ヘルパー** (`rooms.rs` 内):
+  - SHA-256 ハッシュで event_id を計算し `db::events::send()` を呼ぶ共通ヘルパーを追加。create_room の各状態イベント保存で再利用。
 
 ## 既知の課題・技術的負債
 
@@ -27,13 +33,14 @@
 | account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
 | send_transaction PDU の depth が 0 固定 | 送信 PDU の depth は常に 0。strict な受信側で問題になる可能性がある |
 | auth_events / prev_events が空 | 送信 PDU の auth_events=[]、prev_events=[]。仕様上不正確 |
+| join_room の m.room.member 二重書き込みリスク | join PDU 保存後に dispatch_send_transaction を呼ぶが、保存に失敗しても join 自体は完了する（ベストエフォート） |
 
-## v0.20.0 候補
+## v0.21.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **Federation send_transaction の depth / prev_events 追跡** — 送信 PDU に正確な depth・prev_events を付与する
-3. **Federation leave 後のイベント配送** — leave イベント自体を他サーバーへ send_transaction で配送する
-4. **m.room.create / join_rules / power_levels イベントの自動生成** — ローカルルーム作成時に必要な状態イベントを生成して DB に保存する
+2. **Federation send_transaction の depth / prev_events 追跡** — ルームごとに最新イベントの depth を追跡し、送信 PDU に正確な depth・prev_events を付与する
+3. **`make_join` テンプレートの auth_events 設定** — make_join が返すテンプレートに auth_events を正しく含める
+4. **`publicRooms` join_rule public 対応** — createRoom で `preset: "public_chat"` を指定した場合に join_rule を public に変更する
 
 ## 開発フロー（おさらい）
 
