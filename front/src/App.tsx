@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/auth'
 import RequireAuth from './components/common/RequireAuth'
 import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
+import RoomPage from './pages/RoomPage'
 
 export default function App() {
   const hydrate = useAuthStore((s) => s.hydrate)
@@ -18,14 +19,22 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route
-          path="/*"
+          path="/"
           element={
             <RequireAuth>
               <HomePage />
             </RequireAuth>
           }
         />
-        <Route path="/" element={<Navigate to="/" replace />} />
+        <Route
+          path="/room/:roomId"
+          element={
+            <RequireAuth>
+              <RoomPage />
+            </RequireAuth>
+          }
+        />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )
