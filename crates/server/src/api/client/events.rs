@@ -74,6 +74,8 @@ async fn send_event(
             state_key: None,
             content: &content,
             origin_server_ts: now_ms,
+            depth,
+            prev_events: &prev_event_ids,
         },
     )
     .await?;
@@ -142,6 +144,8 @@ async fn send_state_event(
             state_key: Some(""),
             content: &content,
             origin_server_ts: now_ms,
+            depth,
+            prev_events: &prev_event_ids,
         },
     )
     .await?;
@@ -201,6 +205,8 @@ async fn send_state_event_with_key(
             state_key: Some(&path.state_key),
             content: &content,
             origin_server_ts: now_ms,
+            depth,
+            prev_events: &prev_event_ids,
         },
     )
     .await?;
