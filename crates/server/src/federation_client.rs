@@ -142,6 +142,71 @@ pub async fn join_remote_room(state: &AppState, room_id: &str, user_id: &str) ->
     Ok(())
 }
 
+/// ローカルイベントを外部サーバーへ配送する（背景タスク、ベストエフォート）。
+///
+/// ルーム内の外部サーバー一覧を取得し、各サーバーへ
+/// PUT /_matrix/federation/v1/send/{txnId} で署名済み PDU を送信する。
+pub fn dispatch_send_transaction(state: AppState, room_id: String, pdu: serde_json::Value) {
+    tokio::spawn(async move {
+        if let Err(e) = send_to_remote_servers(&state, &room_id, pdu).await {
+            tracing::warn!(room_id, error = %e, "federation send_transaction 失敗");
+        }
+    });
+}
+
+async fn send_to_remote_servers(
+    state: &AppState,
+    room_id: &str,
+    pdu: serde_json::Value,
+) -> Result<()> {
+    let remote_servers =
+        db::rooms::remote_servers_in_room(&state.pool, room_id, &state.server_name).await?;
+    if remote_servers.is_empty() {
+        return Ok(());
+    }
+
+    let signed_pdu = sign_pdu(state, pdu);
+    let txn_id = uuid::Uuid::new_v4().to_string().replace('-', "");
+    let body = serde_json::json!({
+        "origin": &*state.server_name,
+        "origin_server_ts": chrono::Utc::now().timestamp_millis(),
+        "pdus": [signed_pdu],
+    });
+
+    for server in &remote_servers {
+        let uri = format!("/_matrix/federation/v1/send/{}", txn_id);
+        let url = format!("https://{}{}", server, uri);
+        let auth = crate::xmatrix::make_auth_header(state, server, "PUT", &uri, Some(&body));
+        if let Err(e) = state
+            .http
+            .put(&url)
+            .header("Authorization", &auth)
+            .json(&body)
+            .send()
+            .await
+        {
+            tracing::warn!(server, error = %e, "federation send_transaction HTTP失敗");
+        }
+    }
+    Ok(())
+}
+
+/// PDU に自サーバーの Ed25519 署名を付与して返す。
+fn sign_pdu(state: &AppState, mut pdu: serde_json::Value) -> serde_json::Value {
+    let mut for_signing = pdu.clone();
+    if let Some(obj) = for_signing.as_object_mut() {
+        obj.remove("signatures");
+        obj.remove("unsigned");
+    }
+    let canonical = crate::signing_key::canonical_json(&for_signing);
+    let sig = state.signing_key.sign(canonical.as_bytes());
+    let key_id = &state.signing_key.key_id;
+    pdu["signatures"] = serde_json::json!({
+        &*state.server_name: { key_id: &sig }
+    });
+    pdu
+}
+
 /// 単一の state PDU を保存する（エラーは警告ログに留める）。
 async fn store_state_pdu(state: &AppState, pdu: &serde_json::Value) {
     let event_id = match pdu["event_id"].as_str() {
