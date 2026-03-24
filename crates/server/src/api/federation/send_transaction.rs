@@ -108,6 +108,7 @@ async fn process_pdu(
     }
 
     let auth_events = pdu.get("auth_events");
+    let prev_events = pdu.get("prev_events");
     db::events::store_pdu(
         &state.pool,
         &db::events::PduMeta {
@@ -118,6 +119,7 @@ async fn process_pdu(
             state_key,
             content: &content,
             auth_events,
+            prev_events,
             origin_server_ts,
         },
     )

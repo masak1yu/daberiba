@@ -82,6 +82,15 @@ pub async fn change_password(
 }
 
 /// パスワードが正しいか検証する（変更は行わない）
+/// user_id が DB に存在するか確認する。
+pub async fn exists(pool: &MySqlPool, user_id: &str) -> Result<bool> {
+    let row = sqlx::query("SELECT 1 FROM users WHERE user_id = ? LIMIT 1")
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await?;
+    Ok(row.is_some())
+}
+
 pub async fn verify(pool: &MySqlPool, user_id: &str, password: &str) -> Result<bool> {
     let row = sqlx::query!("SELECT password_hash FROM users WHERE user_id = ?", user_id)
         .fetch_optional(pool)
