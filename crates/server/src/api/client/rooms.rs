@@ -133,7 +133,8 @@ async fn create_room(
 }
 
 /// ローカルルームへ状態イベントを保存する共通ヘルパー。
-/// event_id を SHA-256 ハッシュで計算し、events・room_state テーブルに保存する。
+/// depth・prev_events・auth_events を DB から取得し、PDU ハッシュを計算して保存する。
+/// 戻り値: (event_id, pdu)  — federation 配送に使用できる。
 async fn store_state_event(
     state: &AppState,
     room_id: &str,
@@ -141,8 +142,15 @@ async fn store_state_event(
     event_type: &str,
     state_key: &str,
     content: &serde_json::Value,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<(String, serde_json::Value)> {
     let now_ms = chrono::Utc::now().timestamp_millis();
+    let (tip_result, auth_result) = tokio::join!(
+        db::events::get_room_tip(&state.pool, room_id),
+        db::room_state::get_auth_event_ids(&state.pool, room_id),
+    );
+    let (depth, prev_event_ids) = tip_result?;
+    let auth_event_ids = auth_result.unwrap_or_default();
+
     let pdu_for_hash = serde_json::json!({
         "room_id": room_id,
         "sender": sender,
@@ -151,9 +159,9 @@ async fn store_state_event(
         "content": content,
         "origin_server_ts": now_ms,
         "origin": &*state.server_name,
-        "depth": 0,
-        "auth_events": [],
-        "prev_events": [],
+        "depth": depth,
+        "auth_events": auth_event_ids,
+        "prev_events": prev_event_ids,
     });
     let event_id = crate::signing_key::compute_event_id(&pdu_for_hash);
     db::events::send(
@@ -166,10 +174,12 @@ async fn store_state_event(
             state_key: Some(state_key),
             content,
             origin_server_ts: now_ms,
+            depth,
+            prev_events: &prev_event_ids,
         },
     )
     .await?;
-    Ok(())
+    Ok((event_id, pdu_for_hash))
 }
 
 async fn join_room(
@@ -201,7 +211,7 @@ async fn join_room(
 
     // join イベントを保存して外部サーバーへ配送
     let join_content = serde_json::json!({ "membership": "join" });
-    if let Ok(()) = store_state_event(
+    if let Ok((event_id, mut pdu)) = store_state_event(
         &state,
         &room_id,
         &user.user_id,
@@ -212,21 +222,6 @@ async fn join_room(
     .await
     {
         // join PDU を外部サーバーに配送（ベストエフォート）
-        let now_ms = chrono::Utc::now().timestamp_millis();
-        let pdu_for_hash = serde_json::json!({
-            "room_id": room_id,
-            "sender": user.user_id,
-            "type": "m.room.member",
-            "state_key": user.user_id,
-            "content": join_content,
-            "origin_server_ts": now_ms,
-            "origin": &*state.server_name,
-            "depth": 0,
-            "auth_events": [],
-            "prev_events": [],
-        });
-        let event_id = crate::signing_key::compute_event_id(&pdu_for_hash);
-        let mut pdu = pdu_for_hash;
         pdu["event_id"] = serde_json::Value::String(event_id);
         crate::federation_client::dispatch_send_transaction(state, room_id.clone(), pdu);
     }
@@ -252,40 +247,23 @@ async fn leave_room(
 
     // leave イベントを保存してメンバーシップを更新
     let leave_content = serde_json::json!({ "membership": "leave" });
-    let now_ms = chrono::Utc::now().timestamp_millis();
-    let pdu_for_hash = serde_json::json!({
-        "room_id": room_id,
-        "sender": user.user_id,
-        "type": "m.room.member",
-        "state_key": user.user_id,
-        "content": leave_content,
-        "origin_server_ts": now_ms,
-        "origin": &*state.server_name,
-        "depth": 0,
-        "auth_events": [],
-        "prev_events": [],
-    });
-    let event_id = crate::signing_key::compute_event_id(&pdu_for_hash);
-    let _ = db::events::send(
-        &state.pool,
-        &db::events::LocalEvent {
-            event_id: &event_id,
-            room_id: &room_id,
-            sender: &user.user_id,
-            event_type: "m.room.member",
-            state_key: Some(&user.user_id),
-            content: &leave_content,
-            origin_server_ts: now_ms,
-        },
+    let pdu_result = store_state_event(
+        &state,
+        &room_id,
+        &user.user_id,
+        "m.room.member",
+        &user.user_id,
+        &leave_content,
     )
     .await;
 
     db::rooms::leave(&state.pool, &user.user_id, &room_id).await?;
 
     // leave PDU を外部サーバーに配送（ベストエフォート）
-    let mut pdu = pdu_for_hash;
-    pdu["event_id"] = serde_json::Value::String(event_id);
-    crate::federation_client::dispatch_send_transaction(state, room_id, pdu);
+    if let Ok((event_id, mut pdu)) = pdu_result {
+        pdu["event_id"] = serde_json::Value::String(event_id);
+        crate::federation_client::dispatch_send_transaction(state, room_id, pdu);
+    }
 
     Ok(Json(serde_json::json!({})))
 }
