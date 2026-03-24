@@ -400,3 +400,105 @@ pub async fn get_messages(
 
     Ok(MessagePage { events, start, end })
 }
+
+/// `/context` レスポンス
+pub struct EventContextResult {
+    pub event: serde_json::Value,
+    pub events_before: Vec<serde_json::Value>,
+    pub events_after: Vec<serde_json::Value>,
+    pub start: String,
+    pub end: String,
+}
+
+/// 指定イベントの前後イベントを取得する（`/context` 用）。
+/// イベントが存在しない場合は None を返す。
+pub async fn get_context(
+    pool: &MySqlPool,
+    room_id: &str,
+    event_id: &str,
+    limit: u32,
+) -> Result<Option<EventContextResult>> {
+    use sqlx::Row;
+
+    let half = (limit / 2).max(1) as i64;
+
+    // 対象イベントの stream_ordering を取得
+    let center_row =
+        sqlx::query("SELECT stream_ordering FROM events WHERE room_id = ? AND event_id = ?")
+            .bind(room_id)
+            .bind(event_id)
+            .fetch_optional(pool)
+            .await?;
+
+    let center_ord: u64 = match center_row {
+        Some(r) => r.get("stream_ordering"),
+        None => return Ok(None),
+    };
+
+    // 対象イベント本体を取得
+    let event = get_by_id(pool, event_id).await?.unwrap_or_default();
+
+    // 前のイベント（stream_ordering < center）を降順で取得
+    let before_rows = sqlx::query(
+        "SELECT event_id, sender, event_type, state_key, content, created_at, stream_ordering \
+         FROM events WHERE room_id = ? AND stream_ordering < ? \
+         ORDER BY stream_ordering DESC LIMIT ?",
+    )
+    .bind(room_id)
+    .bind(center_ord)
+    .bind(half)
+    .fetch_all(pool)
+    .await?;
+
+    // 後のイベント（stream_ordering > center）を昇順で取得
+    let after_rows = sqlx::query(
+        "SELECT event_id, sender, event_type, state_key, content, created_at, stream_ordering \
+         FROM events WHERE room_id = ? AND stream_ordering > ? \
+         ORDER BY stream_ordering ASC LIMIT ?",
+    )
+    .bind(room_id)
+    .bind(center_ord)
+    .bind(half)
+    .fetch_all(pool)
+    .await?;
+
+    let row_to_json = |r: &sqlx::mysql::MySqlRow| {
+        let content_str: String = r.get("content");
+        let state_key: Option<String> = r.get("state_key");
+        let mut ev = serde_json::json!({
+            "event_id": r.get::<String, _>("event_id"),
+            "room_id": room_id,
+            "sender": r.get::<String, _>("sender"),
+            "type": r.get::<String, _>("event_type"),
+            "content": serde_json::from_str::<serde_json::Value>(&content_str).unwrap_or_default(),
+            "origin_server_ts": r.get::<chrono::NaiveDateTime, _>("created_at")
+                .and_utc()
+                .timestamp_millis(),
+        });
+        if let Some(sk) = state_key {
+            ev["state_key"] = serde_json::Value::String(sk);
+        }
+        ev
+    };
+
+    let start = before_rows
+        .last()
+        .map(|r| ordering_to_token(r.get::<u64, _>("stream_ordering")))
+        .unwrap_or_else(|| ordering_to_token(center_ord));
+    let end = after_rows
+        .last()
+        .map(|r| ordering_to_token(r.get::<u64, _>("stream_ordering")))
+        .unwrap_or_else(|| ordering_to_token(center_ord));
+
+    // events_before は時系列順（昇順）で返す
+    let events_before: Vec<serde_json::Value> = before_rows.iter().rev().map(row_to_json).collect();
+    let events_after: Vec<serde_json::Value> = after_rows.iter().map(row_to_json).collect();
+
+    Ok(Some(EventContextResult {
+        event,
+        events_before,
+        events_after,
+        start,
+        end,
+    }))
+}

@@ -1,21 +1,15 @@
-# Handover — v0.23.0 → v0.24.0
+# Handover — v0.24.0 → v0.25.0
 
-## v0.23.0 でやったこと
+## v0.24.0 でやったこと
 
-- **`LocalEvent` リファクタリング** (`db::events`):
-  - `LocalEvent` に `depth: i64` と `prev_events: &[String]` フィールドを追加。
-  - `send()` 内部の `get_room_tip()` 二重呼び出しを廃止。呼び出し元が事前に取得した depth/prev_events をそのまま使うことで、event_id（PDU ハッシュから計算）と保存フィールドが一致するようになった。
-  - 戻り値を `Result<()>` に変更（呼び出し元はすでに depth/prev_events を持っているため）。
+- **`createRoom` の `room_alias_name` 対応** (`rooms.rs`):
+  - `CreateRoomRequest` に `room_alias_name: Option<String>` を追加。
+  - 指定された場合、`#<alias_name>:<server_name>` 形式のエイリアスを `room_aliases` テーブルに登録し、`m.room.canonical_alias` 状態イベントを保存する。
 
-- **`store_state_event` の auth_events/depth/prev_events 設定** (`rooms.rs`):
-  - `tokio::join!` で `get_room_tip` + `get_auth_event_ids` を並列取得。
-  - PDU に正しい depth・prev_events・auth_events を含めて event_id を計算するようになった。
-  - 戻り値を `(String, serde_json::Value)` に変更（event_id と PDU）。
-  - `join_room` と `leave_room` のインライン PDU 構築を廃止し、`store_state_event` の戻り値を federation 配送に使用。
-
-- **presence 全メンバー対応** (`db::presence`):
-  - `get_for_room_members` を INNER JOIN → LEFT JOIN に変更。
-  - `PUT /presence` を一度も呼んでいないユーザーも "offline" をデフォルトとして sync の `presence.events` に出現するようになった。
+- **`/rooms/{roomId}/context/{eventId}` エンドポイント** (`events.rs` + `db::events`):
+  - `GET /_matrix/client/v3/rooms/{roomId}/context/{eventId}?limit=10` を新規実装。
+  - 指定イベントの前後 `limit/2` 件ずつのイベントを返す（`events_before` / `events_after`）。
+  - `start` / `end` トークン（`s{stream_ordering}` 形式）付き。
 
 ## 既知の課題・技術的負債
 
@@ -30,13 +24,14 @@
 | 状態解決アルゴリズム v2 未完全 | auth_events / prev_events は DB に保存されるが、グラフを使った完全な conflict resolution は未実装 |
 | account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
 | depth の競合リスク | get_room_tip() と send() の間に他のイベントが挿入された場合、depth が重複する可能性（シングルスレッド的な運用では許容範囲） |
+| /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
 
-## v0.24.0 候補
+## v0.25.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **Room alias 自動登録** — `createRoom` 時に `room_alias_name` を受け取って `m.room.aliases` 状態イベントを保存 + エイリアス登録
-3. **`/rooms/{roomId}/members` エンドポイント** — ルームメンバーリスト取得
-4. **`/rooms/{roomId}/context/{eventId}` エンドポイント** — イベントコンテキスト取得（メッセージスクロール対応）
+2. **`/rooms/{roomId}/event/{eventId}` エンドポイント** — 単一イベント取得
+3. **`/rooms/{roomId}/initialSync` または `/sync` の rooms.leave 対応** — 退出ルームの差分を返す
+4. **push rule の `set_tweak: highlight` による highlight_count カウント** — 現在の LIKE 検索から push rule 評価ベースに移行
 
 ## 開発フロー（おさらい）
 
