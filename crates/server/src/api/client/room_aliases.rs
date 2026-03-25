@@ -2,16 +2,21 @@ use crate::{error::ApiResult, error::AppError, middleware::auth::AuthUser, state
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::put,
+    routing::{get, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 
 pub fn routes() -> Router<AppState> {
-    Router::new().route(
-        "/_matrix/client/v3/directory/room/{roomAlias}",
-        put(put_alias).get(get_alias).delete(delete_alias),
-    )
+    Router::new()
+        .route(
+            "/_matrix/client/v3/directory/room/{roomAlias}",
+            put(put_alias).get(get_alias).delete(delete_alias),
+        )
+        .route(
+            "/_matrix/client/v3/rooms/{roomId}/aliases",
+            get(list_room_aliases),
+        )
 }
 
 #[derive(Deserialize)]
@@ -82,4 +87,20 @@ async fn delete_alias(
 
     db::room_aliases::delete(&state.pool, &alias).await?;
     Ok(StatusCode::OK)
+}
+
+#[derive(Serialize)]
+struct RoomAliasesResponse {
+    aliases: Vec<String>,
+}
+
+/// GET /_matrix/client/v3/rooms/{roomId}/aliases
+/// ルームに紐づくエイリアス一覧を返す。
+async fn list_room_aliases(
+    State(state): State<AppState>,
+    axum::Extension(_user): axum::Extension<AuthUser>,
+    Path(room_id): Path<String>,
+) -> ApiResult<Json<RoomAliasesResponse>> {
+    let aliases = db::room_aliases::list_for_room(&state.pool, &room_id).await?;
+    Ok(Json(RoomAliasesResponse { aliases }))
 }

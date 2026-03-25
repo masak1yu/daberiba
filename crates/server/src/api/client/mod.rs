@@ -22,6 +22,7 @@ pub mod room_tags;
 pub mod rooms;
 pub mod search;
 pub mod sync;
+pub mod threads;
 pub mod to_device;
 pub mod typing_notif;
 pub mod versions;
