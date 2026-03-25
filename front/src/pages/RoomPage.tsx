@@ -10,6 +10,7 @@ import { sendReadReceipt } from '../api/messages'
 import { useSwipeBack } from '../hooks/useSwipeBack'
 import AppShell from '../components/layout/AppShell'
 import Timeline from '../components/room/Timeline'
+import MembersList from '../components/room/MembersList'
 
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>()
@@ -29,6 +30,7 @@ export default function RoomPage() {
 
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [showMembers, setShowMembers] = useState(false)
   const txnRef = useRef(0)
 
   const decodedRoomId = roomId ? decodeURIComponent(roomId) : ''
@@ -87,7 +89,21 @@ export default function RoomPage() {
   }
 
   return (
-    <AppShell title={room?.name ?? decodedRoomId} showBack onBack={() => navigate('/')}>
+    <>
+    <AppShell
+      title={room?.name ?? decodedRoomId}
+      showBack
+      onBack={() => navigate('/')}
+      headerRight={
+        <button
+          onClick={() => setShowMembers(true)}
+          className="ml-2 text-gray-400 hover:text-white text-lg"
+          title="メンバー一覧"
+        >
+          👥
+        </button>
+      }
+    >
       <div className="flex h-full flex-col">
         <div className="min-h-0 flex-1">
           <Timeline
@@ -122,5 +138,10 @@ export default function RoomPage() {
         </form>
       </div>
     </AppShell>
+
+    {showMembers && (
+      <MembersList roomId={decodedRoomId} onClose={() => setShowMembers(false)} />
+    )}
+    </>
   )
 }
