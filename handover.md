@@ -1,4 +1,20 @@
-# Handover — v0.29.0 → v0.30.0
+# Handover — v0.30.0 → v0.31.0
+
+## v0.30.0 でやったこと
+
+- **イベントリレーション記録** (`db/events.rs`, `schema.sql`):
+  - `event_relations` テーブルを新設。`events.send()` で `m.relates_to` が含まれる場合に INSERT IGNORE。
+  - rel_type / relates_to_event_id を保存し、`GET /relations` の応答源として使用。
+
+- **`GET /relations`** (`server/api/client/relations.rs`, `db/relations.rs`):
+  - `/_matrix/client/v1/rooms/{roomId}/relations/{eventId}[/{relType}[/{eventType}]]` の 3 バリアント。
+  - stream_ordering ASC で並べ、`?from=<event_id>&limit=<n>` によるカーソルページネーション。
+  - `chunk` / `next_batch` / `prev_batch` を返す。
+
+- **`POST /read_markers`** (`server/api/client/read_markers.rs`):
+  - `m.read` / `m.read.private` / `m.fully_read` を 1 リクエストで設定。
+  - `m.read` 送信時は通知既読（`notifications.mark_read_up_to`）+ ハイライトクリア（`unread_highlights`）も同時実行。
+  - `m.fully_read` は room account_data に保存。
 
 ## v0.29.0 でやったこと
 
@@ -11,12 +27,10 @@
 - **`/search` のページネーション** (`server/api/client/search.rs`, `db/events.rs`):
   - `?next_batch=<stream_ordering>` クエリパラメータを追加。
   - `search_room_events()` に `before_ordering: Option<i64>` を追加し、カーソル方式のページネーションを実装。
-  - `limit+1` 件取得してページ継続を判定し、ある場合は `next_batch` フィールドに末尾の `stream_ordering` を返す。
 
 - **receipt POST 時の cleanup** (`server/api/client/receipts.rs`, `db/unread.rs`):
   - `m.read` / `m.read.private` 送信時に `notifications.mark_read_up_to()` で通知を既読にする。
   - 同時に `unread::delete_highlights_up_to()` でハイライトレコードを削除。
-  - `db::unread::is_highlight()` / `delete_highlights_up_to()` を新設。
 
 ## 既知の課題・技術的負債
 
@@ -30,15 +44,15 @@
 | account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
 | depth の競合リスク | get_room_tip() と send() の間に他のイベントが挿入された場合、depth が重複する可能性 |
 | /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
-| /notifications の only=highlight | unread_highlights テーブルを二次参照するため、削除済みでも結果が空になる可能性あり |
+| /relations のページネーション | prev_batch は from トークンをそのまま返すのみ（後方ページングは未実装） |
 
-## v0.30.0 候補
+## v0.31.0 候補
 
-1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **`/rooms/{roomId}/threads` エンドポイント** — MSC スレッド対応（m.thread rel_type）
-3. **`/relations` エンドポイント** — イベントリレーション（編集・リアクション等）の取得
-4. **イベント編集サポート** — `m.replace` rel_type に対応した `/event` / `/messages` の内容置き換え
-5. **`/rooms/{roomId}/read_markers`** — バッチ既読マーカー（`m.read` + `m.fully_read` 一括送信）
+1. **イベント編集（m.replace）** — `/event` / `/messages` で最新の `m.replace` を反映した content を返す
+2. **リアクション集計（m.reaction）** — `/event` の `unsigned.m.relations` にリアクション件数を含める
+3. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
+4. **スレッド対応** — `m.thread` rel_type を使ったスレッドの取得（`/relations` は既に対応済み）
+5. **`/rooms/{roomId}/threads`** — スレッド一覧エンドポイント（MSC3856）
 
 ## 開発フロー（おさらい）
 
