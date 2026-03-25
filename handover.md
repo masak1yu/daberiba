@@ -1,4 +1,17 @@
-# Handover — v0.31.0 → v0.32.0
+# Handover — v0.32.0 → v0.33.0
+
+## v0.32.0 でやったこと
+
+- **`GET /rooms/{roomId}/threads`** (`server/api/client/threads.rs`):
+  - `/_matrix/client/v1/rooms/{roomId}/threads` — スレッドルート一覧を最新活動順で返す。
+  - `event_relations` テーブルの `rel_type = 'm.thread'` を集計してスレッドルートを特定。
+  - `?from=<stream_ordering>&limit=<n>` カーソルページネーション。
+  - `?include=participated` フィルタ — 自分が投稿したスレッドのみ返す。
+  - 各イベントの `unsigned.m.relations.m.thread` に `count` / `latest_event` / `current_user_participated` を付与。
+
+- **`GET /rooms/{roomId}/aliases`** (`server/api/client/room_aliases.rs`):
+  - `/_matrix/client/v3/rooms/{roomId}/aliases` — ルームに紐づくエイリアス一覧を返す。
+  - `db::room_aliases::list_for_room()` 新設（ORDER BY alias 昇順）。
 
 ## v0.31.0 でやったこと
 
@@ -56,13 +69,13 @@
 | /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
 | /relations のページネーション | prev_batch は from トークンをそのまま返すのみ（後方ページングは未実装） |
 
-## v0.32.0 候補
+## v0.33.0 候補
 
-1. **`/rooms/{roomId}/threads`** — スレッド一覧エンドポイント（MSC3856 / v1 API）
-2. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
+1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
+2. **`/rooms/{roomId}/timestamp_to_event`** — タイムスタンプから最近傍イベントを検索（MSC3030）
 3. **`/account/3pid`** — メールアドレス等のサードパーティ ID 管理
-4. **`/login/sso`** — SSO ログインフロー（MSC2858）
-5. **`/rooms/{roomId}/aliases`** — ルームのエイリアス一覧（`m.room.canonical_alias` 対応）
+4. **`m.room.canonical_alias` 連動** — `/aliases` 応答に `m.room.canonical_alias` 状態イベントの値も含める
+5. **スレッドの latest_event 拡充** — `unsigned.m.relations.m.thread.latest_event` に完全なイベントオブジェクトを含める
 
 ## 開発フロー（おさらい）
 

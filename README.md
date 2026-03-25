@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.31.0 — Client-Server API Phase 22 (unsigned.m.relations aggregation — m.replace + m.reaction) (functional, not production-ready)
+**Status:** v0.32.0 — Client-Server API Phase 23 (GET /threads, GET /rooms/{roomId}/aliases) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -87,6 +87,8 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET | `/_matrix/client/v1/rooms/{roomId}/relations/{eventId}/{relType}` | Event relations filtered by rel_type |
 | GET | `/_matrix/client/v1/rooms/{roomId}/relations/{eventId}/{relType}/{eventType}` | Event relations filtered by rel_type and event type |
 | POST | `/_matrix/client/v3/rooms/{roomId}/read_markers` | Set m.read / m.read.private / m.fully_read in one call |
+| GET | `/_matrix/client/v3/rooms/{roomId}/aliases` | Room alias list |
+| GET | `/_matrix/client/v1/rooms/{roomId}/threads` | Thread list (paginated, include=participated filter, unsigned.m.thread summary) |
 | POST | `/_matrix/client/v3/user/{userId}/filter` | Create filter |
 | GET | `/_matrix/client/v3/user/{userId}/filter/{filterId}` | Get filter |
 | PUT | `/_matrix/client/v3/sendToDevice/{eventType}/{txnId}` | Send to-device message |
