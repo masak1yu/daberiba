@@ -10,6 +10,15 @@ sudo mkdir -p ~/.claude/downloads
 sudo chown -R "$(id -u):$(id -g)" ~/.claude
 curl -fsSL https://claude.ai/install.sh | bash
 
+# Node.js + pnpm のインストール（フロントエンド開発用）
+curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir "$HOME/.local/share/fnm" --skip-shell
+export PATH="$HOME/.local/share/fnm:$PATH"
+fnm install --lts
+fnm use lts-latest
+npm install -g pnpm
+# フロントエンド依存インストール
+(cd front && pnpm install --frozen-lockfile) || true
+
 # mysqldef (sqldef) のインストール — MariaDB 互換
 DPKG_ARCH="$(dpkg --print-architecture)"
 curl -fsSL "https://github.com/sqldef/sqldef/releases/latest/download/mysqldef_linux_${DPKG_ARCH}.tar.gz" \

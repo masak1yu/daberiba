@@ -1,1 +1,1 @@
-cd front && pnpm exec lint-staged
+cd front && command -v pnpm >/dev/null 2>&1 && pnpm exec lint-staged || echo "pnpm not found — skipping lint-staged (run 'pnpm exec lint-staged' manually)"

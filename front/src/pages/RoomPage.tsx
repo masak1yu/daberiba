@@ -1,11 +1,12 @@
 /**
  * ルームページ — タイムライン表示 + メッセージ送信
  */
-import { type FormEvent, useCallback, useRef, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth'
 import { useRoomsStore } from '../stores/rooms'
 import { STORAGE_KEY } from '../api/client'
+import { sendReadReceipt } from '../api/messages'
 import { useSwipeBack } from '../hooks/useSwipeBack'
 import AppShell from '../components/layout/AppShell'
 import Timeline from '../components/room/Timeline'
@@ -17,10 +18,14 @@ export default function RoomPage() {
   // 左端スワイプで前の画面（ルーム一覧）に戻る
   const goBack = useCallback(() => navigate('/'), [navigate])
   useSwipeBack(goBack)
+
   const userId = useAuthStore((s) => s.userId)
   const client = useAuthStore((s) => s.client)
   const timelines = useRoomsStore((s) => s.timelines)
   const rooms = useRoomsStore((s) => s.rooms)
+  const prevBatches = useRoomsStore((s) => s.prevBatches)
+  const historyLoading = useRoomsStore((s) => s.historyLoading)
+  const loadHistory = useRoomsStore((s) => s.loadHistory)
 
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -29,6 +34,27 @@ export default function RoomPage() {
   const decodedRoomId = roomId ? decodeURIComponent(roomId) : ''
   const events = timelines[decodedRoomId] ?? []
   const room = rooms[decodedRoomId]
+  const hasMore = Boolean(prevBatches[decodedRoomId])
+  const isHistoryLoading = historyLoading[decodedRoomId] ?? false
+
+  // ルーム入室時・新着イベント受信時に既読送信
+  const lastEventIdRef = useRef<string | undefined>()
+  useEffect(() => {
+    const lastEvent = events.at(-1)
+    if (!lastEvent?.event_id) return
+    if (lastEvent.event_id === lastEventIdRef.current) return
+    lastEventIdRef.current = lastEvent.event_id
+
+    const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
+    const token = localStorage.getItem(STORAGE_KEY.ACCESS_TOKEN)
+    if (homeserver && token) {
+      void sendReadReceipt(homeserver, token, decodedRoomId, lastEvent.event_id)
+    }
+  }, [decodedRoomId, events])
+
+  const handleLoadMore = useCallback(() => {
+    void loadHistory(decodedRoomId)
+  }, [decodedRoomId, loadHistory])
 
   async function handleSend(e: FormEvent) {
     e.preventDefault()
@@ -63,8 +89,14 @@ export default function RoomPage() {
   return (
     <AppShell title={room?.name ?? decodedRoomId} showBack onBack={() => navigate('/')}>
       <div className="flex h-full flex-col">
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <Timeline events={events} myUserId={userId} />
+        <div className="min-h-0 flex-1">
+          <Timeline
+            events={events}
+            myUserId={userId}
+            hasMore={hasMore}
+            historyLoading={isHistoryLoading}
+            onLoadMore={handleLoadMore}
+          />
         </div>
         <form
           onSubmit={(e) => void handleSend(e)}
