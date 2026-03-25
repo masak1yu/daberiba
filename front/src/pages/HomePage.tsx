@@ -1,10 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth'
 import { useRoomsStore } from '../stores/rooms'
 import { startSyncLoop } from '../api/sync'
 import AppShell from '../components/layout/AppShell'
 import RoomList from '../components/room/RoomList'
+import CreateRoomModal from '../components/room/CreateRoomModal'
 
 export default function HomePage() {
   const client = useAuthStore((s) => s.client)
@@ -15,6 +16,7 @@ export default function HomePage() {
     reset: s.reset,
   }))
   const navigate = useNavigate()
+  const [showCreate, setShowCreate] = useState(false)
 
   useEffect(() => {
     if (!client) return
@@ -33,8 +35,30 @@ export default function HomePage() {
   }, [client, applySyncResponse, setSyncing, setError, reset])
 
   return (
-    <AppShell>
-      <RoomList onSelect={(roomId) => navigate(`/room/${encodeURIComponent(roomId)}`)} />
-    </AppShell>
+    <>
+      <AppShell
+        headerRight={
+          <button
+            onClick={() => setShowCreate(true)}
+            className="ml-2 flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-lg leading-none text-white hover:bg-indigo-500"
+            title="新しいルームを作成"
+          >
+            +
+          </button>
+        }
+      >
+        <RoomList onSelect={(roomId) => navigate(`/room/${encodeURIComponent(roomId)}`)} />
+      </AppShell>
+
+      {showCreate && (
+        <CreateRoomModal
+          onCreated={(roomId) => {
+            setShowCreate(false)
+            navigate(`/room/${encodeURIComponent(roomId)}`)
+          }}
+          onClose={() => setShowCreate(false)}
+        />
+      )}
+    </>
   )
 }

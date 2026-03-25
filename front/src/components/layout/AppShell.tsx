@@ -11,9 +11,11 @@ interface Props {
   title?: string
   showBack?: boolean
   onBack?: () => void
+  /** ヘッダー右端（ログアウトボタンの前）に追加するアクション */
+  headerRight?: ReactNode
 }
 
-export default function AppShell({ children, title, showBack, onBack }: Props) {
+export default function AppShell({ children, title, showBack, onBack, headerRight }: Props) {
   const userId = useAuthStore((s) => s.userId)
   const logout = useAuthStore((s) => s.logout)
   const error = useRoomsStore((s) => s.error)
@@ -34,6 +36,7 @@ export default function AppShell({ children, title, showBack, onBack }: Props) {
         )}
         {title && <span className="flex-1 truncate text-center font-medium">{title}</span>}
         <span className="ml-auto max-w-[40%] truncate text-sm text-gray-400">{userId}</span>
+        {headerRight}
         <button
           onClick={() => void logout()}
           className="ml-2 text-sm text-gray-500 hover:text-gray-300"
