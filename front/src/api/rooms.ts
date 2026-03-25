@@ -1,5 +1,5 @@
 /**
- * ルーム操作 API — createRoom, fetchMembers
+ * ルーム操作 API — createRoom, fetchMembers, leaveRoom, inviteUser
  */
 
 export interface CreateRoomResponse {
@@ -52,4 +52,45 @@ export async function fetchMembers(
       displayName: ev.content.displayname,
       membership: ev.content.membership,
     }))
+}
+
+/** POST /_matrix/client/v3/rooms/{roomId}/leave */
+export async function leaveRoom(
+  homeserver: string,
+  token: string,
+  roomId: string
+): Promise<void> {
+  const res = await fetch(
+    `${homeserver}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/leave`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: '{}',
+    }
+  )
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(err.error ?? `leave failed: ${res.status}`)
+  }
+}
+
+/** POST /_matrix/client/v3/rooms/{roomId}/invite */
+export async function inviteUser(
+  homeserver: string,
+  token: string,
+  roomId: string,
+  userId: string
+): Promise<void> {
+  const res = await fetch(
+    `${homeserver}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/invite`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_id: userId }),
+    }
+  )
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(err.error ?? `invite failed: ${res.status}`)
+  }
 }

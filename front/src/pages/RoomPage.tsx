@@ -7,6 +7,7 @@ import { useAuthStore } from '../stores/auth'
 import { useRoomsStore } from '../stores/rooms'
 import { STORAGE_KEY } from '../api/client'
 import { sendReadReceipt } from '../api/messages'
+import { leaveRoom } from '../api/rooms'
 import { useSwipeBack } from '../hooks/useSwipeBack'
 import AppShell from '../components/layout/AppShell'
 import Timeline from '../components/room/Timeline'
@@ -32,6 +33,8 @@ export default function RoomPage() {
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
   const [showMembers, setShowMembers] = useState(false)
+  const [confirmLeave, setConfirmLeave] = useState(false)
+  const [leaving, setLeaving] = useState(false)
   const txnRef = useRef(0)
 
   const decodedRoomId = roomId ? decodeURIComponent(roomId) : ''
@@ -59,6 +62,21 @@ export default function RoomPage() {
   const handleLoadMore = useCallback(() => {
     void loadHistory(decodedRoomId)
   }, [decodedRoomId, loadHistory])
+
+  async function handleLeave() {
+    const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
+    const token = localStorage.getItem(STORAGE_KEY.ACCESS_TOKEN)
+    if (!homeserver || !token) return
+
+    setLeaving(true)
+    try {
+      await leaveRoom(homeserver, token, decodedRoomId)
+      navigate('/')
+    } catch {
+      setLeaving(false)
+      setConfirmLeave(false)
+    }
+  }
 
   async function handleSend(e: FormEvent) {
     e.preventDefault()
@@ -92,59 +110,99 @@ export default function RoomPage() {
 
   return (
     <>
-    <AppShell
-      title={room?.name ?? decodedRoomId}
-      showBack
-      onBack={() => navigate('/')}
-      headerRight={
-        <button
-          onClick={() => setShowMembers(true)}
-          className="ml-2 text-gray-400 hover:text-white text-lg"
-          title="メンバー一覧"
-        >
-          👥
-        </button>
-      }
-    >
-      <div className="flex h-full flex-col">
-        <div className="min-h-0 flex-1">
-          <Timeline
-            events={events}
-            myUserId={userId}
-            reactions={reactions}
-            hasMore={hasMore}
-            historyLoading={isHistoryLoading}
-            onLoadMore={handleLoadMore}
-          />
-        </div>
-        <form
-          onSubmit={(e) => void handleSend(e)}
-          className="shrink-0 border-t border-gray-800 p-3"
-          style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
-        >
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="メッセージを入力…"
-              className="min-w-0 flex-1 rounded-lg bg-gray-800 px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+      <AppShell
+        title={room?.name ?? decodedRoomId}
+        showBack
+        onBack={() => navigate('/')}
+        headerRight={
+          <div className="ml-2 flex items-center gap-1">
             <button
-              type="submit"
-              disabled={sending || !input.trim()}
-              className="rounded-lg bg-indigo-600 px-4 py-2 text-white transition hover:bg-indigo-500 disabled:opacity-50"
+              onClick={() => setShowMembers(true)}
+              className="text-gray-400 hover:text-white text-lg"
+              title="メンバー一覧"
             >
-              送信
+              👥
+            </button>
+            <button
+              onClick={() => setConfirmLeave(true)}
+              className="text-gray-500 hover:text-red-400 text-sm px-1"
+              title="ルームを退出"
+            >
+              退出
             </button>
           </div>
-        </form>
-      </div>
-    </AppShell>
+        }
+      >
+        <div className="flex h-full flex-col">
+          <div className="min-h-0 flex-1">
+            <Timeline
+              events={events}
+              myUserId={userId}
+              reactions={reactions}
+              hasMore={hasMore}
+              historyLoading={isHistoryLoading}
+              onLoadMore={handleLoadMore}
+            />
+          </div>
+          <form
+            onSubmit={(e) => void handleSend(e)}
+            className="shrink-0 border-t border-gray-800 p-3"
+            style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
+          >
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="メッセージを入力…"
+                className="min-w-0 flex-1 rounded-lg bg-gray-800 px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              <button
+                type="submit"
+                disabled={sending || !input.trim()}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-white transition hover:bg-indigo-500 disabled:opacity-50"
+              >
+                送信
+              </button>
+            </div>
+          </form>
+        </div>
+      </AppShell>
 
-    {showMembers && (
-      <MembersList roomId={decodedRoomId} onClose={() => setShowMembers(false)} />
-    )}
+      {showMembers && (
+        <MembersList roomId={decodedRoomId} onClose={() => setShowMembers(false)} />
+      )}
+
+      {/* 退出確認ダイアログ */}
+      {confirmLeave && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
+          onClick={(e) => { if (e.target === e.currentTarget) setConfirmLeave(false) }}
+        >
+          <div className="w-full max-w-xs rounded-2xl bg-gray-900 p-6 shadow-xl">
+            <h2 className="mb-2 text-base font-bold">ルームを退出しますか？</h2>
+            <p className="mb-5 text-sm text-gray-400">
+              {room?.name ?? decodedRoomId} から退出します。
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmLeave(false)}
+                disabled={leaving}
+                className="flex-1 rounded-lg border border-gray-700 py-2 text-sm text-gray-400 hover:bg-gray-800 disabled:opacity-50"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={() => void handleLeave()}
+                disabled={leaving}
+                className="flex-1 rounded-lg bg-red-700 py-2 text-sm text-white hover:bg-red-600 disabled:opacity-50"
+              >
+                {leaving ? '退出中…' : '退出する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
