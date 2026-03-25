@@ -6,9 +6,11 @@ import { startSyncLoop } from '../api/sync'
 import AppShell from '../components/layout/AppShell'
 import RoomList from '../components/room/RoomList'
 import CreateRoomModal from '../components/room/CreateRoomModal'
+import ProfileModal from '../components/common/ProfileModal'
 
 export default function HomePage() {
   const client = useAuthStore((s) => s.client)
+  const userId = useAuthStore((s) => s.userId)
   const { applySyncResponse, setSyncing, setError, reset } = useRoomsStore((s) => ({
     applySyncResponse: s.applySyncResponse,
     setSyncing: s.setSyncing,
@@ -17,6 +19,7 @@ export default function HomePage() {
   }))
   const navigate = useNavigate()
   const [showCreate, setShowCreate] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
 
   useEffect(() => {
     if (!client) return
@@ -38,13 +41,24 @@ export default function HomePage() {
     <>
       <AppShell
         headerRight={
-          <button
-            onClick={() => setShowCreate(true)}
-            className="ml-2 flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-lg leading-none text-white hover:bg-indigo-500"
-            title="新しいルームを作成"
-          >
-            +
-          </button>
+          <div className="ml-2 flex items-center gap-1.5">
+            {/* プロフィール編集 */}
+            <button
+              onClick={() => setShowProfile(true)}
+              className="text-gray-400 hover:text-white text-sm"
+              title="プロフィール"
+            >
+              ⚙
+            </button>
+            {/* 新規ルーム作成 */}
+            <button
+              onClick={() => setShowCreate(true)}
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-indigo-600 text-lg leading-none text-white hover:bg-indigo-500"
+              title="新しいルームを作成"
+            >
+              +
+            </button>
+          </div>
         }
       >
         <RoomList onSelect={(roomId) => navigate(`/room/${encodeURIComponent(roomId)}`)} />
@@ -58,6 +72,10 @@ export default function HomePage() {
           }}
           onClose={() => setShowCreate(false)}
         />
+      )}
+
+      {showProfile && userId && (
+        <ProfileModal userId={userId} onClose={() => setShowProfile(false)} />
       )}
     </>
   )
