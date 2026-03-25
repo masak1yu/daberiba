@@ -117,6 +117,58 @@ pub async fn get_required_power_level(
         .unwrap_or(50))
 }
 
+/// 指定 stream_ordering 時点のルームステートスナップショットを返す。
+/// 各 (event_type, state_key) ペアについて stream_ordering <= at_ordering の
+/// 最新イベントを取得する（相関サブクエリ使用）。
+pub async fn get_state_at(
+    pool: &MySqlPool,
+    room_id: &str,
+    at_ordering: u64,
+) -> Result<Vec<serde_json::Value>> {
+    use sqlx::Row;
+
+    let rows = sqlx::query(
+        r#"SELECT e.event_id, e.sender, e.event_type, e.state_key, e.content, e.created_at
+           FROM events e
+           WHERE e.room_id = ?
+             AND e.state_key IS NOT NULL
+             AND e.stream_ordering <= ?
+             AND e.stream_ordering = (
+                 SELECT MAX(e2.stream_ordering)
+                 FROM events e2
+                 WHERE e2.room_id = e.room_id
+                   AND e2.event_type = e.event_type
+                   AND e2.state_key = e.state_key
+                   AND e2.stream_ordering <= ?
+             )
+           ORDER BY e.event_type ASC, e.state_key ASC"#,
+    )
+    .bind(room_id)
+    .bind(at_ordering)
+    .bind(at_ordering)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let content_str: String = r.get("content");
+            serde_json::json!({
+                "event_id": r.get::<String, _>("event_id"),
+                "sender": r.get::<String, _>("sender"),
+                "type": r.get::<String, _>("event_type"),
+                "state_key": r.get::<String, _>("state_key"),
+                "content": serde_json::from_str::<serde_json::Value>(&content_str)
+                    .unwrap_or_default(),
+                "origin_server_ts": r.get::<chrono::NaiveDateTime, _>("created_at")
+                    .and_utc()
+                    .timestamp_millis(),
+                "room_id": room_id,
+            })
+        })
+        .collect())
+}
+
 pub async fn get_event(
     pool: &MySqlPool,
     room_id: &str,

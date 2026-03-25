@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS users (
     avatar_url    VARCHAR(1024) NULL,
     created_at    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deactivated   TINYINT(1)    NOT NULL DEFAULT 0,
+    admin         TINYINT(1)    NOT NULL DEFAULT 0 COMMENT '管理者フラグ',
     PRIMARY KEY (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

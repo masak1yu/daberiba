@@ -34,16 +34,22 @@ pub async fn send(
     Ok(())
 }
 
-/// ユーザー宛ての未配信メッセージを取得（/sync 用）
-pub async fn get_pending(pool: &MySqlPool, user_id: &str) -> Result<Vec<ToDeviceMessage>> {
+/// ユーザー・デバイス宛ての未配信メッセージを取得（/sync 用）。
+/// device_id が一致するメッセージのみを返す（"*" は送信時に展開済み）。
+pub async fn get_pending(
+    pool: &MySqlPool,
+    user_id: &str,
+    device_id: &str,
+) -> Result<Vec<ToDeviceMessage>> {
     let rows: Vec<(u64, String, String, String)> = sqlx::query_as(
         r#"SELECT id, sender, event_type, content
            FROM to_device_messages
-           WHERE recipient = ?
+           WHERE recipient = ? AND device_id = ?
            ORDER BY id ASC
            LIMIT 100"#,
     )
     .bind(user_id)
+    .bind(device_id)
     .fetch_all(pool)
     .await?;
     Ok(rows

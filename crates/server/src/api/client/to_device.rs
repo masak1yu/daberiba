@@ -38,16 +38,35 @@ async fn send_to_device(
     for (recipient, devices) in &body.messages {
         for (device_id, content) in devices {
             let content_str = serde_json::to_string(content).unwrap_or_default();
-            db::to_device::send(
-                &state.pool,
-                &user.user_id,
-                recipient,
-                device_id,
-                &path.event_type,
-                &content_str,
-                "",
-            )
-            .await?;
+            if device_id == "*" {
+                // 全デバイス宛て: 受信者の全デバイスに個別に挿入する
+                let all_devices = db::devices::list(&state.pool, recipient)
+                    .await
+                    .unwrap_or_default();
+                for dev in &all_devices {
+                    db::to_device::send(
+                        &state.pool,
+                        &user.user_id,
+                        recipient,
+                        &dev.device_id,
+                        &path.event_type,
+                        &content_str,
+                        "",
+                    )
+                    .await?;
+                }
+            } else {
+                db::to_device::send(
+                    &state.pool,
+                    &user.user_id,
+                    recipient,
+                    device_id,
+                    &path.event_type,
+                    &content_str,
+                    "",
+                )
+                .await?;
+            }
         }
     }
     Ok(StatusCode::OK)
