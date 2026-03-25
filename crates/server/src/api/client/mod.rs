@@ -1,5 +1,6 @@
 pub mod account;
 pub mod account_data;
+pub mod admin;
 pub mod auth;
 pub mod capabilities;
 pub mod devices;

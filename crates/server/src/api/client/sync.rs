@@ -290,7 +290,7 @@ async fn sync(
     // 前回 sync で返したメッセージを ack（since があれば acked_to_device_id 以下を削除）
     let _ = db::to_device::delete_acked(&state.pool, &user.user_id, acked_to_device_id).await;
 
-    let pending = db::to_device::get_pending(&state.pool, &user.user_id)
+    let pending = db::to_device::get_pending(&state.pool, &user.user_id, &user.device_id)
         .await
         .unwrap_or_default();
     let max_to_device_id = pending.iter().map(|m| m.id).max().unwrap_or(0);

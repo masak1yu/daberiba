@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.35.0 — Client-Server API Phase 26 (/members?at=, hierarchy max_depth, lazy_load_members) (functional, not production-ready)
+**Status:** v0.36.0 — Client-Server API Phase 27 (/context state snapshot, to_device * expansion, admin API) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -54,7 +54,7 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET | `/_matrix/client/v3/joined_rooms` | List joined rooms |
 | PUT | `/_matrix/client/v3/rooms/{roomId}/send/{type}/{txnId}` | Send event |
 | GET | `/_matrix/client/v3/rooms/{roomId}/messages` | Message history (paginated, ?lazy_load_members=true) |
-| GET | `/_matrix/client/v3/rooms/{roomId}/context/{eventId}` | Event context (events before/after) |
+| GET | `/_matrix/client/v3/rooms/{roomId}/context/{eventId}` | Event context (events before/after + room state snapshot) |
 | GET | `/_matrix/client/v3/rooms/{roomId}/event/{eventId}` | Get single event |
 | PUT | `/_matrix/client/v3/rooms/{roomId}/state/{type}` | Send state event |
 | PUT | `/_matrix/client/v3/rooms/{roomId}/state/{type}/{key}` | Send state event (with key) |
@@ -115,6 +115,11 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET/PUT/DELETE | `/_matrix/client/v3/room_keys/keys/{roomId}/{sessionId}` | Single session key (backup) |
 | POST | `/_matrix/media/v3/upload` | Upload media |
 | GET | `/_matrix/media/v3/download/{serverName}/{mediaId}` | Download media |
+| GET | `/_matrix/client/v3/admin/whois/{userId}` | User session info (self or admin) |
+| GET | `/_synapse/admin/v1/users` | List all users (admin only, ?from=&limit=) |
+| GET | `/_synapse/admin/v1/users/{userId}` | Get user details (admin only) |
+| POST | `/_synapse/admin/v1/deactivate/{userId}` | Deactivate user (admin only) |
+| GET | `/_synapse/admin/v1/rooms` | List all rooms (admin only, ?from=&limit=) |
 
 ### Federation
 | Method | Path | Description |

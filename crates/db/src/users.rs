@@ -101,6 +101,55 @@ pub async fn deactivate(pool: &MySqlPool, user_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// ユーザーが管理者かどうかを確認する。
+pub async fn is_admin(pool: &MySqlPool, user_id: &str) -> Result<bool> {
+    let row = sqlx::query("SELECT admin FROM users WHERE user_id = ? LIMIT 1")
+        .bind(user_id)
+        .fetch_optional(pool)
+        .await?;
+    use sqlx::Row;
+    Ok(row.map(|r| r.get::<i8, _>("admin") != 0).unwrap_or(false))
+}
+
+/// 全ユーザーの一覧を返す（管理者向け）。
+pub async fn list_all(pool: &MySqlPool) -> Result<Vec<serde_json::Value>> {
+    use sqlx::Row;
+    let rows = sqlx::query(
+        "SELECT user_id, display_name, avatar_url, created_at, deactivated, admin \
+         FROM users ORDER BY created_at ASC",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let created_at: chrono::NaiveDateTime = r.get("created_at");
+            serde_json::json!({
+                "user_id": r.get::<String, _>("user_id"),
+                "display_name": r.get::<Option<String>, _>("display_name"),
+                "avatar_url": r.get::<Option<String>, _>("avatar_url"),
+                "creation_ts": created_at.and_utc().timestamp_millis(),
+                "deactivated": r.get::<i8, _>("deactivated") != 0,
+                "admin": r.get::<i8, _>("admin") != 0,
+            })
+        })
+        .collect())
+}
+
+/// 管理者によるユーザー無効化（deactivated フラグを立て、全トークン・デバイスを削除）。
+pub async fn admin_deactivate(pool: &MySqlPool, user_id: &str) -> Result<()> {
+    sqlx::query("UPDATE users SET deactivated = 1, password_hash = '' WHERE user_id = ?")
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+    // 全アクセストークンを削除してログアウト状態にする
+    sqlx::query("DELETE FROM access_tokens WHERE user_id = ?")
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 pub async fn verify(pool: &MySqlPool, user_id: &str, password: &str) -> Result<bool> {
     let row = sqlx::query!("SELECT password_hash FROM users WHERE user_id = ?", user_id)
         .fetch_optional(pool)

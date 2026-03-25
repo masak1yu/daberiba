@@ -509,6 +509,7 @@ pub struct EventContextResult {
     pub event: serde_json::Value,
     pub events_before: Vec<serde_json::Value>,
     pub events_after: Vec<serde_json::Value>,
+    pub state: Vec<serde_json::Value>,
     pub start: String,
     pub end: String,
 }
@@ -621,10 +622,16 @@ pub async fn get_context(
         .map(|r| row_to_json_with_agg(r, &mut ctx_agg))
         .collect();
 
+    // center_ord 時点のルームステートスナップショット
+    let state = crate::room_state::get_state_at(pool, room_id, center_ord)
+        .await
+        .unwrap_or_default();
+
     Ok(Some(EventContextResult {
         event,
         events_before,
         events_after,
+        state,
         start,
         end,
     }))

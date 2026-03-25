@@ -515,7 +515,7 @@ async fn get_context(
         "event": ctx.event,
         "events_before": ctx.events_before,
         "events_after": ctx.events_after,
-        "state": [],
+        "state": ctx.state,
     })))
 }
 

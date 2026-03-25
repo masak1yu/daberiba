@@ -497,3 +497,32 @@ pub async fn forget(pool: &MySqlPool, room_id: &str, user_id: &str) -> Result<()
     .await?;
     Ok(())
 }
+
+/// 全ルーム一覧を返す（管理者向け）。joined_members 数と creator を含む。
+pub async fn list_all(pool: &MySqlPool) -> Result<Vec<serde_json::Value>> {
+    use sqlx::Row;
+    let rows = sqlx::query(
+        r#"SELECT r.room_id, r.name, r.topic, r.creator_user_id, r.created_at,
+                  COUNT(m.user_id) AS joined_members
+           FROM rooms r
+           LEFT JOIN room_memberships m ON m.room_id = r.room_id AND m.membership = 'join'
+           GROUP BY r.room_id, r.name, r.topic, r.creator_user_id, r.created_at
+           ORDER BY r.created_at ASC"#,
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let created_at: chrono::NaiveDateTime = r.get("created_at");
+            serde_json::json!({
+                "room_id": r.get::<String, _>("room_id"),
+                "name": r.get::<Option<String>, _>("name"),
+                "topic": r.get::<Option<String>, _>("topic"),
+                "creator": r.get::<Option<String>, _>("creator_user_id"),
+                "joined_members": r.get::<i64, _>("joined_members"),
+                "creation_ts": created_at.and_utc().timestamp_millis(),
+            })
+        })
+        .collect())
+}

@@ -1,4 +1,28 @@
-# Handover — v0.35.0 → v0.36.0
+# Handover — v0.36.0 → v0.37.0
+
+## v0.36.0 でやったこと
+
+- **`/rooms/{roomId}/context` の `state` フィールド** (`db/room_state.rs`, `db/events.rs`, `server/api/client/events.rs`):
+  - `db::room_state::get_state_at()` 新設。指定 stream_ordering 以前の各 (event_type, state_key) ペアの最新イベントを correlated subquery で取得。
+  - `EventContextResult` に `state: Vec<serde_json::Value>` フィールドを追加。
+  - `/context` ハンドラで `state: []` の代わりに実際のスナップショットを返すよう変更。
+
+- **`/sendToDevice` の `device_id: *` 展開** (`db/to_device.rs`, `server/api/client/to_device.rs`, `server/api/client/sync.rs`):
+  - `device_id = "*"` の場合、送信時に `db::devices::list()` で受信者の全デバイスを取得し、デバイスごとに個別レコードを挿入。
+  - `db::to_device::get_pending()` のシグネチャを `(pool, user_id, device_id)` に変更し、自デバイス宛てのメッセージのみ取得するよう修正。
+  - `/sync` で `user.device_id` を渡すよう更新。
+
+- **`/admin/*` 管理 API** (`schema/schema.sql`, `db/users.rs`, `db/rooms.rs`, `server/api/client/admin.rs`):
+  - `users` テーブルに `admin TINYINT(1) DEFAULT 0` カラムを追加。
+  - `db::users::is_admin()` — 管理者フラグ確認。
+  - `db::users::list_all()` — 全ユーザー一覧（display_name, avatar_url, deactivated, admin, creation_ts）。
+  - `db::users::admin_deactivate()` — `deactivated=1` + `password_hash=''` + 全アクセストークン削除。
+  - `db::rooms::list_all()` — 全ルーム一覧（name, creator, joined_members, creation_ts）。
+  - `GET /_matrix/client/v3/admin/whois/{userId}` — デバイス別セッション情報（自分か管理者のみ）。
+  - `GET /_synapse/admin/v1/users` — ユーザー一覧（管理者専用、?from=&limit= ページネーション）。
+  - `GET /_synapse/admin/v1/users/{userId}` — ユーザー詳細（管理者専用）。
+  - `POST /_synapse/admin/v1/deactivate/{userId}` — ユーザー無効化（管理者専用）。
+  - `GET /_synapse/admin/v1/rooms` — ルーム一覧（管理者専用、?from=&limit= ページネーション）。
 
 ## v0.35.0 でやったこと
 
@@ -131,21 +155,21 @@
 | 状態解決アルゴリズム v2 未完全 | auth_events / prev_events は DB に保存されるが、グラフを使った完全な conflict resolution は未実装 |
 | account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
 | depth の競合リスク | get_room_tip() と send() の間に他のイベントが挿入された場合、depth が重複する可能性 |
-| /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
 | /relations のページネーション | prev_batch は from トークンをそのまま返すのみ（後方ページングは未実装） |
 | 3pid バリデーションなし | identity server 連携なし。登録は直接 INSERT のみ（メール確認なし） |
 | login_tokens クリーンアップ | `purge_expired()` は実装済みだが定期実行はなし（起動時 or cron での呼び出しが必要） |
-| /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
 | lazy_load_members の初回 sync | 初回 sync 時に既訪問 member を追跡するクライアントキャッシュとの整合は未対応 |
 | /hierarchy の cross-server 展開 | federation ルームの子は room_state に m.space.child がない場合スキップされる |
+| admin フラグの付与手段 | `admin=1` にする UI/API がない（DB 直接 UPDATE が必要） |
+| admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 
-## v0.36.0 候補
+## v0.37.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
 2. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
-3. **`/rooms/{roomId}/context` の `state` フィールド** — 指定 event_id 時点のルームスナップショットを `state` に含める
-4. **`/sync` の to_device メッセージ配信改善** — `device_id: *` の全デバイス配信を正しく展開
-5. **`/admin/*` 管理 API** — ユーザー無効化・メディア削除・ルーム管理などの管理者向けエンドポイント
+3. **管理者昇格 API** — `PUT /_synapse/admin/v1/users/{userId}/admin` で管理者フラグを切り替え
+4. **`/admin/media` 管理** — メディアファイルの一覧・削除エンドポイント
+5. **`/sync` の `E2EE` 改善** — `device_keys` の変更通知（`changed` / `left` リスト）を `/sync` に含める
 
 ## 開発フロー（おさらい）
 
