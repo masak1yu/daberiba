@@ -18,14 +18,16 @@ struct HierarchyQuery {
     /// ページネーション用 from トークン（room_id）
     from: Option<String>,
     limit: Option<u64>,
-    /// true の場合、参加不可ルームを除外しない（デフォルト false）
+    /// true の場合、content.suggested=true の子のみ返す
     #[serde(default)]
     suggested_only: bool,
+    /// 再帰探索の最大深さ（デフォルト 1、最大 5）
+    max_depth: Option<u32>,
 }
 
 /// GET /_matrix/client/v1/rooms/{roomId}/hierarchy
 /// スペース階層を返す（MSC2946）。
-/// 深さ 1 層のみ（ルームと直接チルドレン）を返す。
+/// max_depth まで再帰的に BFS 展開する。ページネーションはルート直下の子に適用。
 async fn get_hierarchy(
     State(state): State<AppState>,
     axum::Extension(_user): axum::Extension<AuthUser>,
@@ -33,16 +35,17 @@ async fn get_hierarchy(
     Query(query): Query<HierarchyQuery>,
 ) -> ApiResult<Json<serde_json::Value>> {
     let limit = query.limit.unwrap_or(50).min(50) as usize;
+    let max_depth = query.max_depth.unwrap_or(1).min(5) as usize;
 
     // ルート情報を収集する。
-    let root = build_room_summary(&state.pool, &room_id).await?;
+    let mut root = build_room_summary(&state.pool, &room_id).await?;
 
     // m.space.child 状態イベントを取得して子ルームを列挙する。
-    let child_states = get_space_children(&state.pool, &room_id).await?;
+    let all_child_states = get_space_children(&state.pool, &room_id).await?;
 
-    // suggested_only=true の場合、suggested フラグが付いた子だけを返す。
+    // suggested_only フィルタ
     let child_states: Vec<_> = if query.suggested_only {
-        child_states
+        all_child_states
             .into_iter()
             .filter(|c| {
                 c.get("content")
@@ -52,7 +55,7 @@ async fn get_hierarchy(
             })
             .collect()
     } else {
-        child_states
+        all_child_states
     };
 
     // from トークンによるオフセット処理（ルーム ID をカーソルとして使用）
@@ -72,26 +75,54 @@ async fn get_hierarchy(
     };
 
     let page: Vec<_> = child_states.iter().skip(start).take(limit + 1).collect();
-
     let has_more = page.len() > limit;
     let page = &page[..page.len().min(limit)];
 
-    // 各子ルームのサマリーを構築する。
-    let mut child_rooms = Vec::new();
-    for state_ev in page {
-        if let Some(child_room_id) = state_ev.get("state_key").and_then(|v| v.as_str()) {
-            if let Ok(summary) = build_room_summary(&state.pool, child_room_id).await {
-                child_rooms.push(summary);
-            }
-        }
-    }
-
-    // ルートの children_state にチルドレンイベントを付与する。
-    let mut root = root;
     root["children_state"] = serde_json::json!(child_states);
 
+    // BFS でルート直下の子を展開し、max_depth まで再帰する。
+    // visited は循環を防ぐ。
     let mut rooms = vec![root];
-    rooms.extend(child_rooms);
+    let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
+    visited.insert(room_id.clone());
+
+    // (room_id, current_depth)
+    let mut queue: std::collections::VecDeque<(String, usize)> = page
+        .iter()
+        .filter_map(|c| {
+            c.get("state_key")
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })
+        .map(|rid| (rid, 1))
+        .collect();
+
+    while let Some((child_id, depth)) = queue.pop_front() {
+        if !visited.insert(child_id.clone()) {
+            continue;
+        }
+
+        let Ok(mut summary) = build_room_summary(&state.pool, &child_id).await else {
+            continue;
+        };
+
+        if depth < max_depth {
+            // 子の子を展開する（suggested_only は深い階層では適用しない）
+            let grandchildren = get_space_children(&state.pool, &child_id)
+                .await
+                .unwrap_or_default();
+            summary["children_state"] = serde_json::json!(grandchildren);
+            for gc in &grandchildren {
+                if let Some(gc_id) = gc.get("state_key").and_then(|v| v.as_str()) {
+                    if !visited.contains(gc_id) {
+                        queue.push_back((gc_id.to_string(), depth + 1));
+                    }
+                }
+            }
+        }
+
+        rooms.push(summary);
+    }
 
     let next_batch = if has_more {
         page.last()

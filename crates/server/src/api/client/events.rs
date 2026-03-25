@@ -235,6 +235,9 @@ struct MessagesQuery {
     dir: Option<String>,
     /// 取得件数（デフォルト 10、最大 100）
     limit: Option<u32>,
+    /// true の場合、chunk 内の sender に対応する m.room.member イベントを state に含める
+    #[serde(default)]
+    lazy_load_members: bool,
 }
 
 #[derive(Serialize)]
@@ -243,6 +246,8 @@ struct MessagesResponse {
     start: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     end: Option<String>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    state: Vec<serde_json::Value>,
 }
 
 /// room_id のメンバー（sender 除く）の HTTP pusher に通知を送る。
@@ -458,10 +463,31 @@ async fn get_messages(
 
     let page = db::events::get_messages(&state.pool, &room_id, from, dir, limit).await?;
 
+    // lazy_load_members: chunk 内 sender の m.room.member イベントを state に含める
+    let member_state = if query.lazy_load_members {
+        let senders: Vec<String> = page
+            .events
+            .iter()
+            .filter_map(|e| {
+                e.get("sender")
+                    .and_then(|s| s.as_str())
+                    .map(|s| s.to_string())
+            })
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        db::rooms::get_member_events_for_users(&state.pool, &room_id, &senders)
+            .await
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+
     Ok(Json(MessagesResponse {
         chunk: page.events,
         start: page.start,
         end: page.end,
+        state: member_state,
     }))
 }
 

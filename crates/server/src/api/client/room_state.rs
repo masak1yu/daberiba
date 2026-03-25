@@ -63,6 +63,8 @@ async fn get_state_event(
 struct MembersQuery {
     membership: Option<String>,
     not_membership: Option<String>,
+    /// prev_batch / next_batch 形式のトークン。指定時は時点スナップショットを返す。
+    at: Option<String>,
 }
 
 async fn get_members(
@@ -71,13 +73,26 @@ async fn get_members(
     Path(room_id): Path<String>,
     Query(query): Query<MembersQuery>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let members = db::rooms::get_members_filtered(
-        &state.pool,
-        &room_id,
-        query.membership.as_deref(),
-        query.not_membership.as_deref(),
-    )
-    .await?;
+    let members = if let Some(at_token) = &query.at {
+        // at トークンを stream_ordering に変換して時点スナップショットを返す。
+        let at_ordering = db::events::parse_token(at_token).unwrap_or(u64::MAX);
+        db::rooms::get_members_at(
+            &state.pool,
+            &room_id,
+            at_ordering,
+            query.membership.as_deref(),
+            query.not_membership.as_deref(),
+        )
+        .await?
+    } else {
+        db::rooms::get_members_filtered(
+            &state.pool,
+            &room_id,
+            query.membership.as_deref(),
+            query.not_membership.as_deref(),
+        )
+        .await?
+    };
     Ok(Json(serde_json::json!({ "chunk": members })))
 }
 
