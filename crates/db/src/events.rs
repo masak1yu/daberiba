@@ -199,25 +199,35 @@ pub async fn get_by_id(pool: &MySqlPool, event_id: &str) -> Result<Option<serde_
     .fetch_optional(pool)
     .await?;
 
-    Ok(row.map(|r| {
-        let content_str: String = r.get("content");
-        let state_key: Option<String> = r.get("state_key");
-        let mut event = serde_json::json!({
-            "event_id": r.get::<String, _>("event_id"),
-            "room_id": r.get::<String, _>("room_id"),
-            "sender": r.get::<String, _>("sender"),
-            "type": r.get::<String, _>("event_type"),
-            "content": serde_json::from_str::<serde_json::Value>(&content_str)
-                .unwrap_or_default(),
-            "origin_server_ts": r.get::<chrono::NaiveDateTime, _>("created_at")
-                .and_utc()
-                .timestamp_millis(),
-        });
-        if let Some(sk) = state_key {
-            event["state_key"] = serde_json::Value::String(sk);
-        }
-        event
-    }))
+    let Some(r) = row else {
+        return Ok(None);
+    };
+
+    let content_str: String = r.get("content");
+    let state_key: Option<String> = r.get("state_key");
+    let fetched_event_id: String = r.get("event_id");
+    let mut event = serde_json::json!({
+        "event_id": &fetched_event_id,
+        "room_id": r.get::<String, _>("room_id"),
+        "sender": r.get::<String, _>("sender"),
+        "type": r.get::<String, _>("event_type"),
+        "content": serde_json::from_str::<serde_json::Value>(&content_str)
+            .unwrap_or_default(),
+        "origin_server_ts": r.get::<chrono::NaiveDateTime, _>("created_at")
+            .and_utc()
+            .timestamp_millis(),
+    });
+    if let Some(sk) = state_key {
+        event["state_key"] = serde_json::Value::String(sk);
+    }
+
+    // unsigned.m.relations を付与（m.replace / m.reaction）
+    let agg = crate::relations::get_aggregations_batch(pool, &[fetched_event_id]).await?;
+    if let Some(relations) = agg.into_values().next() {
+        event["unsigned"] = serde_json::json!({ "m.relations": relations });
+    }
+
+    Ok(Some(event))
 }
 
 /// イベントの stream_ordering を取得する。存在しない場合は None。
@@ -413,12 +423,18 @@ pub async fn get_messages(
         None
     };
 
+    let event_ids: Vec<String> = rows.iter().map(|r| r.get("event_id")).collect();
+    let mut agg = crate::relations::get_aggregations_batch(pool, &event_ids)
+        .await
+        .unwrap_or_default();
+
     let events = rows
         .iter()
         .map(|r| {
+            let event_id: String = r.get("event_id");
             let content_str: String = r.get("content");
-            serde_json::json!({
-                "event_id": r.get::<String, _>("event_id"),
+            let mut ev = serde_json::json!({
+                "event_id": &event_id,
                 "sender": r.get::<String, _>("sender"),
                 "type": r.get::<String, _>("event_type"),
                 "content": serde_json::from_str::<serde_json::Value>(&content_str)
@@ -427,7 +443,11 @@ pub async fn get_messages(
                     .and_utc()
                     .timestamp_millis(),
                 "room_id": room_id,
-            })
+            });
+            if let Some(relations) = agg.remove(&event_id) {
+                ev["unsigned"] = serde_json::json!({ "m.relations": relations });
+            }
+            ev
         })
         .collect();
 
@@ -505,25 +525,6 @@ pub async fn get_context(
     .fetch_all(pool)
     .await?;
 
-    let row_to_json = |r: &sqlx::mysql::MySqlRow| {
-        let content_str: String = r.get("content");
-        let state_key: Option<String> = r.get("state_key");
-        let mut ev = serde_json::json!({
-            "event_id": r.get::<String, _>("event_id"),
-            "room_id": room_id,
-            "sender": r.get::<String, _>("sender"),
-            "type": r.get::<String, _>("event_type"),
-            "content": serde_json::from_str::<serde_json::Value>(&content_str).unwrap_or_default(),
-            "origin_server_ts": r.get::<chrono::NaiveDateTime, _>("created_at")
-                .and_utc()
-                .timestamp_millis(),
-        });
-        if let Some(sk) = state_key {
-            ev["state_key"] = serde_json::Value::String(sk);
-        }
-        ev
-    };
-
     let start = before_rows
         .last()
         .map(|r| ordering_to_token(r.get::<u64, _>("stream_ordering")))
@@ -533,9 +534,52 @@ pub async fn get_context(
         .map(|r| ordering_to_token(r.get::<u64, _>("stream_ordering")))
         .unwrap_or_else(|| ordering_to_token(center_ord));
 
+    // 前後イベントの集計（unsigned.m.relations）
+    let context_ids: Vec<String> = before_rows
+        .iter()
+        .chain(after_rows.iter())
+        .map(|r| r.get::<String, _>("event_id"))
+        .collect();
+    let mut ctx_agg = crate::relations::get_aggregations_batch(pool, &context_ids)
+        .await
+        .unwrap_or_default();
+
+    let row_to_json_with_agg =
+        |r: &sqlx::mysql::MySqlRow,
+         agg: &mut std::collections::HashMap<String, serde_json::Value>| {
+            let event_id: String = r.get("event_id");
+            let content_str: String = r.get("content");
+            let state_key: Option<String> = r.get("state_key");
+            let mut ev = serde_json::json!({
+                "event_id": &event_id,
+                "room_id": room_id,
+                "sender": r.get::<String, _>("sender"),
+                "type": r.get::<String, _>("event_type"),
+                "content": serde_json::from_str::<serde_json::Value>(&content_str)
+                    .unwrap_or_default(),
+                "origin_server_ts": r.get::<chrono::NaiveDateTime, _>("created_at")
+                    .and_utc()
+                    .timestamp_millis(),
+            });
+            if let Some(sk) = state_key {
+                ev["state_key"] = serde_json::Value::String(sk);
+            }
+            if let Some(relations) = agg.remove(&event_id) {
+                ev["unsigned"] = serde_json::json!({ "m.relations": relations });
+            }
+            ev
+        };
+
     // events_before は時系列順（昇順）で返す
-    let events_before: Vec<serde_json::Value> = before_rows.iter().rev().map(row_to_json).collect();
-    let events_after: Vec<serde_json::Value> = after_rows.iter().map(row_to_json).collect();
+    let events_before: Vec<serde_json::Value> = before_rows
+        .iter()
+        .rev()
+        .map(|r| row_to_json_with_agg(r, &mut ctx_agg))
+        .collect();
+    let events_after: Vec<serde_json::Value> = after_rows
+        .iter()
+        .map(|r| row_to_json_with_agg(r, &mut ctx_agg))
+        .collect();
 
     Ok(Some(EventContextResult {
         event,
