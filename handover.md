@@ -1,4 +1,29 @@
-# Handover — v0.34.0 → v0.35.0
+# Handover — v0.35.0 → v0.36.0
+
+## v0.35.0 でやったこと
+
+- **`/rooms/{roomId}/members?at=<token>`** (`server/api/client/room_state.rs`, `db/rooms.rs`):
+  - `?at=` に prev_batch / next_batch トークン（"s{stream_ordering}" 形式）を指定すると、events テーブルから m.room.member イベントを再構築して時点スナップショットを返す。
+  - correlated subquery で各 state_key の最大 stream_ordering を取得し、membership / not_membership フィルタと組み合わせ可能。
+  - `db::rooms::get_members_at()` 新設。
+
+- **`/rooms/{roomId}/messages?lazy_load_members=true`** (`server/api/client/events.rs`, `db/rooms.rs`):
+  - `?lazy_load_members=true` を指定すると、レスポンスの `state` フィールドに chunk 内の sender に対応する m.room.member イベントを含める。
+  - `db::rooms::get_member_events_for_users()` 新設（IN 句で一括取得）。
+  - `MessagesResponse` に `state: Vec<serde_json::Value>` フィールドを追加（空の場合はシリアライズ省略）。
+
+- **`lazy_load_members` フィルタ** (`server/filter.rs`, `server/api/client/sync.rs`):
+  - フィルター JSON の `room.state.lazy_load_members: true` を `FilterDef` に追加。
+  - sync の state イベントを後処理でフィルタリング — timeline に現れた sender の `m.room.member` のみ残し、非メンバーイベントはそのまま返す。
+
+- **`/rooms/{roomId}/hierarchy?max_depth=<n>`** (`server/api/client/hierarchy.rs`):
+  - `?max_depth=<n>`（デフォルト 1、最大 5）を追加。BFS で n 層まで再帰的にスペース階層を展開。
+  - `visited` セットで循環を防ぐ。子の children_state にはグランドチルドレンのイベントを付与。
+  - ページネーションはルート直下の直接チルドレンに適用（深い階層は再帰で一括展開）。
+
+- **release.yml の修正** (`.github/workflows/release.yml`):
+  - workspace 版一元化後に `version.workspace = true` がタグ名になるバグを修正。
+  - バージョン読み取り・バンプ対象を `crates/server/Cargo.toml` → ルート `Cargo.toml` に変更。
 
 ## v0.34.0 でやったこと
 
@@ -108,18 +133,19 @@
 | depth の競合リスク | get_room_tip() と send() の間に他のイベントが挿入された場合、depth が重複する可能性 |
 | /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
 | /relations のページネーション | prev_batch は from トークンをそのまま返すのみ（後方ページングは未実装） |
-| /hierarchy は深さ 1 層のみ | 再帰的なスペース階層探索は未実装 |
 | 3pid バリデーションなし | identity server 連携なし。登録は直接 INSERT のみ（メール確認なし） |
 | login_tokens クリーンアップ | `purge_expired()` は実装済みだが定期実行はなし（起動時 or cron での呼び出しが必要） |
-| /members の at フィルタ未実装 | 指定 event_id 時点のメンバースナップショット取得は未実装（membership フィルタのみ対応） |
+| /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
+| lazy_load_members の初回 sync | 初回 sync 時に既訪問 member を追跡するクライアントキャッシュとの整合は未対応 |
+| /hierarchy の cross-server 展開 | federation ルームの子は room_state に m.space.child がない場合スキップされる |
 
-## v0.35.0 候補
+## v0.36.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **`/rooms/{roomId}/members` の `at` フィルタ** — 指定 stream_ordering 時点のメンバースナップショット（events テーブルから再構築）
-3. **`/hierarchy` の再帰探索** — 深さ n 層まで再帰的にスペース階層を展開
-4. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
-5. **`/rooms/{roomId}/messages` の lazy-loading** — `lazy_load_members` フィルタ対応
+2. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
+3. **`/rooms/{roomId}/context` の `state` フィールド** — 指定 event_id 時点のルームスナップショットを `state` に含める
+4. **`/sync` の to_device メッセージ配信改善** — `device_id: *` の全デバイス配信を正しく展開
+5. **`/admin/*` 管理 API** — ユーザー無効化・メディア削除・ルーム管理などの管理者向けエンドポイント
 
 ## 開発フロー（おさらい）
 

@@ -19,6 +19,8 @@ pub struct FilterDef {
     // トップレベル
     pub presence_types: Option<HashSet<String>>,
     pub presence_not_types: Option<HashSet<String>>,
+    /// lazy_load_members: true の場合、timeline に現れた sender の m.room.member のみを state に含める
+    pub lazy_load_members: bool,
 }
 
 impl FilterDef {
@@ -45,6 +47,10 @@ impl FilterDef {
             account_data_not_types: extract_set(account_data, "not_types"),
             presence_types: extract_set(presence, "types"),
             presence_not_types: extract_set(presence, "not_types"),
+            lazy_load_members: state
+                .and_then(|s| s.get("lazy_load_members"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
         }
     }
 

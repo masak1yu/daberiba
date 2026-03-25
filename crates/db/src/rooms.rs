@@ -157,6 +157,117 @@ pub async fn get_members_filtered(
         .collect())
 }
 
+/// 指定 stream_ordering 時点でのメンバースナップショットを返す。
+/// events テーブルから m.room.member イベントを再構築し、
+/// membership / not_membership フィルタを Rust 側で適用する。
+pub async fn get_members_at(
+    pool: &MySqlPool,
+    room_id: &str,
+    at_ordering: u64,
+    membership: Option<&str>,
+    not_membership: Option<&str>,
+) -> Result<Vec<serde_json::Value>> {
+    use sqlx::Row;
+
+    // 各 state_key について stream_ordering <= at_ordering の最新イベントを取得する。
+    let rows = sqlx::query(
+        r#"SELECT e.state_key, e.content
+           FROM events e
+           WHERE e.room_id = ?
+             AND e.event_type = 'm.room.member'
+             AND e.stream_ordering = (
+                 SELECT MAX(e2.stream_ordering)
+                 FROM events e2
+                 WHERE e2.room_id = e.room_id
+                   AND e2.event_type = 'm.room.member'
+                   AND e2.state_key = e.state_key
+                   AND e2.stream_ordering <= ?
+             )"#,
+    )
+    .bind(room_id)
+    .bind(at_ordering)
+    .fetch_all(pool)
+    .await?;
+
+    let mut result = Vec::new();
+    for row in rows {
+        let user_id: String = row.get("state_key");
+        let content_str: String = row.get("content");
+        let content: serde_json::Value = serde_json::from_str(&content_str).unwrap_or_default();
+
+        let mem = content
+            .get("membership")
+            .and_then(|v| v.as_str())
+            .unwrap_or("leave");
+
+        if let Some(m) = membership {
+            if mem != m {
+                continue;
+            }
+        }
+        if let Some(nm) = not_membership {
+            if mem == nm {
+                continue;
+            }
+        }
+
+        result.push(serde_json::json!({
+            "type": "m.room.member",
+            "state_key": user_id,
+            "content": content,
+        }));
+    }
+
+    Ok(result)
+}
+
+/// 指定ユーザー群の現在の m.room.member イベントを返す（lazy_load_members 用）。
+pub async fn get_member_events_for_users(
+    pool: &MySqlPool,
+    room_id: &str,
+    user_ids: &[String],
+) -> Result<Vec<serde_json::Value>> {
+    if user_ids.is_empty() {
+        return Ok(vec![]);
+    }
+    use sqlx::Row;
+
+    // IN 句を動的に組み立てる。
+    let placeholders = user_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        r#"SELECT e.event_id, e.sender, e.state_key, e.content, e.created_at
+           FROM room_state rs
+           JOIN events e ON e.event_id = rs.event_id
+           WHERE rs.room_id = ?
+             AND rs.event_type = 'm.room.member'
+             AND rs.state_key IN ({placeholders})"#
+    );
+
+    let mut q = sqlx::query(&sql).bind(room_id);
+    for uid in user_ids {
+        q = q.bind(uid);
+    }
+
+    let rows = q.fetch_all(pool).await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let content_str: String = r.get("content");
+            let ts: chrono::NaiveDateTime = r.get("created_at");
+            serde_json::json!({
+                "event_id": r.get::<String, _>("event_id"),
+                "sender": r.get::<String, _>("sender"),
+                "type": "m.room.member",
+                "state_key": r.get::<String, _>("state_key"),
+                "content": serde_json::from_str::<serde_json::Value>(&content_str)
+                    .unwrap_or_default(),
+                "origin_server_ts": ts.and_utc().timestamp_millis(),
+                "room_id": room_id,
+            })
+        })
+        .collect())
+}
+
 pub async fn get_joined_members(
     pool: &MySqlPool,
     room_id: &str,

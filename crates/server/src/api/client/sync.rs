@@ -129,6 +129,45 @@ async fn sync(
                         }
                     }
                 }
+
+                // lazy_load_members: timeline に現れた sender の m.room.member のみ残す
+                if f.lazy_load_members {
+                    let timeline_senders: std::collections::HashSet<String> = room_data
+                        .get("timeline")
+                        .and_then(|t| t.get("events"))
+                        .and_then(|e| e.as_array())
+                        .map(|events| {
+                            events
+                                .iter()
+                                .filter_map(|e| {
+                                    e.get("sender")
+                                        .and_then(|s| s.as_str())
+                                        .map(|s| s.to_string())
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+
+                    if let Some(state_obj) = room_data.get_mut("state") {
+                        if let Some(events) = state_obj.get_mut("events") {
+                            if let Some(arr) = events.as_array_mut() {
+                                arr.retain(|e| {
+                                    if e.get("type").and_then(|v| v.as_str())
+                                        == Some("m.room.member")
+                                    {
+                                        let sk = e
+                                            .get("state_key")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        timeline_senders.contains(sk)
+                                    } else {
+                                        true
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
             }
 
             // ephemeral イベント（m.typing / m.receipt）
