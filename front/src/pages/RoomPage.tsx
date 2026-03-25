@@ -27,6 +27,7 @@ export default function RoomPage() {
   const prevBatches = useRoomsStore((s) => s.prevBatches)
   const historyLoading = useRoomsStore((s) => s.historyLoading)
   const loadHistory = useRoomsStore((s) => s.loadHistory)
+  const allReactions = useRoomsStore((s) => s.reactions)
 
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -38,6 +39,7 @@ export default function RoomPage() {
   const room = rooms[decodedRoomId]
   const hasMore = Boolean(prevBatches[decodedRoomId])
   const isHistoryLoading = historyLoading[decodedRoomId] ?? false
+  const reactions = allReactions[decodedRoomId]
 
   // ルーム入室時・新着イベント受信時に既読送信
   const lastEventIdRef = useRef<string | undefined>()
@@ -109,6 +111,7 @@ export default function RoomPage() {
           <Timeline
             events={events}
             myUserId={userId}
+            reactions={reactions}
             hasMore={hasMore}
             historyLoading={isHistoryLoading}
             onLoadMore={handleLoadMore}

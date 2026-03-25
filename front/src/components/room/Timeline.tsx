@@ -4,19 +4,22 @@
  * - 末尾イベントが変わったときだけ最下部へ自動スクロール（過去ログ挿入時は除外）
  * - 上端センチネルの IntersectionObserver で過去ログを遡り読み込み
  * - 過去ログ挿入後はスクロール位置を復元して表示位置が飛ばないようにする
+ * - リアクション（m.reaction）を絵文字バッジとして吹き出し下に表示
  */
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { MatrixEvent } from '../../api/sync'
+import type { Reactions } from '../../stores/rooms'
 
 interface Props {
   events: MatrixEvent[]
   myUserId: string | null
+  reactions?: Reactions
   hasMore?: boolean
   historyLoading?: boolean
   onLoadMore?: () => void
 }
 
-export default function Timeline({ events, myUserId, hasMore, historyLoading, onLoadMore }: Props) {
+export default function Timeline({ events, myUserId, reactions, hasMore, historyLoading, onLoadMore }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
@@ -96,6 +99,8 @@ export default function Timeline({ events, myUserId, hasMore, historyLoading, on
             hour: '2-digit',
             minute: '2-digit',
           })
+          const eventReactions = ev.event_id ? (reactions?.[ev.event_id] ?? {}) : {}
+          const reactionEntries = Object.entries(eventReactions)
 
           return (
             <div key={ev.event_id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
@@ -110,6 +115,29 @@ export default function Timeline({ events, myUserId, hasMore, historyLoading, on
                 >
                   {body}
                 </div>
+
+                {/* リアクションバッジ */}
+                {reactionEntries.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {reactionEntries.map(([emoji, senders]) => {
+                      const reacted = senders.includes(myUserId ?? '')
+                      return (
+                        <span
+                          key={emoji}
+                          className={`flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs ${
+                            reacted
+                              ? 'border-indigo-500 bg-indigo-900/60 text-indigo-200'
+                              : 'border-gray-700 bg-gray-800 text-gray-300'
+                          }`}
+                        >
+                          {emoji}
+                          <span className="font-medium">{senders.length}</span>
+                        </span>
+                      )
+                    })}
+                  </div>
+                )}
+
                 <span className="mt-0.5 text-xs text-gray-600">{time}</span>
               </div>
             </div>
