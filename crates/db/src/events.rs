@@ -81,6 +81,29 @@ pub async fn send(pool: &MySqlPool, ev: &LocalEvent<'_>) -> Result<()> {
         .await?;
     }
 
+    // m.relates_to が含まれる場合は event_relations に記録する
+    if let (Some(rel_type), Some(rel_event_id)) = (
+        ev.content
+            .get("m.relates_to")
+            .and_then(|r| r.get("rel_type"))
+            .and_then(|v| v.as_str()),
+        ev.content
+            .get("m.relates_to")
+            .and_then(|r| r.get("event_id"))
+            .and_then(|v| v.as_str()),
+    ) {
+        sqlx::query(
+            r#"INSERT IGNORE INTO event_relations (event_id, room_id, rel_type, relates_to_event_id)
+               VALUES (?, ?, ?, ?)"#,
+        )
+        .bind(ev.event_id)
+        .bind(ev.room_id)
+        .bind(rel_type)
+        .bind(rel_event_id)
+        .execute(pool)
+        .await?;
+    }
+
     Ok(())
 }
 
