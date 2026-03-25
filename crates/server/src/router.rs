@@ -37,6 +37,7 @@ pub fn build(state: AppState) -> Router {
         .merge(api::client::relations::routes())
         .merge(api::client::read_markers::routes())
         .merge(api::client::threads::routes())
+        .merge(api::client::timestamp_to_event::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // メディアルート（認証必須）

@@ -68,7 +68,10 @@ async fn get_threads(
     };
 
     let sql = format!(
-        r#"SELECT thread_roots.root_event_id, thread_roots.latest_activity, thread_roots.reply_count
+        r#"SELECT thread_roots.root_event_id,
+                  thread_roots.latest_activity,
+                  thread_roots.reply_count,
+                  latest_ev.event_id AS latest_event_id
            FROM (
                SELECT er.relates_to_event_id AS root_event_id,
                       MAX(e.stream_ordering)  AS latest_activity,
@@ -79,6 +82,8 @@ async fn get_threads(
                  AND er.rel_type = 'm.thread'
                GROUP BY er.relates_to_event_id
            ) AS thread_roots
+           INNER JOIN events latest_ev
+             ON latest_ev.stream_ordering = thread_roots.latest_activity
            WHERE 1=1
              {cursor_clause}
              {participated_clause}
@@ -107,8 +112,8 @@ async fn get_threads(
     let mut chunk = Vec::with_capacity(rows.len());
     for row in rows {
         let root_event_id: String = row.get("root_event_id");
-        let latest_activity: i64 = row.get("latest_activity");
         let reply_count: i64 = row.get("reply_count");
+        let latest_event_id: String = row.get("latest_event_id");
 
         // ルートイベント本体（unsigned.m.relations は get_by_id が付与済み）
         let mut event = db::events::get_by_id(&state.pool, &root_event_id)
@@ -116,11 +121,15 @@ async fn get_threads(
             .unwrap_or_default()
             .unwrap_or_default();
 
+        // スレッド内最新イベントを取得
+        let latest_event = db::events::get_by_id(&state.pool, &latest_event_id)
+            .await
+            .unwrap_or_default()
+            .unwrap_or_default();
+
         // m.thread 集計を unsigned.m.relations に追加
         let thread_summary = serde_json::json!({
-            "latest_event": {
-                "origin_server_ts": latest_activity,
-            },
+            "latest_event": latest_event,
             "count": reply_count,
             "current_user_participated": include_participated,
         });
