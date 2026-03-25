@@ -274,6 +274,30 @@ CREATE TABLE IF NOT EXISTS event_relations (
     FOREIGN KEY (room_id) REFERENCES rooms(room_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ログイントークンテーブル。POST /v1/login/get_token で発行し、m.login.token フローで消費する。
+-- 有効期限 120 秒・シングルユース。
+CREATE TABLE IF NOT EXISTS login_tokens (
+    token      VARCHAR(255) NOT NULL,
+    user_id    VARCHAR(255) NOT NULL,
+    expires_at BIGINT       NOT NULL COMMENT 'Unix milliseconds',
+    used       TINYINT(1)   NOT NULL DEFAULT 0,
+    PRIMARY KEY (token),
+    INDEX idx_login_tokens_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- サードパーティ ID テーブル。GET/POST /account/3pid* で管理する。
+CREATE TABLE IF NOT EXISTS user_threepids (
+    user_id      VARCHAR(255) NOT NULL,
+    medium       VARCHAR(32)  NOT NULL COMMENT 'email | msisdn',
+    address      VARCHAR(255) NOT NULL,
+    validated_at BIGINT       NOT NULL COMMENT 'Unix milliseconds',
+    added_at     BIGINT       NOT NULL COMMENT 'Unix milliseconds',
+    PRIMARY KEY (medium, address),
+    INDEX idx_user_threepids_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS room_key_backup_sessions (
     version             BIGINT UNSIGNED NOT NULL,
     user_id             VARCHAR(255)    NOT NULL,

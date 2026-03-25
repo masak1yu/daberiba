@@ -1,5 +1,6 @@
 use crate::{
     error::{ApiResult, AppError},
+    middleware::auth::AuthUser,
     state::AppState,
 };
 use axum::{
@@ -15,10 +16,16 @@ pub fn routes() -> Router<AppState> {
         .route("/_matrix/client/v3/login", get(login_flows).post(login))
 }
 
+/// 認証必須ルート（router.rs 側で auth middleware を付けて登録する）
+pub fn protected_routes() -> Router<AppState> {
+    Router::new().route("/_matrix/client/v1/login/get_token", post(get_login_token))
+}
+
 async fn login_flows() -> Json<serde_json::Value> {
     Json(serde_json::json!({
         "flows": [
-            { "type": "m.login.password" }
+            { "type": "m.login.password" },
+            { "type": "m.login.token" }
         ]
     }))
 }
@@ -100,6 +107,7 @@ struct LoginRequest {
     login_type: String,
     identifier: Option<LoginIdentifier>,
     password: Option<String>,
+    token: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -120,27 +128,74 @@ async fn login(
     State(state): State<AppState>,
     Json(body): Json<LoginRequest>,
 ) -> ApiResult<Json<LoginResponse>> {
-    if body.login_type != "m.login.password" {
-        return Err(AppError::BadRequest("unsupported login type".into()));
+    match body.login_type.as_str() {
+        "m.login.password" => {
+            let username = body
+                .identifier
+                .and_then(|id| id.user)
+                .ok_or_else(|| AppError::BadRequest("missing identifier.user".into()))?;
+
+            let password = body
+                .password
+                .ok_or_else(|| AppError::BadRequest("missing password".into()))?;
+
+            let (user_id, access_token, device_id) =
+                db::users::login(&state.pool, &username, &password, &state.server_name)
+                    .await
+                    .map_err(|_| AppError::Unauthorized)?;
+
+            Ok(Json(LoginResponse {
+                user_id,
+                access_token,
+                device_id,
+            }))
+        }
+        "m.login.token" => {
+            let token = body
+                .token
+                .ok_or_else(|| AppError::BadRequest("missing token".into()))?;
+
+            // トークンを消費して user_id を取得
+            let user_id = db::login_tokens::consume(&state.pool, &token)
+                .await
+                .map_err(AppError::Internal)?
+                .ok_or(AppError::Unauthorized)?;
+
+            // 新しいデバイスとアクセストークンを発行
+            let device_id = uuid::Uuid::new_v4()
+                .to_string()
+                .replace('-', "")
+                .to_uppercase();
+            let device_id = format!("DEVICE_{}", &device_id[..8]);
+            db::devices::create(&state.pool, &user_id, &device_id)
+                .await
+                .map_err(AppError::Internal)?;
+            let access_token = db::access_tokens::create(&state.pool, &user_id, &device_id)
+                .await
+                .map_err(AppError::Internal)?;
+
+            Ok(Json(LoginResponse {
+                user_id,
+                access_token,
+                device_id,
+            }))
+        }
+        _ => Err(AppError::BadRequest("unsupported login type".into())),
     }
+}
 
-    let username = body
-        .identifier
-        .and_then(|id| id.user)
-        .ok_or_else(|| AppError::BadRequest("missing identifier.user".into()))?;
+/// POST /_matrix/client/v1/login/get_token
+/// 現在のセッションから短命ログイントークンを発行する（クロスデバインログイン用）。
+async fn get_login_token(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let token = db::login_tokens::create(&state.pool, &user.user_id)
+        .await
+        .map_err(AppError::Internal)?;
 
-    let password = body
-        .password
-        .ok_or_else(|| AppError::BadRequest("missing password".into()))?;
-
-    let (user_id, access_token, device_id) =
-        db::users::login(&state.pool, &username, &password, &state.server_name)
-            .await
-            .map_err(|_| AppError::Unauthorized)?;
-
-    Ok(Json(LoginResponse {
-        user_id,
-        access_token,
-        device_id,
-    }))
+    Ok(Json(serde_json::json!({
+        "login_token": token,
+        "expires_in_ms": 120_000,
+    })))
 }

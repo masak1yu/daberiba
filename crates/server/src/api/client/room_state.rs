@@ -1,6 +1,6 @@
 use crate::{error::ApiResult, middleware::auth::AuthUser, state::AppState};
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     routing::{get, post},
     Json, Router,
 };
@@ -59,12 +59,25 @@ async fn get_state_event(
     Ok(Json(content))
 }
 
+#[derive(Deserialize, Default)]
+struct MembersQuery {
+    membership: Option<String>,
+    not_membership: Option<String>,
+}
+
 async fn get_members(
     State(state): State<AppState>,
     axum::Extension(_user): axum::Extension<AuthUser>,
     Path(room_id): Path<String>,
+    Query(query): Query<MembersQuery>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    let members = db::rooms::get_members(&state.pool, &room_id).await?;
+    let members = db::rooms::get_members_filtered(
+        &state.pool,
+        &room_id,
+        query.membership.as_deref(),
+        query.not_membership.as_deref(),
+    )
+    .await?;
     Ok(Json(serde_json::json!({ "chunk": members })))
 }
 
