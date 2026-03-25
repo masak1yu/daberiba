@@ -240,6 +240,46 @@ pub async fn get_stream_ordering(pool: &MySqlPool, event_id: &str) -> Result<Opt
     Ok(row.map(|(o,)| o))
 }
 
+/// タイムスタンプに最も近いイベントを返す（MSC3030 / timestamp_to_event）。
+///
+/// - dir: "f" → ts 以降で最も古いイベント、"b" → ts 以前で最も新しいイベント
+/// - 返り値: (event_id, origin_server_ts_ms)
+pub async fn get_closest_event(
+    pool: &MySqlPool,
+    room_id: &str,
+    ts_ms: i64,
+    dir: &str,
+) -> Result<Option<(String, i64)>> {
+    use sqlx::Row;
+
+    // created_at を ms に変換して比較する。
+    // UNIX_TIMESTAMP(created_at) は秒精度なので * 1000 して ms にする。
+    // created_at は DATETIME(3) なので小数部も含む。
+    let (cmp_op, order_by) = if dir == "f" {
+        (">=", "ASC")
+    } else {
+        ("<=", "DESC")
+    };
+
+    let sql = format!(
+        r#"SELECT event_id,
+                  CAST(UNIX_TIMESTAMP(created_at) * 1000 AS SIGNED) AS ts_ms
+           FROM events
+           WHERE room_id = ?
+             AND UNIX_TIMESTAMP(created_at) * 1000 {cmp_op} ?
+           ORDER BY created_at {order_by}
+           LIMIT 1"#,
+    );
+
+    let row = sqlx::query(&sql)
+        .bind(room_id)
+        .bind(ts_ms)
+        .fetch_optional(pool)
+        .await?;
+
+    Ok(row.map(|r| (r.get::<String, _>("event_id"), r.get::<i64, _>("ts_ms"))))
+}
+
 /// backfill 用: 指定 event_id より古いイベントを最大 limit 件取得する。
 ///
 /// `v` クエリパラメータで指定された event_id を起点として、それより古い

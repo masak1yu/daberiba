@@ -96,11 +96,34 @@ struct RoomAliasesResponse {
 
 /// GET /_matrix/client/v3/rooms/{roomId}/aliases
 /// ルームに紐づくエイリアス一覧を返す。
+/// room_aliases テーブルのエイリアスに加えて m.room.canonical_alias の
+/// alias / alt_aliases も含める（重複は除く）。
 async fn list_room_aliases(
     State(state): State<AppState>,
     axum::Extension(_user): axum::Extension<AuthUser>,
     Path(room_id): Path<String>,
 ) -> ApiResult<Json<RoomAliasesResponse>> {
-    let aliases = db::room_aliases::list_for_room(&state.pool, &room_id).await?;
+    let mut aliases = db::room_aliases::list_for_room(&state.pool, &room_id).await?;
+
+    // m.room.canonical_alias 状態イベントから alias / alt_aliases も追加
+    if let Ok(Some(content)) =
+        db::room_state::get_event(&state.pool, &room_id, "m.room.canonical_alias", "").await
+    {
+        if let Some(alias) = content.get("alias").and_then(|v| v.as_str()) {
+            if !aliases.contains(&alias.to_string()) {
+                aliases.push(alias.to_string());
+            }
+        }
+        if let Some(alt) = content.get("alt_aliases").and_then(|v| v.as_array()) {
+            for a in alt {
+                if let Some(s) = a.as_str() {
+                    if !aliases.contains(&s.to_string()) {
+                        aliases.push(s.to_string());
+                    }
+                }
+            }
+        }
+    }
+
     Ok(Json(RoomAliasesResponse { aliases }))
 }
