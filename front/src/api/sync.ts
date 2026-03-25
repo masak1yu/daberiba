@@ -18,6 +18,7 @@ export interface JoinedRoom {
   }
   state: { events: MatrixEvent[] }
   account_data: { events: MatrixEvent[] }
+  ephemeral: { events: MatrixEvent[] }
   unread_notifications: {
     notification_count?: number
     highlight_count?: number
@@ -30,6 +31,29 @@ export interface SyncResponse {
     join: Record<string, JoinedRoom>
     leave?: Record<string, unknown>
   }
+}
+
+/**
+ * PUT /_matrix/client/v3/rooms/{roomId}/typing/{userId}
+ * typing=true のとき timeout_ms ミリ秒後に自動クリアされる（サーバー側）
+ */
+export async function sendTyping(
+  homeserver: string,
+  token: string,
+  roomId: string,
+  userId: string,
+  typing: boolean,
+  timeoutMs = 10_000
+): Promise<void> {
+  const body = typing ? { typing: true, timeout: timeoutMs } : { typing: false }
+  await fetch(
+    `${homeserver}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/typing/${encodeURIComponent(userId)}`,
+    {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }
+  )
 }
 
 /** 1回分の /sync リクエスト */

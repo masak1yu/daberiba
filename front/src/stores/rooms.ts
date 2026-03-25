@@ -34,6 +34,8 @@ interface RoomsState {
   historyLoading: Record<string, boolean>
   /** room_id → eventId → { emoji → senders } */
   reactions: Record<string, Reactions>
+  /** room_id → 現在タイピング中のユーザー ID 一覧 */
+  typing: Record<string, string[]>
   syncing: boolean
   error: string | null
 }
@@ -53,6 +55,7 @@ const INITIAL: RoomsState = {
   prevBatches: {},
   historyLoading: {},
   reactions: {},
+  typing: {},
   syncing: false,
   error: null,
 }
@@ -83,11 +86,12 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
   ...INITIAL,
 
   applySyncResponse(resp) {
-    const { rooms: prev, timelines: prevTimelines, prevBatches: prevPB, reactions: prevReactions } = get()
+    const { rooms: prev, timelines: prevTimelines, prevBatches: prevPB, reactions: prevReactions, typing: prevTyping } = get()
     const nextRooms = { ...prev }
     const nextTimelines = { ...prevTimelines }
     const nextPrevBatches = { ...prevPB }
     const nextReactions = { ...prevReactions }
+    const nextTyping = { ...prevTyping }
 
     for (const [roomId, room] of Object.entries(resp.rooms?.join ?? {})) {
       // 状態イベントからルーム名を抽出
@@ -103,6 +107,12 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
 
       nextTimelines[roomId] = [...(nextTimelines[roomId] ?? []), ...msgEvents]
       nextReactions[roomId] = mergeReactions(nextReactions[roomId] ?? {}, reactionEvents)
+
+      // ephemeral: m.typing イベントからタイピング中ユーザーを更新
+      const typingEv = (room.ephemeral?.events ?? []).find((e) => e.type === 'm.typing')
+      if (typingEv) {
+        nextTyping[roomId] = (typingEv.content as { user_ids?: string[] }).user_ids ?? []
+      }
 
       // limited=true のときだけ prev_batch を保存（= 過去ログが遡れる）
       if (room.timeline.limited && room.timeline.prev_batch) {
@@ -126,6 +136,7 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
       timelines: nextTimelines,
       prevBatches: nextPrevBatches,
       reactions: nextReactions,
+      typing: nextTyping,
     })
   },
 

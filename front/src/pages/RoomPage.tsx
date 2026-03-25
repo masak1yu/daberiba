@@ -8,6 +8,7 @@ import { useRoomsStore } from '../stores/rooms'
 import { STORAGE_KEY } from '../api/client'
 import { sendReadReceipt } from '../api/messages'
 import { leaveRoom } from '../api/rooms'
+import { sendTyping } from '../api/sync'
 import { useSwipeBack } from '../hooks/useSwipeBack'
 import AppShell from '../components/layout/AppShell'
 import Timeline from '../components/room/Timeline'
@@ -29,6 +30,7 @@ export default function RoomPage() {
   const historyLoading = useRoomsStore((s) => s.historyLoading)
   const loadHistory = useRoomsStore((s) => s.loadHistory)
   const allReactions = useRoomsStore((s) => s.reactions)
+  const allTyping = useRoomsStore((s) => s.typing)
 
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -36,6 +38,7 @@ export default function RoomPage() {
   const [confirmLeave, setConfirmLeave] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const txnRef = useRef(0)
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const decodedRoomId = roomId ? decodeURIComponent(roomId) : ''
   const events = timelines[decodedRoomId] ?? []
@@ -43,6 +46,8 @@ export default function RoomPage() {
   const hasMore = Boolean(prevBatches[decodedRoomId])
   const isHistoryLoading = historyLoading[decodedRoomId] ?? false
   const reactions = allReactions[decodedRoomId]
+  // 自分以外のタイピング中ユーザー
+  const typingUsers = (allTyping[decodedRoomId] ?? []).filter((id) => id !== userId)
 
   // ルーム入室時・新着イベント受信時に既読送信
   const lastEventIdRef = useRef<string | undefined>()
@@ -62,6 +67,39 @@ export default function RoomPage() {
   const handleLoadMore = useCallback(() => {
     void loadHistory(decodedRoomId)
   }, [decodedRoomId, loadHistory])
+
+  // 入力中に typing=true を送信し、500ms 無入力で typing=false を送る
+  function handleInputChange(value: string) {
+    setInput(value)
+
+    const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
+    const token = localStorage.getItem(STORAGE_KEY.ACCESS_TOKEN)
+    if (!homeserver || !token || !userId) return
+
+    if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
+
+    if (value) {
+      void sendTyping(homeserver, token, decodedRoomId, userId, true)
+      typingTimerRef.current = setTimeout(() => {
+        void sendTyping(homeserver, token, decodedRoomId, userId, false)
+      }, 8_000)
+    } else {
+      void sendTyping(homeserver, token, decodedRoomId, userId, false)
+    }
+  }
+
+  // ルーム離脱時に typing=false を送信してタイマーをクリア
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current)
+      const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
+      const token = localStorage.getItem(STORAGE_KEY.ACCESS_TOKEN)
+      if (homeserver && token && userId) {
+        void sendTyping(homeserver, token, decodedRoomId, userId, false)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [decodedRoomId])
 
   async function handleLeave() {
     const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
@@ -93,6 +131,10 @@ export default function RoomPage() {
     }
 
     try {
+      // 送信直前に typing=false を即時送信
+      if (userId) void sendTyping(homeserver, accessToken, decodedRoomId, userId, false)
+      if (typingTimerRef.current) { clearTimeout(typingTimerRef.current); typingTimerRef.current = null }
+
       // PUT /_matrix/client/v3/rooms/{roomId}/send/m.room.message/{txnId}
       const url = `${homeserver}/_matrix/client/v3/rooms/${encodeURIComponent(decodedRoomId)}/send/m.room.message/${txnId}`
       const res = await fetch(url, {
@@ -144,6 +186,16 @@ export default function RoomPage() {
               onLoadMore={handleLoadMore}
             />
           </div>
+
+          {/* タイピングインジケーター */}
+          {typingUsers.length > 0 && (
+            <div className="shrink-0 px-4 py-1 text-xs text-gray-500">
+              {typingUsers.length === 1
+                ? `${typingUsers[0]} が入力中…`
+                : `${typingUsers.length} 人が入力中…`}
+            </div>
+          )}
+
           <form
             onSubmit={(e) => void handleSend(e)}
             className="shrink-0 border-t border-gray-800 p-3"
@@ -153,7 +205,7 @@ export default function RoomPage() {
               <input
                 type="text"
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => handleInputChange(e.target.value)}
                 placeholder="メッセージを入力…"
                 className="min-w-0 flex-1 rounded-lg bg-gray-800 px-4 py-2 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
