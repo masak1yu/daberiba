@@ -1,4 +1,18 @@
-# Handover — v0.32.0 → v0.33.0
+# Handover — v0.33.0 → v0.34.0
+
+## v0.33.0 でやったこと
+
+- **`GET /timestamp_to_event`** (`server/api/client/timestamp_to_event.rs`, `db/events.rs`):
+  - `/_matrix/client/v1/rooms/{roomId}/timestamp_to_event?ts=<ms>&dir=f|b` — MSC3030 実装。
+  - `dir=f` → ts 以降で最も古いイベント、`dir=b` → ts 以前で最も新しいイベントを返す。
+  - `db::events::get_closest_event()` 新設。`UNIX_TIMESTAMP(created_at) * 1000` で ms 比較。
+
+- **スレッド `latest_event` 拡充** (`server/api/client/threads.rs`):
+  - `/threads` の集計クエリに `latest_ev.event_id` を追加（`MAX(stream_ordering)` と JOIN）。
+  - `unsigned.m.relations.m.thread.latest_event` に完全なイベントオブジェクトを含めるよう変更。
+
+- **`/aliases` に canonical_alias を含める** (`server/api/client/room_aliases.rs`):
+  - `m.room.canonical_alias` 状態イベントの `alias` / `alt_aliases` を重複なしで `aliases` 配列に追加。
 
 ## v0.32.0 でやったこと
 
@@ -69,13 +83,13 @@
 | /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
 | /relations のページネーション | prev_batch は from トークンをそのまま返すのみ（後方ページングは未実装） |
 
-## v0.33.0 候補
+## v0.34.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **`/rooms/{roomId}/timestamp_to_event`** — タイムスタンプから最近傍イベントを検索（MSC3030）
-3. **`/account/3pid`** — メールアドレス等のサードパーティ ID 管理
-4. **`m.room.canonical_alias` 連動** — `/aliases` 応答に `m.room.canonical_alias` 状態イベントの値も含める
-5. **スレッドの latest_event 拡充** — `unsigned.m.relations.m.thread.latest_event` に完全なイベントオブジェクトを含める
+2. **`/account/3pid`** — メールアドレス等のサードパーティ ID 管理
+3. **`/rooms/{roomId}/hierarchy`** — スペース階層取得（MSC2946）
+4. **`/login` の `m.login.token`** — トークンベースのログインフロー追加
+5. **`/rooms/{roomId}/members` の `at` / `membership` フィルタ** — 指定 event_id 時点のメンバーリストや特定ステートのみ取得
 
 ## 開発フロー（おさらい）
 

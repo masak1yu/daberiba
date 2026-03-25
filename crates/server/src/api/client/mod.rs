@@ -23,6 +23,7 @@ pub mod rooms;
 pub mod search;
 pub mod sync;
 pub mod threads;
+pub mod timestamp_to_event;
 pub mod to_device;
 pub mod typing_notif;
 pub mod versions;
