@@ -53,5 +53,27 @@ async fn send_receipt(
         &path.event_id,
     )
     .await?;
+
+    // m.read / m.read.private の場合は通知を既読にし、ハイライトをクリアする
+    if path.receipt_type == "m.read" || path.receipt_type == "m.read.private" {
+        let now_ms = chrono::Utc::now().timestamp_millis();
+        let _ =
+            db::notifications::mark_read_up_to(&state.pool, &user.user_id, &path.room_id, now_ms)
+                .await;
+
+        // event_id の stream_ordering を取得してハイライトをクリア
+        if let Ok(Some(ordering)) =
+            db::events::get_stream_ordering(&state.pool, &path.event_id).await
+        {
+            let _ = db::unread::delete_highlights_up_to(
+                &state.pool,
+                &path.room_id,
+                &user.user_id,
+                ordering,
+            )
+            .await;
+        }
+    }
+
     Ok(StatusCode::OK)
 }

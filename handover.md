@@ -1,25 +1,22 @@
-# Handover — v0.28.0 → v0.29.0
+# Handover — v0.29.0 → v0.30.0
 
-## v0.28.0 でやったこと
+## v0.29.0 でやったこと
 
-- **highlight_count の正確化** (`db/unread.rs`, `server/push_eval.rs`, `server/api/client/events.rs`):
-  - `push_eval::actions_highlight()` を新設し、`set_tweak: highlight` を検出。
-  - `dispatch_push` でハイライト判定されたイベントを `unread_highlights` テーブルに記録。
-  - `db::unread::record_highlight()` 新設 — INSERT IGNORE で冪等な記録。
-  - `get_for_room()` の `highlight_count` を LIKE 検索から `unread_highlights` テーブル参照に変更。
-  - `schema.sql` に `unread_highlights` テーブルを追加。
+- **`GET /notifications`** (`server/api/client/notifications.rs`, `db/notifications.rs`):
+  - プッシュ通知履歴を返す新エンドポイント。
+  - `notifications` テーブル新設（`schema.sql`）。`dispatch_push` が notify アクション発火時に INSERT。
+  - `?from=<id>&limit=<n>` で ID ベースページネーション、`?only=highlight` でハイライトのみフィルタ。
+  - `only=highlight` 時は `unread_highlights` テーブルと突き合わせて判定。
 
-- **`POST /search`** (`server/api/client/search.rs`, `db/events.rs`):
-  - ユーザーが参加しているルームの `m.room.message` イベントを body フィールドで LIKE 検索。
-  - `filter.rooms` で対象ルームを絞り込み可能。`filter.limit` でページサイズ指定（最大 100）。
-  - `db::events::search_room_events()` 新設。
+- **`/search` のページネーション** (`server/api/client/search.rs`, `db/events.rs`):
+  - `?next_batch=<stream_ordering>` クエリパラメータを追加。
+  - `search_room_events()` に `before_ordering: Option<i64>` を追加し、カーソル方式のページネーションを実装。
+  - `limit+1` 件取得してページ継続を判定し、ある場合は `next_batch` フィールドに末尾の `stream_ordering` を返す。
 
-- **`/upgrade` の predecessor event_id 修正** (`server/api/client/rooms.rs`):
-  - 旧ルームの最終 event_id を `get_room_tip()` で取得して `m.room.create.predecessor.event_id` に設定。
-  - 旧ルームにイベントがない場合は空文字列にフォールバック。
-
-- **`db::events::get_stream_ordering()`** 新設:
-  - event_id から stream_ordering を取得するユーティリティ関数。
+- **receipt POST 時の cleanup** (`server/api/client/receipts.rs`, `db/unread.rs`):
+  - `m.read` / `m.read.private` 送信時に `notifications.mark_read_up_to()` で通知を既読にする。
+  - 同時に `unread::delete_highlights_up_to()` でハイライトレコードを削除。
+  - `db::unread::is_highlight()` / `delete_highlights_up_to()` を新設。
 
 ## 既知の課題・技術的負債
 
@@ -33,16 +30,15 @@
 | account_data since のクロックスキュー | `now_ms` はサーバー時刻のため、time-skew でごく稀に差分漏れの可能性 |
 | depth の競合リスク | get_room_tip() と send() の間に他のイベントが挿入された場合、depth が重複する可能性 |
 | /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
-| /search はページネーションなし | next_batch は常に null（全件一括取得のみ） |
-| unread_highlights の cleanup なし | 既読送信後も行が残る（COUNT は receipts と結合して絞るため実害はない） |
+| /notifications の only=highlight | unread_highlights テーブルを二次参照するため、削除済みでも結果が空になる可能性あり |
 
-## v0.29.0 候補
+## v0.30.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **`/search` のページネーション** — next_batch トークンによる続き取得
-3. **`/rooms/{roomId}/threads` エンドポイント** — MSC スレッド対応（m.thread rel_type）
-4. **`/notifications` エンドポイント** — push notification 履歴の取得
-5. **`unread_highlights` の cleanup** — `POST /receipt` 時に古い highlight を削除
+2. **`/rooms/{roomId}/threads` エンドポイント** — MSC スレッド対応（m.thread rel_type）
+3. **`/relations` エンドポイント** — イベントリレーション（編集・リアクション等）の取得
+4. **イベント編集サポート** — `m.replace` rel_type に対応した `/event` / `/messages` の内容置き換え
+5. **`/rooms/{roomId}/read_markers`** — バッチ既読マーカー（`m.read` + `m.fully_read` 一括送信）
 
 ## 開発フロー（おさらい）
 
