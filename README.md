@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.33.0 — Client-Server API Phase 24 (timestamp_to_event, thread latest_event, aliases+canonical) (functional, not production-ready)
+**Status:** v0.34.0 — Client-Server API Phase 25 (m.login.token, /account/3pid, /hierarchy, /members filters) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -24,7 +24,7 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 |---|---|---|
 | GET | `/_matrix/client/versions` | Supported spec versions |
 | GET | `/_matrix/client/v3/login` | Login flows |
-| POST | `/_matrix/client/v3/login` | Login (m.login.password) |
+| POST | `/_matrix/client/v3/login` | Login (m.login.password, m.login.token) |
 | POST | `/_matrix/client/v3/register` | Register |
 | GET | `/_matrix/client/v3/capabilities` | Server capabilities |
 | GET | `/.well-known/matrix/client` | Client discovery |
@@ -33,9 +33,13 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 ### Authenticated
 | Method | Path | Description |
 |---|---|---|
+| POST | `/_matrix/client/v1/login/get_token` | Issue short-lived login token (120 s, single-use) |
 | GET | `/_matrix/client/v3/account/whoami` | Current user |
 | POST | `/_matrix/client/v3/account/password` | Change password (UIA) |
 | POST | `/_matrix/client/v3/account/deactivate` | Deactivate account (UIA) |
+| GET | `/_matrix/client/v3/account/3pids` | List third-party IDs |
+| POST | `/_matrix/client/v3/account/3pid/add` | Add third-party ID (email/msisdn) |
+| POST | `/_matrix/client/v3/account/3pid/delete` | Remove third-party ID |
 | POST | `/_matrix/client/v3/logout` | Logout |
 | POST | `/_matrix/client/v3/logout/all` | Logout all devices |
 | GET | `/_matrix/client/v3/sync` | Sync (stream_ordering cursor, ephemeral events) |
@@ -56,7 +60,7 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | PUT | `/_matrix/client/v3/rooms/{roomId}/state/{type}/{key}` | Send state event (with key) |
 | GET | `/_matrix/client/v3/rooms/{roomId}/state` | Get room state |
 | GET | `/_matrix/client/v3/rooms/{roomId}/state/{type}/{key}` | Get state event |
-| GET | `/_matrix/client/v3/rooms/{roomId}/members` | Room members |
+| GET | `/_matrix/client/v3/rooms/{roomId}/members` | Room members (?membership=&not_membership= filters) |
 | GET | `/_matrix/client/v3/rooms/{roomId}/joined_members` | Joined members |
 | POST | `/_matrix/client/v3/rooms/{roomId}/invite` | Invite user |
 | POST | `/_matrix/client/v3/rooms/{roomId}/kick` | Kick user from room (power level enforced) |
@@ -90,6 +94,7 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET | `/_matrix/client/v3/rooms/{roomId}/aliases` | Room alias list (includes canonical_alias + alt_aliases) |
 | GET | `/_matrix/client/v1/rooms/{roomId}/threads` | Thread list (paginated, include=participated filter, full latest_event in unsigned.m.thread) |
 | GET | `/_matrix/client/v1/rooms/{roomId}/timestamp_to_event` | Nearest event to timestamp (?ts=ms&dir=f\|b) (MSC3030) |
+| GET | `/_matrix/client/v1/rooms/{roomId}/hierarchy` | Space hierarchy (MSC2946, depth 1, suggested_only filter) |
 | POST | `/_matrix/client/v3/user/{userId}/filter` | Create filter |
 | GET | `/_matrix/client/v3/user/{userId}/filter/{filterId}` | Get filter |
 | PUT | `/_matrix/client/v3/sendToDevice/{eventType}/{txnId}` | Send to-device message |
