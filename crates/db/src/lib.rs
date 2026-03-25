@@ -12,6 +12,7 @@ pub mod presence;
 pub mod profile;
 pub mod pushers;
 pub mod receipts;
+pub mod relations;
 pub mod room_aliases;
 pub mod room_keys;
 pub mod room_state;

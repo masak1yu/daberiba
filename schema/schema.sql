@@ -261,6 +261,19 @@ CREATE TABLE IF NOT EXISTS notifications (
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- イベントリレーションテーブル。
+-- m.relates_to を持つイベントを events に挿入する際に同時に記録する。
+-- GET /relations の応答源。
+CREATE TABLE IF NOT EXISTS event_relations (
+    event_id           VARCHAR(255) NOT NULL COMMENT 'リレーション元イベント（新しい側）',
+    room_id            VARCHAR(255) NOT NULL,
+    rel_type           VARCHAR(128) NOT NULL COMMENT 'm.replace / m.reaction / m.thread 等',
+    relates_to_event_id VARCHAR(255) NOT NULL COMMENT 'リレーション先イベント（参照される側）',
+    PRIMARY KEY (event_id),
+    INDEX idx_er_target (relates_to_event_id, rel_type, event_id),
+    FOREIGN KEY (room_id) REFERENCES rooms(room_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS room_key_backup_sessions (
     version             BIGINT UNSIGNED NOT NULL,
     user_id             VARCHAR(255)    NOT NULL,
