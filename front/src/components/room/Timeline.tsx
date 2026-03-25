@@ -8,18 +8,19 @@
  */
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { MatrixEvent } from '../../api/sync'
-import type { Reactions } from '../../stores/rooms'
+import type { MemberNames, Reactions } from '../../stores/rooms'
 
 interface Props {
   events: MatrixEvent[]
   myUserId: string | null
   reactions?: Reactions
+  memberNames?: MemberNames
   hasMore?: boolean
   historyLoading?: boolean
   onLoadMore?: () => void
 }
 
-export default function Timeline({ events, myUserId, reactions, hasMore, historyLoading, onLoadMore }: Props) {
+export default function Timeline({ events, myUserId, reactions, memberNames, hasMore, historyLoading, onLoadMore }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
@@ -101,11 +102,12 @@ export default function Timeline({ events, myUserId, reactions, hasMore, history
           })
           const eventReactions = ev.event_id ? (reactions?.[ev.event_id] ?? {}) : {}
           const reactionEntries = Object.entries(eventReactions)
+          const senderName = (ev.sender && memberNames?.[ev.sender]) ?? ev.sender ?? ''
 
           return (
             <div key={ev.event_id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
               <div className={`flex max-w-[75%] flex-col ${isMine ? 'items-end' : 'items-start'}`}>
-                {!isMine && <span className="mb-0.5 text-xs text-gray-500">{ev.sender}</span>}
+                {!isMine && <span className="mb-0.5 text-xs text-gray-500">{senderName}</span>}
                 <div
                   className={`break-words rounded-2xl px-3 py-2 text-sm ${
                     isMine

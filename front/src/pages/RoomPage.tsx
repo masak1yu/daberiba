@@ -31,6 +31,7 @@ export default function RoomPage() {
   const loadHistory = useRoomsStore((s) => s.loadHistory)
   const allReactions = useRoomsStore((s) => s.reactions)
   const allTyping = useRoomsStore((s) => s.typing)
+  const allMemberNames = useRoomsStore((s) => s.memberNames)
 
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -46,8 +47,11 @@ export default function RoomPage() {
   const hasMore = Boolean(prevBatches[decodedRoomId])
   const isHistoryLoading = historyLoading[decodedRoomId] ?? false
   const reactions = allReactions[decodedRoomId]
-  // 自分以外のタイピング中ユーザー
-  const typingUsers = (allTyping[decodedRoomId] ?? []).filter((id) => id !== userId)
+  const memberNames = allMemberNames[decodedRoomId]
+  // 自分以外のタイピング中ユーザー（displayName 優先で表示）
+  const typingUsers = (allTyping[decodedRoomId] ?? [])
+    .filter((id) => id !== userId)
+    .map((id) => memberNames?.[id] ?? id)
 
   // ルーム入室時・新着イベント受信時に既読送信
   const lastEventIdRef = useRef<string | undefined>()
@@ -181,6 +185,7 @@ export default function RoomPage() {
               events={events}
               myUserId={userId}
               reactions={reactions}
+              memberNames={memberNames}
               hasMore={hasMore}
               historyLoading={isHistoryLoading}
               onLoadMore={handleLoadMore}
