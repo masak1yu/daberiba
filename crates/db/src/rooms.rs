@@ -100,6 +100,63 @@ pub async fn get_members(pool: &MySqlPool, room_id: &str) -> Result<Vec<serde_js
         .collect())
 }
 
+/// membership / not_membership フィルタ付きメンバー一覧を返す。
+/// どちらも None の場合は全メンバーを返す（既存 get_members 相当）。
+pub async fn get_members_filtered(
+    pool: &MySqlPool,
+    room_id: &str,
+    membership: Option<&str>,
+    not_membership: Option<&str>,
+) -> Result<Vec<serde_json::Value>> {
+    use sqlx::Row;
+
+    // 動的 WHERE 句を構築する。
+    let mut conditions = vec!["rm.room_id = ?"];
+    if membership.is_some() {
+        conditions.push("rm.membership = ?");
+    }
+    if not_membership.is_some() {
+        conditions.push("rm.membership != ?");
+    }
+
+    let sql = format!(
+        r#"SELECT rm.user_id, rm.membership, u.display_name, u.avatar_url
+           FROM room_memberships rm
+           JOIN users u ON u.user_id = rm.user_id
+           WHERE {}"#,
+        conditions.join(" AND ")
+    );
+
+    let mut q = sqlx::query(&sql).bind(room_id);
+    if let Some(m) = membership {
+        q = q.bind(m);
+    }
+    if let Some(nm) = not_membership {
+        q = q.bind(nm);
+    }
+
+    let rows = q.fetch_all(pool).await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| {
+            let user_id: String = r.get("user_id");
+            let membership: String = r.get("membership");
+            let display_name: Option<String> = r.get("display_name");
+            let avatar_url: Option<String> = r.get("avatar_url");
+            serde_json::json!({
+                "type": "m.room.member",
+                "state_key": user_id,
+                "content": {
+                    "membership": membership,
+                    "displayname": display_name,
+                    "avatar_url": avatar_url,
+                },
+            })
+        })
+        .collect())
+}
+
 pub async fn get_joined_members(
     pool: &MySqlPool,
     room_id: &str,

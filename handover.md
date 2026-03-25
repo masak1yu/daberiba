@@ -1,4 +1,30 @@
-# Handover — v0.33.0 → v0.34.0
+# Handover — v0.34.0 → v0.35.0
+
+## v0.34.0 でやったこと
+
+- **`m.login.token` フロー** (`server/api/client/auth.rs`, `db/login_tokens.rs`, `schema.sql`):
+  - `POST /_matrix/client/v1/login/get_token` — 認証済みセッションから 120 秒有効・シングルユースのログイントークンを発行。
+  - `POST /_matrix/client/v3/login` に `type: "m.login.token"` を追加。トークン消費後に新デバイス + アクセストークンを発行。
+  - `login_tokens` テーブル新設（`token`, `user_id`, `expires_at`, `used`）。
+  - `GET /login` の `flows` に `m.login.token` を追加。
+
+- **`/account/3pid` 管理** (`server/api/client/threepids.rs`, `db/threepids.rs`, `schema.sql`):
+  - `GET /_matrix/client/v3/account/3pids` — ユーザーに紐づく 3pid 一覧を返す。
+  - `POST /_matrix/client/v3/account/3pid/add` — 3pid（email/msisdn）を直接登録（identity server バリデーションなし）。
+  - `POST /_matrix/client/v3/account/3pid/delete` — 3pid を削除。レスポンスは `id_server_unbind_result: "no-support"`。
+  - `user_threepids` テーブル新設（`medium + address` PK, `user_id`, `validated_at`, `added_at`）。
+
+- **`GET /rooms/{roomId}/hierarchy`** (`server/api/client/hierarchy.rs`):
+  - `/_matrix/client/v1/rooms/{roomId}/hierarchy` — スペース階層取得（MSC2946）。
+  - `m.space.child` 状態イベントを走査してチルドレンを 1 層分列挙。
+  - `?suggested_only=true` で `content.suggested=true` の子のみ返す。
+  - `?from=<room_id>&limit=<n>` によるカーソルページネーション。
+  - レスポンスに `room_type`, `world_readable`, `guest_can_join`, `join_rule`, `children_state` を含む。
+
+- **`/rooms/{roomId}/members` フィルタ** (`server/api/client/room_state.rs`, `db/rooms.rs`):
+  - `?membership=<value>` — 特定 membership ステートのメンバーのみ返す（join / leave / invite / ban 等）。
+  - `?not_membership=<value>` — 指定 membership を除外する。
+  - `db::rooms::get_members_filtered()` 新設（動的 WHERE 句で両フィルタを組み合わせ可能）。
 
 ## v0.33.0 でやったこと
 
@@ -82,14 +108,18 @@
 | depth の競合リスク | get_room_tip() と send() の間に他のイベントが挿入された場合、depth が重複する可能性 |
 | /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
 | /relations のページネーション | prev_batch は from トークンをそのまま返すのみ（後方ページングは未実装） |
+| /hierarchy は深さ 1 層のみ | 再帰的なスペース階層探索は未実装 |
+| 3pid バリデーションなし | identity server 連携なし。登録は直接 INSERT のみ（メール確認なし） |
+| login_tokens クリーンアップ | `purge_expired()` は実装済みだが定期実行はなし（起動時 or cron での呼び出しが必要） |
+| /members の at フィルタ未実装 | 指定 event_id 時点のメンバースナップショット取得は未実装（membership フィルタのみ対応） |
 
-## v0.34.0 候補
+## v0.35.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **`/account/3pid`** — メールアドレス等のサードパーティ ID 管理
-3. **`/rooms/{roomId}/hierarchy`** — スペース階層取得（MSC2946）
-4. **`/login` の `m.login.token`** — トークンベースのログインフロー追加
-5. **`/rooms/{roomId}/members` の `at` / `membership` フィルタ** — 指定 event_id 時点のメンバーリストや特定ステートのみ取得
+2. **`/rooms/{roomId}/members` の `at` フィルタ** — 指定 stream_ordering 時点のメンバースナップショット（events テーブルから再構築）
+3. **`/hierarchy` の再帰探索** — 深さ n 層まで再帰的にスペース階層を展開
+4. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
+5. **`/rooms/{roomId}/messages` の lazy-loading** — `lazy_load_members` フィルタ対応
 
 ## 開発フロー（おさらい）
 

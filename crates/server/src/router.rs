@@ -12,6 +12,7 @@ pub fn build(state: AppState) -> Router {
 
     // 認証必須ルート
     let protected = Router::new()
+        .merge(api::client::auth::protected_routes())
         .merge(api::client::account::routes())
         .merge(api::client::account_data::routes())
         .merge(api::client::filters::routes())
@@ -36,8 +37,10 @@ pub fn build(state: AppState) -> Router {
         .merge(api::client::notifications::routes())
         .merge(api::client::relations::routes())
         .merge(api::client::read_markers::routes())
+        .merge(api::client::threepids::routes())
         .merge(api::client::threads::routes())
         .merge(api::client::timestamp_to_event::routes())
+        .merge(api::client::hierarchy::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // メディアルート（認証必須）
