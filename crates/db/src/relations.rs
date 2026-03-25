@@ -1,5 +1,6 @@
 use anyhow::Result;
 use sqlx::MySqlPool;
+use std::collections::HashMap;
 
 /// m.relates_to を持つイベントのリレーション情報を記録する。
 /// 既に同一 event_id が存在する場合は無視する（INSERT IGNORE）。
@@ -21,6 +22,111 @@ pub async fn record(
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// イベント ID のリストに対して `unsigned.m.relations` の集計データを一括取得する。
+///
+/// 返り値: event_id -> { "m.replace": {...}, "m.reaction": {"chunk": [...]} }
+/// - m.replace: stream_ordering 最大の置換イベント（event_id / sender / origin_server_ts）
+/// - m.reaction: key ごとの件数リスト
+pub async fn get_aggregations_batch(
+    pool: &MySqlPool,
+    event_ids: &[String],
+) -> Result<HashMap<String, serde_json::Value>> {
+    use sqlx::Row;
+
+    if event_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let placeholders = event_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+
+    // --- m.replace: 最新の置換イベントを取得 ---
+    let replace_sql = format!(
+        r#"SELECT er.relates_to_event_id,
+                  e.event_id, e.sender,
+                  e.created_at
+           FROM event_relations er
+           INNER JOIN events e ON e.event_id = er.event_id
+           WHERE er.relates_to_event_id IN ({placeholders})
+             AND er.rel_type = 'm.replace'
+           ORDER BY e.stream_ordering DESC"#,
+    );
+    let mut q = sqlx::query(&replace_sql);
+    for id in event_ids {
+        q = q.bind(id);
+    }
+    let replace_rows = q.fetch_all(pool).await?;
+
+    // relates_to_event_id ごとに最初の行（= stream_ordering 最大）を採用
+    let mut replace_map: HashMap<String, serde_json::Value> = HashMap::new();
+    for row in &replace_rows {
+        let target: String = row.get("relates_to_event_id");
+        replace_map.entry(target).or_insert_with(|| {
+            serde_json::json!({
+                "event_id": row.get::<String, _>("event_id"),
+                "sender": row.get::<String, _>("sender"),
+                "origin_server_ts": row.get::<chrono::NaiveDateTime, _>("created_at")
+                    .and_utc()
+                    .timestamp_millis(),
+            })
+        });
+    }
+
+    // --- m.reaction: key ごとの件数 ---
+    let reaction_sql = format!(
+        r#"SELECT er.relates_to_event_id,
+                  JSON_UNQUOTE(JSON_EXTRACT(e.content, '$."m.relates_to".key')) AS reaction_key,
+                  COUNT(*) AS cnt
+           FROM event_relations er
+           INNER JOIN events e ON e.event_id = er.event_id
+           WHERE er.relates_to_event_id IN ({placeholders})
+             AND er.rel_type = 'm.reaction'
+           GROUP BY er.relates_to_event_id, reaction_key"#,
+    );
+    let mut q = sqlx::query(&reaction_sql);
+    for id in event_ids {
+        q = q.bind(id);
+    }
+    let reaction_rows = q.fetch_all(pool).await?;
+
+    // relates_to_event_id ごとに chunk を組み立て
+    let mut reaction_map: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+    for row in &reaction_rows {
+        let target: String = row.get("relates_to_event_id");
+        let key: Option<String> = row.try_get("reaction_key").ok().flatten();
+        let cnt: i64 = row.get("cnt");
+        if let Some(k) = key {
+            reaction_map
+                .entry(target)
+                .or_default()
+                .push(serde_json::json!({
+                    "type": "m.reaction",
+                    "key": k,
+                    "count": cnt,
+                }));
+        }
+    }
+
+    // --- 集計結果を event_id ごとにまとめる ---
+    let mut result: HashMap<String, serde_json::Value> = HashMap::new();
+    for id in event_ids {
+        let mut relations = serde_json::Map::new();
+        if let Some(rep) = replace_map.get(id) {
+            relations.insert("m.replace".to_string(), rep.clone());
+        }
+        if let Some(chunk) = reaction_map.get(id) {
+            relations.insert(
+                "m.reaction".to_string(),
+                serde_json::json!({ "chunk": chunk }),
+            );
+        }
+        if !relations.is_empty() {
+            result.insert(id.clone(), serde_json::Value::Object(relations));
+        }
+    }
+
+    Ok(result)
 }
 
 pub struct RelationPage {

@@ -1,4 +1,14 @@
-# Handover — v0.30.0 → v0.31.0
+# Handover — v0.31.0 → v0.32.0
+
+## v0.31.0 でやったこと
+
+- **`unsigned.m.relations` 集計** (`db/relations.rs`, `db/events.rs`):
+  - `relations::get_aggregations_batch(pool, event_ids)` を新設。複数 event_id を一括で集計。
+  - **m.replace**: 最新の置換イベント（event_id / sender / origin_server_ts）を返す。
+  - **m.reaction**: emoji key ごとの件数リスト `{"chunk": [{"type": "m.reaction", "key": "👍", "count": 3}]}` を返す。
+  - `db::events::get_by_id()` — `unsigned.m.relations` を付与して返す。
+  - `db::events::get_messages()` — 全イベントを一括集計して `unsigned.m.relations` を付与。
+  - `db::events::get_context()` — 前後イベントに同様の集計を付与。
 
 ## v0.30.0 でやったこと
 
@@ -46,13 +56,13 @@
 | /context の state フィールド | 現在は空配列を返している（指定時点のルームスナップショットは未実装） |
 | /relations のページネーション | prev_batch は from トークンをそのまま返すのみ（後方ページングは未実装） |
 
-## v0.31.0 候補
+## v0.32.0 候補
 
-1. **イベント編集（m.replace）** — `/event` / `/messages` で最新の `m.replace` を反映した content を返す
-2. **リアクション集計（m.reaction）** — `/event` の `unsigned.m.relations` にリアクション件数を含める
-3. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-4. **スレッド対応** — `m.thread` rel_type を使ったスレッドの取得（`/relations` は既に対応済み）
-5. **`/rooms/{roomId}/threads`** — スレッド一覧エンドポイント（MSC3856）
+1. **`/rooms/{roomId}/threads`** — スレッド一覧エンドポイント（MSC3856 / v1 API）
+2. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
+3. **`/account/3pid`** — メールアドレス等のサードパーティ ID 管理
+4. **`/login/sso`** — SSO ログインフロー（MSC2858）
+5. **`/rooms/{roomId}/aliases`** — ルームのエイリアス一覧（`m.room.canonical_alias` 対応）
 
 ## 開発フロー（おさらい）
 
