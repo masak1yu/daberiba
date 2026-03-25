@@ -20,7 +20,7 @@ jobs:
       - name: Read version from Cargo.toml
         id: version
         run: |
-          VERSION=$(grep '^version' crates/server/Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -63,12 +63,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Bump version in both crates
-          sed -i "s/^version = \"${VERSION}\"/version = \"${NEXT_VERSION}\"/" crates/db/Cargo.toml
-          sed -i "s/^version = \"${VERSION}\"/version = \"${NEXT_VERSION}\"/" crates/server/Cargo.toml
+          # Bump version in workspace root Cargo.toml
+          sed -i "s/^version = \"${VERSION}\"/version = \"${NEXT_VERSION}\"/" Cargo.toml
 
           git checkout -b "$NEXT_BRANCH"
-          git add crates/db/Cargo.toml crates/server/Cargo.toml
+          git add Cargo.toml
           git commit -m "chore: bump version to ${NEXT_VERSION}"
           git push origin "$NEXT_BRANCH"
           echo "Created branch $NEXT_BRANCH with version ${NEXT_VERSION}"
