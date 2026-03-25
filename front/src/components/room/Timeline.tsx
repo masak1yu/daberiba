@@ -5,10 +5,13 @@
  * - 上端センチネルの IntersectionObserver で過去ログを遡り読み込み
  * - 過去ログ挿入後はスクロール位置を復元して表示位置が飛ばないようにする
  * - リアクション（m.reaction）を絵文字バッジとして吹き出し下に表示
+ * - m.image はサムネイル表示、m.file はダウンロードリンク表示
  */
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { MatrixEvent } from '../../api/sync'
 import type { MemberNames, Reactions } from '../../stores/rooms'
+import { mxcToHttp, mxcToThumbnail } from '../../api/media'
+import { STORAGE_KEY } from '../../api/client'
 
 interface Props {
   events: MatrixEvent[]
@@ -18,6 +21,48 @@ interface Props {
   hasMore?: boolean
   historyLoading?: boolean
   onLoadMore?: () => void
+}
+
+/** msgtype ごとのバブル内コンテンツ */
+function MessageContent({ content }: { content: Record<string, unknown> }) {
+  const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER) ?? ''
+  const msgtype = String(content.msgtype ?? '')
+  const body = String(content.body ?? '')
+
+  if (msgtype === 'm.image') {
+    const mxc = String(content.url ?? '')
+    const src = mxc.startsWith('mxc://') ? mxcToThumbnail(mxc, homeserver) : mxc
+    return (
+      <a href={mxcToHttp(mxc, homeserver)} target="_blank" rel="noopener noreferrer">
+        <img
+          src={src}
+          alt={body}
+          className="max-h-60 max-w-full rounded-lg object-cover"
+          loading="lazy"
+        />
+      </a>
+    )
+  }
+
+  if (msgtype === 'm.file' || msgtype === 'm.audio' || msgtype === 'm.video') {
+    const mxc = String(content.url ?? '')
+    const href = mxc.startsWith('mxc://') ? mxcToHttp(mxc, homeserver) : mxc
+    const icon = msgtype === 'm.audio' ? '🎵' : msgtype === 'm.video' ? '🎬' : '📎'
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-1.5 underline underline-offset-2"
+      >
+        <span>{icon}</span>
+        <span className="break-all">{body}</span>
+      </a>
+    )
+  }
+
+  // m.text / m.notice / その他 — 改行保持
+  return <span className="whitespace-pre-wrap">{body}</span>
 }
 
 export default function Timeline({ events, myUserId, reactions, memberNames, hasMore, historyLoading, onLoadMore }: Props) {
@@ -95,7 +140,6 @@ export default function Timeline({ events, myUserId, reactions, memberNames, has
       <div className="flex flex-col gap-2 p-4">
         {events.map((ev) => {
           const isMine = ev.sender === myUserId
-          const body = String((ev.content as { body?: string }).body ?? '')
           const time = new Date(ev.origin_server_ts ?? 0).toLocaleTimeString('ja-JP', {
             hour: '2-digit',
             minute: '2-digit',
@@ -115,7 +159,7 @@ export default function Timeline({ events, myUserId, reactions, memberNames, has
                       : 'rounded-bl-sm bg-gray-800 text-gray-100'
                   }`}
                 >
-                  {body}
+                  <MessageContent content={ev.content} />
                 </div>
 
                 {/* リアクションバッジ */}
