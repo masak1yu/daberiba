@@ -328,3 +328,25 @@ CREATE TABLE IF NOT EXISTS event_reports (
     INDEX idx_event_reports_user (user_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- クロスサイニングキーテーブル。POST /keys/device_signing/upload で登録する。
+-- key_type: 'master' | 'self_signing' | 'user_signing'
+CREATE TABLE IF NOT EXISTS cross_signing_keys (
+    user_id  VARCHAR(255) NOT NULL,
+    key_type VARCHAR(32)  NOT NULL COMMENT 'master | self_signing | user_signing',
+    key_json MEDIUMTEXT   NOT NULL COMMENT 'JSON',
+    PRIMARY KEY (user_id, key_type),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- キー署名テーブル。POST /keys/signatures/upload でアップロードされた署名を保存する。
+-- signer_user_id が target_user_id の key_id に署名した内容。
+CREATE TABLE IF NOT EXISTS key_signatures (
+    signer_user_id VARCHAR(255) NOT NULL,
+    target_user_id VARCHAR(255) NOT NULL,
+    key_id         VARCHAR(255) NOT NULL COMMENT 'device_id or cross-signing key ID',
+    signature_json MEDIUMTEXT   NOT NULL COMMENT 'JSON (署名付きキーオブジェクト全体)',
+    PRIMARY KEY (signer_user_id, target_user_id, key_id),
+    INDEX idx_key_signatures_target (target_user_id, key_id),
+    FOREIGN KEY (signer_user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

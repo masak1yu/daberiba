@@ -198,6 +198,77 @@ pub async fn get_left_users(
         .collect())
 }
 
+/// クロスサイニングキーをアップロード / 更新
+pub async fn upload_cross_signing_keys(
+    pool: &MySqlPool,
+    user_id: &str,
+    key_type: &str,
+    key_json: &str,
+) -> Result<()> {
+    sqlx::query(
+        r#"INSERT INTO cross_signing_keys (user_id, key_type, key_json)
+           VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE key_json = VALUES(key_json)"#,
+    )
+    .bind(user_id)
+    .bind(key_type)
+    .bind(key_json)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// ユーザーのクロスサイニングキーを全種類取得
+pub async fn get_cross_signing_keys(
+    pool: &MySqlPool,
+    user_id: &str,
+) -> Result<Vec<(String, String)>> {
+    let rows: Vec<(String, String)> =
+        sqlx::query_as("SELECT key_type, key_json FROM cross_signing_keys WHERE user_id = ?")
+            .bind(user_id)
+            .fetch_all(pool)
+            .await?;
+    Ok(rows)
+}
+
+/// キー署名をアップロード / 更新
+pub async fn upload_key_signature(
+    pool: &MySqlPool,
+    signer_user_id: &str,
+    target_user_id: &str,
+    key_id: &str,
+    signature_json: &str,
+) -> Result<()> {
+    sqlx::query(
+        r#"INSERT INTO key_signatures (signer_user_id, target_user_id, key_id, signature_json)
+           VALUES (?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE signature_json = VALUES(signature_json)"#,
+    )
+    .bind(signer_user_id)
+    .bind(target_user_id)
+    .bind(key_id)
+    .bind(signature_json)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// 対象ユーザーのキーに対する署名一覧を取得
+pub async fn get_key_signatures(
+    pool: &MySqlPool,
+    target_user_id: &str,
+    key_id: &str,
+) -> Result<Vec<(String, String)>> {
+    let rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT signer_user_id, signature_json FROM key_signatures WHERE target_user_id = ? AND key_id = ?",
+    )
+    .bind(target_user_id)
+    .bind(key_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
 /// デバイスごとのワンタイム鍵残数（POST /keys/upload のレスポンス用）
 pub async fn count_one_time_keys(
     pool: &MySqlPool,

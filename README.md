@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.39.0 — Client-Server API Phase 30 (capabilities expansion, publicRooms pagination/filter/POST, room upgrade copies name/topic/avatar) (functional, not production-ready)
+**Status:** v0.40.0 — Client-Server API Phase 31 (cross-signing keys, GET /keys/changes, presence delta in sync) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -99,8 +99,11 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET | `/_matrix/client/v3/user/{userId}/filter/{filterId}` | Get filter |
 | PUT | `/_matrix/client/v3/sendToDevice/{eventType}/{txnId}` | Send to-device message |
 | POST | `/_matrix/client/v3/keys/upload` | Upload device keys / one-time keys |
-| POST | `/_matrix/client/v3/keys/query` | Query device keys for users |
+| POST | `/_matrix/client/v3/keys/query` | Query device keys + cross-signing keys for users |
 | POST | `/_matrix/client/v3/keys/claim` | Claim one-time keys |
+| GET | `/_matrix/client/v3/keys/changes` | Users with changed keys between two sync tokens |
+| POST | `/_matrix/client/v3/keys/device_signing/upload` | Upload cross-signing keys (master/self_signing/user_signing) |
+| POST | `/_matrix/client/v3/keys/signatures/upload` | Upload key signatures |
 | GET/PUT | `/_matrix/client/v3/user/{userId}/account_data/{type}` | Global account data |
 | GET/PUT | `/_matrix/client/v3/user/{userId}/rooms/{roomId}/account_data/{type}` | Room account data |
 | GET | `/_matrix/client/v3/pushrules/` | Get all push rules |

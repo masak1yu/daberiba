@@ -51,6 +51,41 @@ pub async fn get(pool: &MySqlPool, user_id: &str) -> Result<Option<PresenceStatu
     ))
 }
 
+/// since_ms 以降に更新されたプレゼンスのみ取得（sync デルタ用）。
+/// user_ids が空の場合は空を返す。
+pub async fn get_changed_since(
+    pool: &MySqlPool,
+    user_ids: &[String],
+    since_ms: i64,
+) -> Result<Vec<PresenceStatus>> {
+    if user_ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let placeholders = user_ids.iter().map(|_| "?").collect::<Vec<_>>().join(", ");
+    let sql = format!(
+        "SELECT user_id, presence, status_msg, last_active_ts
+         FROM presence
+         WHERE user_id IN ({placeholders}) AND last_active_ts > ?"
+    );
+    let mut q = sqlx::query_as::<_, (String, String, Option<String>, i64)>(&sql);
+    for uid in user_ids {
+        q = q.bind(uid);
+    }
+    q = q.bind(since_ms);
+    let rows = q.fetch_all(pool).await?;
+    Ok(rows
+        .into_iter()
+        .map(
+            |(user_id, presence, status_msg, last_active_ts)| PresenceStatus {
+                user_id,
+                presence,
+                status_msg,
+                last_active_ts,
+            },
+        )
+        .collect())
+}
+
 /// ルームのメンバー全員のプレゼンスを取得（sync 用）。
 /// presence レコードがないユーザーは "offline" をデフォルトとして返す。
 pub async fn get_for_room_members(pool: &MySqlPool, room_id: &str) -> Result<Vec<PresenceStatus>> {
