@@ -13,6 +13,7 @@ use aws_sdk_s3::primitives::ByteStream;
 pub trait MediaStore: Send + Sync {
     async fn store(&self, media_id: &str, data: Bytes) -> Result<()>;
     async fn fetch(&self, media_id: &str) -> Result<Option<Bytes>>;
+    async fn delete(&self, media_id: &str) -> Result<()>;
 }
 
 /// ローカルファイルシステムへの保存実装
@@ -54,6 +55,15 @@ impl MediaStore for LocalStore {
             Err(e) => Err(e.into()),
         }
     }
+
+    async fn delete(&self, media_id: &str) -> Result<()> {
+        let path = self.path_for(media_id);
+        match tokio::fs::remove_file(&path).await {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e.into()),
+        }
+    }
 }
 
 /// S3 互換ストレージへの保存実装
@@ -89,6 +99,17 @@ impl MediaStore for S3Store {
             .send()
             .await
             .map_err(|e| anyhow::anyhow!("S3 put error: {e}"))?;
+        Ok(())
+    }
+
+    async fn delete(&self, media_id: &str) -> Result<()> {
+        self.client
+            .delete_object()
+            .bucket(&self.bucket)
+            .key(media_id)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("S3 delete error: {e}"))?;
         Ok(())
     }
 
