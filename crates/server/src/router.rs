@@ -42,6 +42,8 @@ pub fn build(state: AppState) -> Router {
         .merge(api::client::timestamp_to_event::routes())
         .merge(api::client::hierarchy::routes())
         .merge(api::client::admin::routes())
+        .merge(api::client::openid::routes())
+        .merge(api::client::room_summary::routes())
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
     // メディアルート（認証必須）
@@ -59,7 +61,8 @@ pub fn build(state: AppState) -> Router {
         .merge(api::federation::invite::routes())
         .merge(api::federation::send_transaction::routes())
         .merge(api::federation::get_event::routes())
-        .merge(api::federation::backfill::routes());
+        .merge(api::federation::backfill::routes())
+        .merge(api::federation::openid::routes());
 
     // サーバー公開鍵（認証不要）
     let server_keys = api::server_keys::routes();

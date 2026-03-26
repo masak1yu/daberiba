@@ -1,4 +1,20 @@
-# Handover — v0.40.0 → v0.41.0
+# Handover — v0.41.0 → v0.42.0
+
+## v0.41.0 でやったこと
+
+- **OpenID Connect トークン発行** (`schema/schema.sql`, `db/openid_tokens.rs`, `server/api/client/openid.rs`, `server/api/federation/openid.rs`):
+  - `openid_tokens` テーブル新設 (`token`, `user_id`, `expires_at`)。有効期限 3600 秒。
+  - `db::openid_tokens::create()` — UUID トークンを発行して保存。
+  - `db::openid_tokens::verify()` — トークンの有効性確認と user_id 取得。期限切れは None。
+  - `db::openid_tokens::purge_expired()` — 期限切れトークンの削除（クリーンアップ用）。
+  - `POST /_matrix/client/v3/user/{userId}/openid/request_token` — 自分専用に `{ access_token, token_type: "Bearer", matrix_server_name, expires_in: 3600 }` を返す。
+  - `GET /_matrix/federation/v1/openid/userinfo?access_token=<token>` — 外部サービスがトークンを検証して `{ sub: "@user:server" }` を取得。
+
+- **ルームサマリー** (`db/rooms.rs`, `server/api/client/room_summary.rs`):
+  - `db::rooms::get_membership()` 新設。ユーザーのルームに対する membership を取得。
+  - `GET /_matrix/client/v1/rooms/{roomId}/summary` (MSC3266) を新設。
+  - `m.room.name`, `m.room.topic`, `m.room.avatar`, `m.room.join_rules`, `m.room.canonical_alias`, `m.room.create`, `m.room.encryption`, `m.room.guest_access` を `tokio::join!` で並列取得。
+  - `num_joined_members`, `join_rule`, `world_readable`, `guest_can_join`, `membership` (リクエストユーザーの) を返す。フィールドが存在する場合のみレスポンスに含める。
 
 ## v0.40.0 でやったこと
 
@@ -236,13 +252,13 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.41.0 候補
+## v0.42.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
 2. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
 3. **`/publicRooms` の cross-server 対応** — `?server=` パラメータで他サーバへプロキシ（federation 経由）
-4. **`/user/{userId}/openid/request_token`** — OpenID Connect トークン発行
-5. **`/rooms/{roomId}/summary`** — ルームサマリー（MSC3266 / v1 API）
+4. **`/rooms/{roomId}/knock`** — ノック（入室申請）フロー（MSC2403）
+5. **`/login/sso/redirect` ウィジェット認証** — OpenID トークンを使ったウィジェット認証フロー
 
 ## 開発フロー（おさらい）
 
