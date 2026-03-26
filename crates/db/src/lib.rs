@@ -9,6 +9,7 @@ pub mod keys;
 pub mod login_tokens;
 pub mod media;
 pub mod notifications;
+pub mod openid_tokens;
 pub mod presence;
 pub mod profile;
 pub mod pushers;

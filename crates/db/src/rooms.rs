@@ -548,6 +548,21 @@ pub async fn forget(pool: &MySqlPool, room_id: &str, user_id: &str) -> Result<()
     Ok(())
 }
 
+/// ユーザーのルームに対する membership を取得する。レコードがない場合は None。
+pub async fn get_membership(
+    pool: &MySqlPool,
+    room_id: &str,
+    user_id: &str,
+) -> Result<Option<String>> {
+    let row: Option<(String,)> =
+        sqlx::query_as("SELECT membership FROM room_memberships WHERE room_id = ? AND user_id = ?")
+            .bind(room_id)
+            .bind(user_id)
+            .fetch_optional(pool)
+            .await?;
+    Ok(row.map(|(m,)| m))
+}
+
 /// 全ルーム一覧を返す（管理者向け）。joined_members 数と creator を含む。
 pub async fn list_all(pool: &MySqlPool) -> Result<Vec<serde_json::Value>> {
     use sqlx::Row;

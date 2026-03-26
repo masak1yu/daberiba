@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.40.0 — Client-Server API Phase 31 (cross-signing keys, GET /keys/changes, presence delta in sync) (functional, not production-ready)
+**Status:** v0.41.0 — Client-Server API Phase 32 (OpenID token, room summary MSC3266, federation userinfo) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -104,6 +104,8 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET | `/_matrix/client/v3/keys/changes` | Users with changed keys between two sync tokens |
 | POST | `/_matrix/client/v3/keys/device_signing/upload` | Upload cross-signing keys (master/self_signing/user_signing) |
 | POST | `/_matrix/client/v3/keys/signatures/upload` | Upload key signatures |
+| POST | `/_matrix/client/v3/user/{userId}/openid/request_token` | Issue OpenID token (3rd-party identity verification) |
+| GET | `/_matrix/client/v1/rooms/{roomId}/summary` | Room summary / preview (MSC3266) |
 | GET/PUT | `/_matrix/client/v3/user/{userId}/account_data/{type}` | Global account data |
 | GET/PUT | `/_matrix/client/v3/user/{userId}/rooms/{roomId}/account_data/{type}` | Room account data |
 | GET | `/_matrix/client/v3/pushrules/` | Get all push rules |
@@ -143,6 +145,7 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | PUT | `/_matrix/federation/v1/send/:txn_id` | Receive transaction (PDU sig verified, state resolution) |
 | GET | `/_matrix/federation/v1/event/:event_id` | Fetch event by ID |
 | GET | `/_matrix/federation/v1/backfill/:room_id` | Fetch historical events (backfill) |
+| GET | `/_matrix/federation/v1/openid/userinfo` | Validate OpenID token, return Matrix user_id |
 
 ## Getting Started
 

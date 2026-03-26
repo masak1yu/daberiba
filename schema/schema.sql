@@ -350,3 +350,14 @@ CREATE TABLE IF NOT EXISTS key_signatures (
     INDEX idx_key_signatures_target (target_user_id, key_id),
     FOREIGN KEY (signer_user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- OpenID Connect トークンテーブル。POST /user/{userId}/openid/request_token で発行する。
+-- 有効期限 3600 秒・複数回利用可（federation userinfo で検証する）。
+CREATE TABLE IF NOT EXISTS openid_tokens (
+    token      VARCHAR(255) NOT NULL,
+    user_id    VARCHAR(255) NOT NULL,
+    expires_at BIGINT       NOT NULL COMMENT 'Unix milliseconds',
+    PRIMARY KEY (token),
+    INDEX idx_openid_tokens_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
