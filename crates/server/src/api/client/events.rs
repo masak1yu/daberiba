@@ -41,7 +41,7 @@ struct SendEventPath {
     #[serde(rename = "eventType")]
     event_type: String,
     #[serde(rename = "txnId")]
-    _txn_id: String,
+    txn_id: String,
 }
 
 async fn send_event(
@@ -50,6 +50,18 @@ async fn send_event(
     Path(path): Path<SendEventPath>,
     Json(content): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    // txn_id 冪等性チェック: 同一 (user, device, txn_id) の場合は保存済み event_id を返す
+    if let Some(cached_event_id) = db::sent_transactions::get_event_id(
+        &state.pool,
+        &user.user_id,
+        &user.device_id,
+        &path.txn_id,
+    )
+    .await?
+    {
+        return Ok(Json(serde_json::json!({ "event_id": cached_event_id })));
+    }
+
     let now_ms = chrono::Utc::now().timestamp_millis();
     let (tip_result, auth_result) = tokio::join!(
         db::events::get_room_tip(&state.pool, &path.room_id),
@@ -92,6 +104,16 @@ async fn send_event(
     let mut pdu = pdu_for_hash;
     pdu["event_id"] = serde_json::Value::String(event_id.clone());
     crate::federation_client::dispatch_send_transaction(state.clone(), path.room_id.clone(), pdu);
+
+    // txn_id を記録して冪等性を保証（ベストエフォート）
+    let _ = db::sent_transactions::record(
+        &state.pool,
+        &user.user_id,
+        &user.device_id,
+        &path.txn_id,
+        &event_id,
+    )
+    .await;
 
     // HTTP pusher への通知（背景タスク、ベストエフォート）
     dispatch_push(

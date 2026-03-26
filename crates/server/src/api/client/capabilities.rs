@@ -16,7 +16,9 @@ async fn capabilities() -> Json<serde_json::Value> {
             "m.room_versions": {
                 "default": "10",
                 "available": {
+                    "9": "stable",
                     "10": "stable",
+                    "11": "stable",
                 }
             },
         }

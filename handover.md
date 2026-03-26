@@ -1,4 +1,20 @@
-# Handover — v0.42.0 → v0.43.0
+# Handover — v0.43.0 → v0.44.0
+
+## v0.43.0 でやったこと
+
+- **txn_id 冪等性** (`schema/schema.sql`, `db/sent_transactions.rs`, `server/api/client/events.rs`):
+  - `sent_transactions` テーブル新設 (`user_id`, `device_id`, `txn_id`, `event_id`)。PK は `(user_id, device_id, txn_id)`。
+  - `db::sent_transactions::get_event_id()` — 既存 txn_id があれば event_id を返す。
+  - `db::sent_transactions::record()` — 送信後に INSERT IGNORE で記録。
+  - `PUT /rooms/{roomId}/send/{eventType}/{txnId}` — 送信前に重複チェック。同一 (device, txn_id) は保存済み event_id をそのまま返す。送信後に記録。
+
+- **`/rooms/{roomId}/initialSync`** (`server/api/client/initial_sync.rs`):
+  - `GET /_matrix/client/v3/rooms/{roomId}/initialSync` レガシーエンドポイントを新設。
+  - `membership`, `state`（現在のスナップショット）, `messages.chunk`（最新50件・後方向き）, `start`/`end` トークン, `receipts` を返す。
+  - 既存の `db::room_state::get_all()`, `db::events::get_messages()`, `db::receipts::get_for_room()` を活用。
+
+- **room versions 9/11 追加** (`server/api/client/capabilities.rs`):
+  - `/capabilities` の `m.room_versions.available` に `"9": "stable"` と `"11": "stable"` を追加。
 
 ## v0.42.0 でやったこと
 
@@ -265,13 +281,13 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.43.0 候補
+## v0.44.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
 2. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
 3. **`/publicRooms` の cross-server 対応** — `?server=` パラメータで他サーバへプロキシ（federation 経由）
-4. **`/rooms/{roomId}/initialSync`** — レガシーエンドポイント（古いクライアント向け）
-5. **ルームバージョン v11 サポート** — room_version="11" での作成・upgrade 許可
+4. **`/_matrix/client/v3/events` グローバルイベントストリーム** — レガシーロングポーリング
+5. **プッシュゲートウェイ HTTP 送信** — 実際の HTTP pusher への通知配信強化
 
 ## 開発フロー（おさらい）
 

@@ -7,6 +7,7 @@ pub mod devices;
 pub mod events;
 pub mod filters;
 pub mod hierarchy;
+pub mod initial_sync;
 pub mod keys;
 pub mod notifications;
 pub mod openid;
