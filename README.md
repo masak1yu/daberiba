@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.42.0 — Client-Server API Phase 33 (knock MSC2403, register/available, sync rooms.knock) (functional, not production-ready)
+**Status:** v0.43.0 — Client-Server API Phase 34 (txn_id idempotency, room initialSync, room versions 9/10/11) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -55,7 +55,8 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | POST | `/_matrix/client/v3/rooms/{roomId}/knock` | Knock (request to join, MSC2403) |
 | POST | `/_matrix/client/v3/knock/{roomIdOrAlias}` | Knock by room ID or alias (MSC2403) |
 | GET | `/_matrix/client/v3/joined_rooms` | List joined rooms |
-| PUT | `/_matrix/client/v3/rooms/{roomId}/send/{type}/{txnId}` | Send event |
+| PUT | `/_matrix/client/v3/rooms/{roomId}/send/{type}/{txnId}` | Send event (txn_id idempotency) |
+| GET | `/_matrix/client/v3/rooms/{roomId}/initialSync` | Room initial sync (legacy endpoint) |
 | GET | `/_matrix/client/v3/rooms/{roomId}/messages` | Message history (paginated, ?lazy_load_members=true) |
 | GET | `/_matrix/client/v3/rooms/{roomId}/context/{eventId}` | Event context (events before/after + room state snapshot) |
 | GET | `/_matrix/client/v3/rooms/{roomId}/event/{eventId}` | Get single event |

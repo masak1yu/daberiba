@@ -21,6 +21,7 @@ pub mod room_keys;
 pub mod room_state;
 pub mod room_tags;
 pub mod rooms;
+pub mod sent_transactions;
 pub mod server_signing_key;
 pub mod sync;
 pub mod threepids;

@@ -361,3 +361,15 @@ CREATE TABLE IF NOT EXISTS openid_tokens (
     INDEX idx_openid_tokens_user_id (user_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 送信済みトランザクション記録テーブル。txn_id の冪等性保証に使用する。
+-- 同じ (user_id, device_id, txn_id) で再送された場合、保存済み event_id を返す。
+CREATE TABLE IF NOT EXISTS sent_transactions (
+    user_id    VARCHAR(255) NOT NULL,
+    device_id  VARCHAR(255) NOT NULL,
+    txn_id     VARCHAR(255) NOT NULL,
+    event_id   VARCHAR(255) NOT NULL,
+    created_at DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, device_id, txn_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
