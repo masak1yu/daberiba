@@ -56,6 +56,27 @@ pub async fn get(
     Ok(row)
 }
 
+/// 全メディア一覧を返す（管理者向け）。
+pub async fn list_all(pool: &MySqlPool) -> Result<Vec<MediaRecord>> {
+    let rows: Vec<MediaRecord> = sqlx::query_as(
+        "SELECT media_id, server_name, user_id, content_type, filename, file_size, room_id \
+         FROM media ORDER BY media_id ASC",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows)
+}
+
+/// メディアレコードを DB から削除する（ファイル削除は呼び出し元で行う）。
+pub async fn delete(pool: &MySqlPool, server_name: &str, media_id: &str) -> Result<bool> {
+    let result = sqlx::query("DELETE FROM media WHERE server_name = ? AND media_id = ?")
+        .bind(server_name)
+        .bind(media_id)
+        .execute(pool)
+        .await?;
+    Ok(result.rows_affected() > 0)
+}
+
 /// ユーザーがそのメディアにアクセス可能かチェックする。
 /// room_id が NULL → 認証済みユーザー全員 OK（true を返す）。
 /// room_id が設定されている → room_memberships で join しているか確認。

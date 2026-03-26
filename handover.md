@@ -1,4 +1,23 @@
-# Handover — v0.36.0 → v0.37.0
+# Handover — v0.37.0 → v0.38.0
+
+## v0.37.0 でやったこと
+
+- **管理者昇格 API** (`db/users.rs`, `server/api/client/admin.rs`):
+  - `db::users::set_admin()` 新設。`admin` フラグを ON/OFF する。
+  - `PUT /_synapse/admin/v1/users/{userId}/admin` — `{ "admin": true/false }` でフラグを切り替え。管理者専用。
+  - 対象ユーザーが存在しない場合は 404 を返す。
+
+- **`/admin/media` 管理** (`db/media.rs`, `server/src/media_store.rs`, `server/api/client/admin.rs`):
+  - `db::media::list_all()` 新設（非マクロ `sqlx::query_as`）。全メディアレコードを返す。
+  - `db::media::delete()` 新設。DB レコードを削除し、削除件数を返す。
+  - `MediaStore` トレイトに `async fn delete(&self, media_id: &str) -> Result<()>` を追加。`LocalStore` / `S3Store` に実装。
+  - `GET /_synapse/admin/v1/media` — メディア一覧（?from=&limit= ページネーション）。管理者専用。
+  - `DELETE /_synapse/admin/v1/media/{serverName}/{mediaId}` — DB レコード削除 + ストレージファイル削除。管理者専用。
+
+- **`/sync` の `device_lists` 改善** (`db/keys.rs`, `server/api/client/sync.rs`):
+  - `db::keys::get_changed_users()` 新設。共有ルームにいるユーザーのうち、`since_ms` 以降に `device_keys.updated_at` が更新されたユーザーを返す（初回 sync は全共有ルームメンバー）。
+  - `db::keys::get_left_users()` 新設。`since_stream` 以降に leave/ban イベントが発生し、かつ現在共有ルームがないユーザーを返す。
+  - `/sync` レスポンスに `device_lists: { changed: [...], left: [...] }` を追加。
 
 ## v0.36.0 でやったこと
 
@@ -160,16 +179,16 @@
 | login_tokens クリーンアップ | `purge_expired()` は実装済みだが定期実行はなし（起動時 or cron での呼び出しが必要） |
 | lazy_load_members の初回 sync | 初回 sync 時に既訪問 member を追跡するクライアントキャッシュとの整合は未対応 |
 | /hierarchy の cross-server 展開 | federation ルームの子は room_state に m.space.child がない場合スキップされる |
-| admin フラグの付与手段 | `admin=1` にする UI/API がない（DB 直接 UPDATE が必要） |
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
+| device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.37.0 候補
+## v0.38.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
 2. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
-3. **管理者昇格 API** — `PUT /_synapse/admin/v1/users/{userId}/admin` で管理者フラグを切り替え
-4. **`/admin/media` 管理** — メディアファイルの一覧・削除エンドポイント
-5. **`/sync` の `E2EE` 改善** — `device_keys` の変更通知（`changed` / `left` リスト）を `/sync` に含める
+3. **`/pushrules` 評価エンジン** — イベント投稿時にサーバーサイドでプッシュルールを評価し通知を生成
+4. **`/rooms/{roomId}/report/{eventId}`** — コンテンツ報告エンドポイント（MSC2414）
+5. **`/sync` の `rooms.invite` 改善** — 招待状態のルームに `invite_state` イベントリストを含める
 
 ## 開発フロー（おさらい）
 

@@ -106,6 +106,98 @@ pub async fn claim_one_time_key(
     }
 }
 
+/// /sync の device_lists.changed 用:
+/// `since_ms` 以降に device_keys が更新されたユーザーのうち、
+/// `user_id` と共有ルームにいるユーザーの user_id 一覧を返す。
+/// `since_ms` が None（初回 sync）の場合は共有ルームの全ユーザーを返す。
+pub async fn get_changed_users(
+    pool: &MySqlPool,
+    user_id: &str,
+    since_ms: Option<u64>,
+) -> Result<Vec<String>> {
+    use sqlx::Row;
+    let rows = if let Some(ms) = since_ms {
+        // UNIX ミリ秒 → MySQL DATETIME 変換（FROM_UNIXTIME はマイクロ秒非対応のためミリ秒を秒に変換）
+        let since_secs = (ms / 1000) as i64;
+        sqlx::query(
+            r#"SELECT DISTINCT dk.user_id
+               FROM device_keys dk
+               JOIN room_memberships rm ON rm.user_id = dk.user_id AND rm.membership = 'join'
+               WHERE rm.room_id IN (
+                   SELECT room_id FROM room_memberships
+                   WHERE user_id = ? AND membership = 'join'
+               )
+               AND dk.user_id != ?
+               AND UNIX_TIMESTAMP(dk.updated_at) >= ?"#,
+        )
+        .bind(user_id)
+        .bind(user_id)
+        .bind(since_secs)
+        .fetch_all(pool)
+        .await?
+    } else {
+        sqlx::query(
+            r#"SELECT DISTINCT dk.user_id
+               FROM device_keys dk
+               JOIN room_memberships rm ON rm.user_id = dk.user_id AND rm.membership = 'join'
+               WHERE rm.room_id IN (
+                   SELECT room_id FROM room_memberships
+                   WHERE user_id = ? AND membership = 'join'
+               )
+               AND dk.user_id != ?"#,
+        )
+        .bind(user_id)
+        .bind(user_id)
+        .fetch_all(pool)
+        .await?
+    };
+    Ok(rows
+        .into_iter()
+        .map(|r| r.get::<String, _>("user_id"))
+        .collect())
+}
+
+/// /sync の device_lists.left 用:
+/// `since_stream` 以降に退出イベント（leave / ban）があり、
+/// かつ現在 `user_id` と共有ルームがないユーザーの user_id 一覧を返す。
+pub async fn get_left_users(
+    pool: &MySqlPool,
+    user_id: &str,
+    since_stream: u64,
+) -> Result<Vec<String>> {
+    use sqlx::Row;
+    // since_stream 以降に leave/ban になったユーザー（共有ルームで）
+    let rows = sqlx::query(
+        r#"SELECT DISTINCT e.sender AS left_user
+           FROM events e
+           WHERE e.room_id IN (
+               SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'
+           )
+           AND e.event_type = 'm.room.member'
+           AND JSON_UNQUOTE(JSON_EXTRACT(e.content, '$.membership')) IN ('leave', 'ban')
+           AND e.stream_ordering > ?
+           AND e.state_key != ?
+           AND e.state_key NOT IN (
+               SELECT rm2.user_id FROM room_memberships rm2
+               WHERE rm2.user_id = e.state_key
+                 AND rm2.membership = 'join'
+                 AND rm2.room_id IN (
+                     SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'
+                 )
+           )"#,
+    )
+    .bind(user_id)
+    .bind(since_stream)
+    .bind(user_id)
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(|r| r.get::<String, _>("left_user"))
+        .collect())
+}
+
 /// デバイスごとのワンタイム鍵残数（POST /keys/upload のレスポンス用）
 pub async fn count_one_time_keys(
     pool: &MySqlPool,

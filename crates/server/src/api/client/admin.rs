@@ -2,7 +2,7 @@ use crate::{error::ApiResult, middleware::auth::AuthUser, state::AppState};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    routing::{get, post},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::Deserialize;
@@ -18,7 +18,16 @@ pub fn routes() -> Router<AppState> {
             "/_synapse/admin/v1/deactivate/{userId}",
             post(deactivate_user),
         )
+        .route(
+            "/_synapse/admin/v1/users/{userId}/admin",
+            put(set_user_admin),
+        )
         .route("/_synapse/admin/v1/rooms", get(list_rooms))
+        .route("/_synapse/admin/v1/media", get(list_media))
+        .route(
+            "/_synapse/admin/v1/media/{serverName}/{mediaId}",
+            delete(delete_media),
+        )
 }
 
 /// 管理者チェック: 呼び出し元が admin でない場合は 403 を返す。
@@ -166,4 +175,96 @@ async fn list_rooms(
         "next_token": next_token,
         "total": total,
     })))
+}
+
+#[derive(Deserialize)]
+struct SetAdminBody {
+    admin: bool,
+}
+
+/// PUT /_synapse/admin/v1/users/{userId}/admin
+/// ユーザーの管理者フラグを設定する。管理者専用。
+async fn set_user_admin(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+    Path(target_user_id): Path<String>,
+    Json(body): Json<SetAdminBody>,
+) -> ApiResult<StatusCode> {
+    require_admin(&state.pool, &user.user_id).await?;
+
+    if !db::users::exists(&state.pool, &target_user_id).await? {
+        return Err(crate::error::AppError::NotFound);
+    }
+    db::users::set_admin(&state.pool, &target_user_id, body.admin).await?;
+
+    Ok(StatusCode::OK)
+}
+
+#[derive(Deserialize, Default)]
+struct ListMediaQuery {
+    from: Option<u64>,
+    limit: Option<u64>,
+}
+
+/// GET /_synapse/admin/v1/media
+/// 全メディア一覧を返す。管理者専用。
+async fn list_media(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+    Query(query): Query<ListMediaQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    require_admin(&state.pool, &user.user_id).await?;
+
+    let limit = query.limit.unwrap_or(100).min(500) as usize;
+    let from = query.from.unwrap_or(0) as usize;
+
+    let mut all_media = db::media::list_all(&state.pool).await?;
+    let total = all_media.len();
+    let page: Vec<_> = all_media
+        .drain(from..)
+        .take(limit)
+        .map(|m| {
+            serde_json::json!({
+                "media_id": m.media_id,
+                "server_name": m.server_name,
+                "user_id": m.user_id,
+                "content_type": m.content_type,
+                "filename": m.filename,
+                "file_size": m.file_size,
+                "room_id": m.room_id,
+                "mxc_uri": format!("mxc://{}/{}", m.server_name, m.media_id),
+            })
+        })
+        .collect();
+    let next_token = if from + limit < total {
+        Some((from + limit) as u64)
+    } else {
+        None
+    };
+
+    Ok(Json(serde_json::json!({
+        "media": page,
+        "next_token": next_token,
+        "total": total,
+    })))
+}
+
+/// DELETE /_synapse/admin/v1/media/{serverName}/{mediaId}
+/// メディアを削除する（DB レコード + ストレージ両方）。管理者専用。
+async fn delete_media(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+    Path((server_name, media_id)): Path<(String, String)>,
+) -> ApiResult<StatusCode> {
+    require_admin(&state.pool, &user.user_id).await?;
+
+    let deleted = db::media::delete(&state.pool, &server_name, &media_id).await?;
+    if !deleted {
+        return Err(crate::error::AppError::NotFound);
+    }
+
+    // ストレージからも削除（ローカル or S3）
+    let _ = state.media.delete(&media_id).await;
+
+    Ok(StatusCode::OK)
 }

@@ -150,6 +150,16 @@ pub async fn admin_deactivate(pool: &MySqlPool, user_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// ユーザーの管理者フラグを設定する。
+pub async fn set_admin(pool: &MySqlPool, user_id: &str, admin: bool) -> Result<()> {
+    sqlx::query("UPDATE users SET admin = ? WHERE user_id = ?")
+        .bind(admin as i8)
+        .bind(user_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 pub async fn verify(pool: &MySqlPool, user_id: &str, password: &str) -> Result<bool> {
     let row = sqlx::query!("SELECT password_hash FROM users WHERE user_id = ?", user_id)
         .fetch_optional(pool)

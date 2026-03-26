@@ -308,6 +308,25 @@ async fn sync(
 
     result["to_device"] = serde_json::json!({ "events": to_device_events });
 
+    // device_lists（E2EE デバイスキー変更通知）
+    // since_stream を u64 に変換して changed / left を取得する
+    let since_stream_ord: Option<u64> = since_stream.as_deref().and_then(|s| s.parse::<u64>().ok());
+    let device_lists_changed =
+        db::keys::get_changed_users(&state.pool, &user.user_id, account_data_since_ms)
+            .await
+            .unwrap_or_default();
+    let device_lists_left = if let Some(ord) = since_stream_ord {
+        db::keys::get_left_users(&state.pool, &user.user_id, ord)
+            .await
+            .unwrap_or_default()
+    } else {
+        vec![]
+    };
+    result["device_lists"] = serde_json::json!({
+        "changed": device_lists_changed,
+        "left": device_lists_left,
+    });
+
     // next_batch を "{stream_ordering}_{max_to_device_id}_{now_ms}" に更新
     let stream_ordering = result["next_batch"].as_str().unwrap_or("0").to_string();
     let now_ms = chrono::Utc::now().timestamp_millis() as u64;
