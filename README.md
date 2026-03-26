@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.37.0 — Client-Server API Phase 28 (admin promotion/media API, device_lists in sync) (functional, not production-ready)
+**Status:** v0.38.0 — Client-Server API Phase 29 (content reports, invite_state enrichment, default push rules) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -123,6 +123,8 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET | `/_synapse/admin/v1/rooms` | List all rooms (admin only, ?from=&limit=) |
 | GET | `/_synapse/admin/v1/media` | List all media (admin only, ?from=&limit=) |
 | DELETE | `/_synapse/admin/v1/media/{serverName}/{mediaId}` | Delete media (admin only) |
+| GET | `/_synapse/admin/v1/event_reports` | List content reports (admin only) |
+| POST | `/_matrix/client/v3/rooms/{roomId}/report/{eventId}` | Report event content |
 
 ### Federation
 | Method | Path | Description |
