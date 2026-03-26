@@ -1,4 +1,17 @@
-# Handover — v0.41.0 → v0.42.0
+# Handover — v0.42.0 → v0.43.0
+
+## v0.42.0 でやったこと
+
+- **ノック（MSC2403）** (`db/rooms.rs`, `server/api/client/rooms.rs`, `db/sync.rs`):
+  - `db::rooms::knock()` 新設。`room_memberships.membership = 'knock'` に upsert。
+  - `db::rooms::knock_rooms()` 新設。ユーザーが knock 中のルーム ID 一覧を返す。
+  - `POST /_matrix/client/v3/rooms/{roomId}/knock` — join_rules が `knock` or `knock_restricted` の場合のみ許可。ban 済みユーザーと既参加ユーザーはブロック。m.room.member イベント（membership=knock）を生成。
+  - `POST /_matrix/client/v3/knock/{roomIdOrAlias}` — エイリアス（#...）の場合は `db::room_aliases::resolve()` で room_id に変換してから knock。
+  - `/sync` の `rooms.knock` セクションを追加。knock 中ルームの stripped state（name/avatar/join_rules/canonical_alias/encryption）を `knock_state.events` で返す。
+
+- **`GET /_matrix/client/v3/register/available`** (`server/api/client/auth.rs`):
+  - `?username=<localpart>` でユーザー名利用可否を確認。`@localpart:SERVER_NAME` が存在しなければ `{ available: true }` を返す。存在する場合は 400 M_USER_IN_USE。
+  - 既存の `db::users::exists()` を利用。
 
 ## v0.41.0 でやったこと
 
@@ -252,13 +265,13 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.42.0 候補
+## v0.43.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
 2. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
 3. **`/publicRooms` の cross-server 対応** — `?server=` パラメータで他サーバへプロキシ（federation 経由）
-4. **`/rooms/{roomId}/knock`** — ノック（入室申請）フロー（MSC2403）
-5. **`/login/sso/redirect` ウィジェット認証** — OpenID トークンを使ったウィジェット認証フロー
+4. **`/rooms/{roomId}/initialSync`** — レガシーエンドポイント（古いクライアント向け）
+5. **ルームバージョン v11 サポート** — room_version="11" での作成・upgrade 許可
 
 ## 開発フロー（おさらい）
 

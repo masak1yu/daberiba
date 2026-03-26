@@ -27,6 +27,11 @@ pub fn routes() -> Router<AppState> {
             "/_matrix/client/v3/rooms/{roomId}/upgrade",
             post(upgrade_room),
         )
+        .route("/_matrix/client/v3/rooms/{roomId}/knock", post(knock_room))
+        .route(
+            "/_matrix/client/v3/knock/{roomIdOrAlias}",
+            post(knock_room_alias),
+        )
 }
 
 #[derive(Deserialize)]
@@ -298,6 +303,91 @@ async fn leave_room(
     }
 
     Ok(Json(serde_json::json!({})))
+}
+
+#[derive(Deserialize)]
+struct KnockRequest {
+    reason: Option<String>,
+    #[serde(rename = "via")]
+    #[allow(dead_code)]
+    via: Option<Vec<String>>,
+}
+
+/// POST /_matrix/client/v3/rooms/{roomId}/knock — ノック（入室申請）
+async fn knock_room(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+    Path(room_id): Path<String>,
+    body: Option<Json<KnockRequest>>,
+) -> ApiResult<Json<serde_json::Value>> {
+    knock_room_impl(
+        &state,
+        &user.user_id,
+        &room_id,
+        body.and_then(|b| b.reason.clone()),
+    )
+    .await
+}
+
+/// POST /_matrix/client/v3/knock/{roomIdOrAlias}
+async fn knock_room_alias(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+    Path(room_id_or_alias): Path<String>,
+    body: Option<Json<KnockRequest>>,
+) -> ApiResult<Json<serde_json::Value>> {
+    // エイリアスを解決
+    let room_id = if room_id_or_alias.starts_with('#') {
+        db::room_aliases::resolve(&state.pool, &room_id_or_alias)
+            .await?
+            .ok_or(AppError::NotFound)?
+    } else {
+        room_id_or_alias
+    };
+    knock_room_impl(
+        &state,
+        &user.user_id,
+        &room_id,
+        body.and_then(|b| b.reason.clone()),
+    )
+    .await
+}
+
+async fn knock_room_impl(
+    state: &AppState,
+    user_id: &str,
+    room_id: &str,
+    reason: Option<String>,
+) -> ApiResult<Json<serde_json::Value>> {
+    // join_rules が knock または knock_restricted であることを確認
+    let join_rules = db::room_state::get_event(&state.pool, room_id, "m.room.join_rules", "")
+        .await?
+        .and_then(|v| v["join_rule"].as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "invite".to_string());
+
+    if !matches!(join_rules.as_str(), "knock" | "knock_restricted") {
+        return Err(AppError::Forbidden);
+    }
+
+    // 現在の membership をチェック（ban されている場合はブロック）
+    if let Some(membership) = db::rooms::get_membership(&state.pool, room_id, user_id).await? {
+        if membership == "ban" {
+            return Err(AppError::Forbidden);
+        }
+        if membership == "join" {
+            return Err(AppError::BadRequest("already joined".into()));
+        }
+    }
+
+    let mut content = serde_json::json!({ "membership": "knock" });
+    if let Some(r) = reason {
+        content["reason"] = serde_json::Value::String(r);
+    }
+
+    store_state_event(state, room_id, user_id, "m.room.member", user_id, &content).await?;
+    db::rooms::knock(&state.pool, user_id, room_id).await?;
+
+    Ok(Json(serde_json::json!({ "room_id": room_id })))
 }
 
 async fn joined_rooms(

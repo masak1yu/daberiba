@@ -4,7 +4,7 @@ use crate::{
     state::AppState,
 };
 use axum::{
-    extract::State,
+    extract::{Query, State},
     routing::{get, post},
     Json, Router,
 };
@@ -13,6 +13,10 @@ use serde::{Deserialize, Serialize};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/_matrix/client/v3/register", post(register))
+        .route(
+            "/_matrix/client/v3/register/available",
+            get(register_available),
+        )
         .route("/_matrix/client/v3/login", get(login_flows).post(login))
 }
 
@@ -198,4 +202,31 @@ async fn get_login_token(
         "login_token": token,
         "expires_in_ms": 120_000,
     })))
+}
+
+#[derive(Deserialize)]
+struct RegisterAvailableQuery {
+    username: Option<String>,
+}
+
+/// GET /_matrix/client/v3/register/available?username=<localpart>
+/// ユーザー名が利用可能か確認する。利用可能なら { available: true }。
+async fn register_available(
+    State(state): State<AppState>,
+    Query(params): Query<RegisterAvailableQuery>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let localpart = params
+        .username
+        .ok_or_else(|| AppError::BadRequest("username required".into()))?;
+
+    // ローカルパートを user_id 形式に変換
+    let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
+    let user_id = format!("@{}:{}", localpart, server_name);
+
+    let exists = db::users::exists(&state.pool, &user_id).await?;
+    if exists {
+        return Err(AppError::BadRequest("M_USER_IN_USE".into()));
+    }
+
+    Ok(Json(serde_json::json!({ "available": true })))
 }
