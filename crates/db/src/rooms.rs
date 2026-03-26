@@ -332,25 +332,73 @@ pub struct PublicRoom {
     pub num_joined_members: i64,
 }
 
-/// join_rules = public なルームを一覧取得
-pub async fn get_public_rooms(pool: &MySqlPool) -> Result<Vec<PublicRoom>> {
-    // room_state に m.room.join_rules が "public" なルームを探す
-    let rows: Vec<(String, Option<String>, Option<String>, i64)> = sqlx::query_as(
-        r#"SELECT r.room_id, r.name, r.topic,
-                  COUNT(rm.user_id) AS num_joined_members
-           FROM rooms r
-           JOIN room_state rs ON rs.room_id = r.room_id
-                              AND rs.event_type = 'm.room.join_rules'
-                              AND rs.state_key = ''
-           JOIN events e ON e.event_id = rs.event_id
-           JOIN room_memberships rm ON rm.room_id = r.room_id AND rm.membership = 'join'
-           WHERE JSON_UNQUOTE(JSON_EXTRACT(e.content, '$.join_rule')) = 'public'
-           GROUP BY r.room_id, r.name, r.topic"#,
-    )
-    .fetch_all(pool)
-    .await?;
+/// join_rules = public なルームを一覧取得（フィルタ・ページネーション対応）
+pub async fn get_public_rooms(
+    pool: &MySqlPool,
+    filter: Option<&str>,
+    limit: u64,
+    offset: u64,
+) -> Result<(Vec<PublicRoom>, u64)> {
+    let base = r#"
+        FROM rooms r
+        JOIN room_state rs ON rs.room_id = r.room_id
+                           AND rs.event_type = 'm.room.join_rules'
+                           AND rs.state_key = ''
+        JOIN events e ON e.event_id = rs.event_id
+        JOIN room_memberships rm ON rm.room_id = r.room_id AND rm.membership = 'join'
+        WHERE JSON_UNQUOTE(JSON_EXTRACT(e.content, '$.join_rule')) = 'public'
+    "#;
 
-    Ok(rows
+    // フィルタ条件付きで総件数を取得
+    let total: u64 = if let Some(term) = filter.filter(|s| !s.is_empty()) {
+        let like = format!("%{}%", term);
+        let sql = format!(
+            "SELECT COUNT(DISTINCT r.room_id) {base} AND (r.name LIKE ? OR r.topic LIKE ?)"
+        );
+        sqlx::query_scalar(&sql)
+            .bind(&like)
+            .bind(&like)
+            .fetch_one(pool)
+            .await?
+    } else {
+        let sql = format!("SELECT COUNT(DISTINCT r.room_id) {base}");
+        sqlx::query_scalar(&sql).fetch_one(pool).await?
+    };
+
+    // ルーム一覧取得
+    let rows: Vec<(String, Option<String>, Option<String>, i64)> =
+        if let Some(term) = filter.filter(|s| !s.is_empty()) {
+            let like = format!("%{}%", term);
+            let sql = format!(
+                "SELECT r.room_id, r.name, r.topic, COUNT(rm.user_id) AS num_joined_members
+             {base} AND (r.name LIKE ? OR r.topic LIKE ?)
+             GROUP BY r.room_id, r.name, r.topic
+             ORDER BY num_joined_members DESC
+             LIMIT ? OFFSET ?"
+            );
+            sqlx::query_as(&sql)
+                .bind(&like)
+                .bind(&like)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(pool)
+                .await?
+        } else {
+            let sql = format!(
+                "SELECT r.room_id, r.name, r.topic, COUNT(rm.user_id) AS num_joined_members
+             {base}
+             GROUP BY r.room_id, r.name, r.topic
+             ORDER BY num_joined_members DESC
+             LIMIT ? OFFSET ?"
+            );
+            sqlx::query_as(&sql)
+                .bind(limit)
+                .bind(offset)
+                .fetch_all(pool)
+                .await?
+        };
+
+    let rooms = rows
         .into_iter()
         .map(|(room_id, name, topic, num_joined_members)| PublicRoom {
             room_id,
@@ -358,7 +406,9 @@ pub async fn get_public_rooms(pool: &MySqlPool) -> Result<Vec<PublicRoom>> {
             topic,
             num_joined_members,
         })
-        .collect())
+        .collect();
+
+    Ok((rooms, total))
 }
 
 /// federation invite 用: ルームが存在しない場合のみプレースホルダーとして rooms テーブルに挿入する。

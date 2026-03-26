@@ -549,6 +549,46 @@ async fn upgrade_room(
     )
     .await?;
 
+    // 旧ルームの name / topic / avatar を新ルームにコピー
+    let (old_name, old_topic, old_avatar) = tokio::join!(
+        db::room_state::get_event(&state.pool, &room_id, "m.room.name", ""),
+        db::room_state::get_event(&state.pool, &room_id, "m.room.topic", ""),
+        db::room_state::get_event(&state.pool, &room_id, "m.room.avatar", ""),
+    );
+    if let Some(content) = old_name? {
+        store_state_event(
+            &state,
+            &new_room_id,
+            &user.user_id,
+            "m.room.name",
+            "",
+            &content,
+        )
+        .await?;
+    }
+    if let Some(content) = old_topic? {
+        store_state_event(
+            &state,
+            &new_room_id,
+            &user.user_id,
+            "m.room.topic",
+            "",
+            &content,
+        )
+        .await?;
+    }
+    if let Some(content) = old_avatar? {
+        store_state_event(
+            &state,
+            &new_room_id,
+            &user.user_id,
+            "m.room.avatar",
+            "",
+            &content,
+        )
+        .await?;
+    }
+
     // 旧ルームに m.room.tombstone を保存してアップグレード済みにする
     store_state_event(
         &state,

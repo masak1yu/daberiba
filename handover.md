@@ -1,4 +1,22 @@
-# Handover — v0.38.0 → v0.39.0
+# Handover — v0.39.0 → v0.40.0
+
+## v0.39.0 でやったこと
+
+- **`/capabilities` 拡充** (`server/api/client/capabilities.rs`):
+  - `m.set_displayname: { enabled: true }` — 表示名変更可能フラグを追加。
+  - `m.set_avatar_url: { enabled: true }` — アバター URL 変更可能フラグを追加。
+  - `m.3pid_changes: { enabled: false }` — 3pid 変更フラグ（現状無効）。
+  - `m.get_login_token: { enabled: false }` — ログイントークン取得フラグ（エンドポイントは実装済みだが capability フラグは無効）。
+
+- **`/publicRooms` 改善** (`server/api/client/public_rooms.rs`, `db/rooms.rs`):
+  - `GET` に `?limit=`（デフォルト 30、最大 500）、`?since=`（offset ベースのページネーショントークン）、`?filter=`（name/topic の部分一致）パラメータを追加。
+  - `POST /_matrix/client/v3/publicRooms` を新設。ボディ `{ "limit", "since", "filter": { "generic_search_term" } }` に対応。
+  - レスポンスに `next_batch` / `prev_batch` トークンを追加（次ページが存在する場合のみ）。`total_room_count_estimate` を実際のフィルタ後総件数に変更。
+  - `db::rooms::get_public_rooms()` シグネチャを `(pool, filter, limit, offset) -> (Vec<PublicRoom>, u64)` に変更。フィルタ時は `r.name LIKE ? OR r.topic LIKE ?`、ページネーションは LIMIT/OFFSET。
+
+- **`/rooms/{roomId}/upgrade` 改善** (`server/api/client/rooms.rs`):
+  - 旧ルームの `m.room.name`、`m.room.topic`、`m.room.avatar` を `db::room_state::get_event()` で取得し、新ルームにコピー。
+  - 各状態イベントが存在する場合のみコピー（`None` の場合はスキップ）。
 
 ## v0.38.0 でやったこと
 
@@ -198,13 +216,13 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.39.0 候補
+## v0.40.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
 2. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
-3. **`/rooms/{roomId}/upgrade`** — ルームバージョンアップグレード（MSC1849）
-4. **`GET /publicRooms` の改善** — サーバー横断検索（?server= パラメータ）と include_all_networks 対応
-5. **`/capabilities` の拡充** — `m.change_password`, `m.room_versions` を正確に返す
+3. **`/publicRooms` の cross-server 対応** — `?server=` パラメータで他サーバへプロキシ（federation 経由）
+4. **`/keys/upload` / `/keys/query` の完全実装** — E2EE デバイス鍵管理の強化
+5. **presence の永続化** — PresenceStore をインメモリからDBに移行
 
 ## 開発フロー（おさらい）
 
