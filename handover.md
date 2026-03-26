@@ -1,4 +1,15 @@
-# Handover — v0.43.0 → v0.44.0
+# Handover — v0.44.0 → v0.45.0
+
+## v0.44.0 でやったこと
+
+- **グローバルイベントストリーム** (`db/events.rs`, `server/api/client/global_events.rs`):
+  - `db::events::get_global_events_since(pool, user_id, since_ordering, room_id_filter, limit)` 新設。ユーザーが参加しているルームのイベントを stream_ordering 昇順で返す。
+  - `GET /_matrix/client/v3/events` レガシーエンドポイントを新設。`?from=<token>` でページネーション、`?room_id=` で特定ルーム絞り込み、`?timeout=` を受け付けるが現状は即時返却。
+
+- **`/publicRooms` cross-server プロキシ** (`server/api/client/public_rooms.rs`):
+  - `GET /publicRooms?server=<serverName>` および POST body `server` フィールドに対応。
+  - 指定サーバーの `/_matrix/federation/v1/publicRooms` に `state.http` でプロキシし、レスポンスをそのまま返す。
+  - `percent_encode()` ヘルパーで filter クエリパラメータを URL エンコード。
 
 ## v0.43.0 でやったこと
 
@@ -281,13 +292,13 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.44.0 候補
+## v0.45.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
 2. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
-3. **`/publicRooms` の cross-server 対応** — `?server=` パラメータで他サーバへプロキシ（federation 経由）
-4. **`/_matrix/client/v3/events` グローバルイベントストリーム** — レガシーロングポーリング
-5. **プッシュゲートウェイ HTTP 送信** — 実際の HTTP pusher への通知配信強化
+3. **`/_matrix/client/v3/login/token`** — `m.login.token` フローの実装（QR コードログイン準備）
+4. **`/rooms/{roomId}/aliases`** — ルームのエイリアス一覧取得エンドポイント
+5. **`/user/{userId}/account_data` の個別 GET** — グローバルアカウントデータの取得（現状は sync 経由のみ）
 
 ## 開発フロー（おさらい）
 

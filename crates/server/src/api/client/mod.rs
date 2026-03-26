@@ -6,6 +6,7 @@ pub mod capabilities;
 pub mod devices;
 pub mod events;
 pub mod filters;
+pub mod global_events;
 pub mod hierarchy;
 pub mod initial_sync;
 pub mod keys;

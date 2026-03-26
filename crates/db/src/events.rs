@@ -729,3 +729,80 @@ pub async fn search_room_events(
         })
         .collect())
 }
+
+/// ユーザーが参加しているルームの全イベントを `since_ordering` より新しい順で返す。
+///
+/// - `since_ordering`: この stream_ordering より大きいイベントを返す。
+/// - `room_id_filter`: 指定した場合、そのルームのみ返す。
+/// - `limit`: 取得件数上限。
+///
+/// 戻り値: (events, max_stream_ordering)
+/// max_stream_ordering が Some の場合、次回クエリの `from` トークンに使う。
+pub async fn get_global_events_since(
+    pool: &MySqlPool,
+    user_id: &str,
+    since_ordering: u64,
+    room_id_filter: Option<&str>,
+    limit: u64,
+) -> Result<(Vec<serde_json::Value>, Option<u64>)> {
+    use sqlx::Row;
+
+    let rows = if let Some(rid) = room_id_filter {
+        sqlx::query(
+            "SELECT e.event_id, e.room_id, e.sender, e.event_type, e.state_key, \
+             e.content, e.origin_server_ts, e.stream_ordering \
+             FROM events e \
+             JOIN room_memberships rm ON rm.room_id = e.room_id \
+               AND rm.user_id = ? AND rm.membership = 'join' \
+             WHERE e.stream_ordering > ? AND e.room_id = ? \
+             ORDER BY e.stream_ordering ASC LIMIT ?",
+        )
+        .bind(user_id)
+        .bind(since_ordering as i64)
+        .bind(rid)
+        .bind(limit as i64)
+        .fetch_all(pool)
+        .await?
+    } else {
+        sqlx::query(
+            "SELECT e.event_id, e.room_id, e.sender, e.event_type, e.state_key, \
+             e.content, e.origin_server_ts, e.stream_ordering \
+             FROM events e \
+             JOIN room_memberships rm ON rm.room_id = e.room_id \
+               AND rm.user_id = ? AND rm.membership = 'join' \
+             WHERE e.stream_ordering > ? \
+             ORDER BY e.stream_ordering ASC LIMIT ?",
+        )
+        .bind(user_id)
+        .bind(since_ordering as i64)
+        .bind(limit as i64)
+        .fetch_all(pool)
+        .await?
+    };
+
+    let max_ordering = rows
+        .last()
+        .map(|r| r.get::<i64, _>("stream_ordering") as u64);
+
+    let events = rows
+        .into_iter()
+        .map(|r| {
+            let content: serde_json::Value =
+                serde_json::from_str(r.get("content")).unwrap_or_default();
+            let mut ev = serde_json::json!({
+                "event_id": r.get::<String, _>("event_id"),
+                "room_id": r.get::<String, _>("room_id"),
+                "sender": r.get::<String, _>("sender"),
+                "type": r.get::<String, _>("event_type"),
+                "content": content,
+                "origin_server_ts": r.get::<i64, _>("origin_server_ts"),
+            });
+            if let Some(sk) = r.get::<Option<String>, _>("state_key") {
+                ev["state_key"] = serde_json::Value::String(sk);
+            }
+            ev
+        })
+        .collect();
+
+    Ok((events, max_ordering))
+}

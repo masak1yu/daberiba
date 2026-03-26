@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.43.0 — Client-Server API Phase 34 (txn_id idempotency, room initialSync, room versions 9/10/11) (functional, not production-ready)
+**Status:** v0.44.0 — Client-Server API Phase 35 (global event stream, publicRooms cross-server proxy) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -80,7 +80,8 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET/PUT | `/_matrix/client/v3/profile/{userId}/avatar_url` | Avatar URL |
 | GET | `/_matrix/client/v3/pushers` | List pushers |
 | POST | `/_matrix/client/v3/pushers/set` | Register / delete pusher |
-| GET/POST | `/_matrix/client/v3/publicRooms` | Public room directory (?limit=, ?since=, ?filter=, POST body filter) |
+| GET/POST | `/_matrix/client/v3/publicRooms` | Public room directory (?limit=, ?since=, ?filter=, ?server= cross-server proxy) |
+| GET | `/_matrix/client/v3/events` | Legacy global event stream (?from=, ?timeout=, ?room_id=) |
 | PUT | `/_matrix/client/v3/directory/room/{roomAlias}` | Create room alias |
 | GET | `/_matrix/client/v3/directory/room/{roomAlias}` | Resolve room alias |
 | DELETE | `/_matrix/client/v3/directory/room/{roomAlias}` | Delete room alias |
