@@ -230,7 +230,7 @@ async fn sync(
                 );
             }
 
-            // プレゼンス収集
+            // プレゼンス収集: ルームメンバーの user_id セットを集める
             if let Ok(statuses) = db::presence::get_for_room_members(&state.pool, room_id).await {
                 for s in statuses {
                     presence_user_ids.insert(s.user_id);
@@ -239,11 +239,28 @@ async fn sync(
         }
     }
 
-    // presence.events
-    let mut presence_events: Vec<serde_json::Value> = Vec::new();
-    for uid in &presence_user_ids {
-        if let Ok(Some(s)) = db::presence::get(&state.pool, uid).await {
-            let now_ms = chrono::Utc::now().timestamp_millis();
+    // presence.events — since_ms がある場合は差分のみ、初回 sync は全員分
+    let presence_statuses: Vec<db::presence::PresenceStatus> =
+        if let Some(since_ms) = account_data_since_ms {
+            let uids: Vec<String> = presence_user_ids.into_iter().collect();
+            db::presence::get_changed_since(&state.pool, &uids, since_ms as i64)
+                .await
+                .unwrap_or_default()
+        } else {
+            // 初回 sync: 全ユーザー分を個別取得
+            let mut statuses = Vec::new();
+            for uid in &presence_user_ids {
+                if let Ok(Some(s)) = db::presence::get(&state.pool, uid).await {
+                    statuses.push(s);
+                }
+            }
+            statuses
+        };
+
+    let now_ms = chrono::Utc::now().timestamp_millis();
+    let mut presence_events: Vec<serde_json::Value> = presence_statuses
+        .into_iter()
+        .map(|s| {
             let last_active_ago = now_ms - s.last_active_ts;
             let mut content = serde_json::json!({
                 "presence": s.presence,
@@ -253,13 +270,13 @@ async fn sync(
             if let Some(msg) = &s.status_msg {
                 content["status_msg"] = serde_json::json!(msg);
             }
-            presence_events.push(serde_json::json!({
+            serde_json::json!({
                 "type": "m.presence",
-                "sender": uid,
+                "sender": s.user_id,
                 "content": content,
-            }));
-        }
-    }
+            })
+        })
+        .collect();
 
     // presence フィルター
     if let Some(ref f) = filter {

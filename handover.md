@@ -1,4 +1,24 @@
-# Handover — v0.39.0 → v0.40.0
+# Handover — v0.40.0 → v0.41.0
+
+## v0.40.0 でやったこと
+
+- **クロスサイニングキー** (`schema/schema.sql`, `db/keys.rs`, `server/api/client/keys.rs`):
+  - `cross_signing_keys` テーブル新設 (`user_id`, `key_type`, `key_json`)。
+  - `key_signatures` テーブル新設 (`signer_user_id`, `target_user_id`, `key_id`, `signature_json`)。
+  - `db::keys::upload_cross_signing_keys()` / `get_cross_signing_keys()` 新設。
+  - `db::keys::upload_key_signature()` / `get_key_signatures()` 新設。
+  - `POST /_matrix/client/v3/keys/device_signing/upload` — master/self_signing/user_signing キーをアップロード。
+  - `POST /_matrix/client/v3/keys/signatures/upload` — 署名オブジェクトをアップロード（失敗時は `failures` マップで返す）。
+  - `POST /keys/query` レスポンスに `master_keys`, `self_signing_keys`, `user_signing_keys` を追加。
+
+- **`GET /keys/changes`** (`server/api/client/keys.rs`):
+  - `GET /_matrix/client/v3/keys/changes?from=<token>&to=<token>` を新設。
+  - from トークン（sync トークン形式 `{ord}_{td}_{ms}`）から `since_ms` と `since_stream` を抽出し、既存の `get_changed_users` / `get_left_users` を呼び出す。
+  - `{ changed: [...], left: [...] }` を返す。
+
+- **`/sync` presence デルタ** (`db/presence.rs`, `server/api/client/sync.rs`):
+  - `db::presence::get_changed_since(pool, user_ids, since_ms)` 新設。IN 句で対象ユーザーを絞り、`last_active_ts > since_ms` で差分取得。
+  - `/sync` の presence 収集: `account_data_since_ms` がある（2 回目以降 sync）場合は `get_changed_since` で差分のみ返す。初回 sync は従来通り全員分。
 
 ## v0.39.0 でやったこと
 
@@ -216,13 +236,13 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.40.0 候補
+## v0.41.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
 2. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
 3. **`/publicRooms` の cross-server 対応** — `?server=` パラメータで他サーバへプロキシ（federation 経由）
-4. **`/keys/upload` / `/keys/query` の完全実装** — E2EE デバイス鍵管理の強化
-5. **presence の永続化** — PresenceStore をインメモリからDBに移行
+4. **`/user/{userId}/openid/request_token`** — OpenID Connect トークン発行
+5. **`/rooms/{roomId}/summary`** — ルームサマリー（MSC3266 / v1 API）
 
 ## 開発フロー（おさらい）
 
