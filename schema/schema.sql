@@ -312,3 +312,19 @@ CREATE TABLE IF NOT EXISTS room_key_backup_sessions (
     INDEX idx_rkbs_version_user (version, user_id),
     FOREIGN KEY (version) REFERENCES room_key_backup_versions(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- コンテンツ報告テーブル（POST /rooms/{roomId}/report/{eventId}）
+CREATE TABLE IF NOT EXISTS event_reports (
+    id         BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    room_id    VARCHAR(255)    NOT NULL,
+    event_id   VARCHAR(255)    NOT NULL,
+    user_id    VARCHAR(255)    NOT NULL COMMENT '報告者',
+    score      INT             NULL     COMMENT '-100 (最悪) ～ 0 (問題なし)',
+    reason     TEXT            NULL,
+    created_at DATETIME        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    INDEX idx_event_reports_room (room_id),
+    INDEX idx_event_reports_event (event_id),
+    INDEX idx_event_reports_user (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

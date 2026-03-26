@@ -186,8 +186,33 @@ pub async fn sync(
     let mut invite_map = serde_json::Map::new();
     for inv in invited {
         let mut invite_state_events: Vec<serde_json::Value> = Vec::new();
+        let sender = inv.invited_by.as_deref().unwrap_or("");
 
-        // ルーム名があれば追加
+        // m.room.create（ルームバージョン等）
+        if let Ok(Some(content)) =
+            crate::room_state::get_event(pool, &inv.room_id, "m.room.create", "").await
+        {
+            invite_state_events.push(serde_json::json!({
+                "type": "m.room.create",
+                "state_key": "",
+                "content": content,
+                "sender": sender,
+            }));
+        }
+
+        // m.room.join_rules
+        if let Ok(Some(content)) =
+            crate::room_state::get_event(pool, &inv.room_id, "m.room.join_rules", "").await
+        {
+            invite_state_events.push(serde_json::json!({
+                "type": "m.room.join_rules",
+                "state_key": "",
+                "content": content,
+                "sender": sender,
+            }));
+        }
+
+        // m.room.name
         if let Ok(Some(content)) =
             crate::room_state::get_event(pool, &inv.room_id, "m.room.name", "").await
         {
@@ -195,7 +220,43 @@ pub async fn sync(
                 "type": "m.room.name",
                 "state_key": "",
                 "content": content,
-                "sender": inv.invited_by.as_deref().unwrap_or(""),
+                "sender": sender,
+            }));
+        }
+
+        // m.room.avatar（存在する場合）
+        if let Ok(Some(content)) =
+            crate::room_state::get_event(pool, &inv.room_id, "m.room.avatar", "").await
+        {
+            invite_state_events.push(serde_json::json!({
+                "type": "m.room.avatar",
+                "state_key": "",
+                "content": content,
+                "sender": sender,
+            }));
+        }
+
+        // m.room.canonical_alias（存在する場合）
+        if let Ok(Some(content)) =
+            crate::room_state::get_event(pool, &inv.room_id, "m.room.canonical_alias", "").await
+        {
+            invite_state_events.push(serde_json::json!({
+                "type": "m.room.canonical_alias",
+                "state_key": "",
+                "content": content,
+                "sender": sender,
+            }));
+        }
+
+        // m.room.encryption（E2EE ルームの場合）
+        if let Ok(Some(content)) =
+            crate::room_state::get_event(pool, &inv.room_id, "m.room.encryption", "").await
+        {
+            invite_state_events.push(serde_json::json!({
+                "type": "m.room.encryption",
+                "state_key": "",
+                "content": content,
+                "sender": sender,
             }));
         }
 
@@ -214,7 +275,7 @@ pub async fn sync(
             "type": "m.room.member",
             "state_key": user_id,
             "content": { "membership": "invite" },
-            "sender": inv.invited_by.as_deref().unwrap_or(""),
+            "sender": sender,
         }));
 
         invite_map.insert(

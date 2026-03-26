@@ -28,6 +28,7 @@ pub fn routes() -> Router<AppState> {
             "/_synapse/admin/v1/media/{serverName}/{mediaId}",
             delete(delete_media),
         )
+        .route("/_synapse/admin/v1/event_reports", get(list_event_reports))
 }
 
 /// 管理者チェック: 呼び出し元が admin でない場合は 403 を返す。
@@ -267,4 +268,19 @@ async fn delete_media(
     let _ = state.media.delete(&media_id).await;
 
     Ok(StatusCode::OK)
+}
+
+/// GET /_synapse/admin/v1/event_reports
+/// コンテンツ報告一覧を返す。管理者専用。
+async fn list_event_reports(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+) -> ApiResult<Json<serde_json::Value>> {
+    require_admin(&state.pool, &user.user_id).await?;
+    let reports = db::reports::list_all(&state.pool).await?;
+    let total = reports.len();
+    Ok(Json(serde_json::json!({
+        "event_reports": reports,
+        "total": total,
+    })))
 }

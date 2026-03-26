@@ -22,6 +22,10 @@ pub fn routes() -> Router<AppState> {
             get(get_joined_members),
         )
         .route("/_matrix/client/v3/rooms/{roomId}/invite", post(invite))
+        .route(
+            "/_matrix/client/v3/rooms/{roomId}/report/{eventId}",
+            post(report_event),
+        )
 }
 
 async fn get_state(
@@ -149,5 +153,31 @@ async fn invite(
         }
     });
 
+    Ok(Json(serde_json::json!({})))
+}
+
+#[derive(Deserialize)]
+struct ReportBody {
+    score: Option<i32>,
+    reason: Option<String>,
+}
+
+/// POST /_matrix/client/v3/rooms/{roomId}/report/{eventId}
+/// コンテンツ報告を記録する。
+async fn report_event(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+    Path((room_id, event_id)): Path<(String, String)>,
+    Json(body): Json<ReportBody>,
+) -> ApiResult<Json<serde_json::Value>> {
+    db::reports::create(
+        &state.pool,
+        &room_id,
+        &event_id,
+        &user.user_id,
+        body.score,
+        body.reason.as_deref(),
+    )
+    .await?;
     Ok(Json(serde_json::json!({})))
 }

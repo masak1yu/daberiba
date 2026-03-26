@@ -1,4 +1,20 @@
-# Handover — v0.37.0 → v0.38.0
+# Handover — v0.38.0 → v0.39.0
+
+## v0.38.0 でやったこと
+
+- **`POST /rooms/{roomId}/report/{eventId}`** (`schema/schema.sql`, `db/reports.rs`, `server/api/client/room_state.rs`):
+  - `event_reports` テーブル新設（room_id, event_id, reporter user_id, score, reason, created_at）。
+  - `db::reports::create()` — 報告を記録。`db::reports::list_all()` — 管理者向け全報告一覧。
+  - `POST /_matrix/client/v3/rooms/{roomId}/report/{eventId}` — `{ "score": -100, "reason": "spam" }` で報告。Matrix spec 準拠。
+  - `GET /_synapse/admin/v1/event_reports` — 管理者向け報告一覧を追加（`admin.rs`）。
+
+- **`/sync` の `rooms.invite` 改善** (`db/sync.rs`):
+  - invite_state に含めるストリップドステートを拡充: `m.room.create`, `m.room.join_rules`, `m.room.name`, `m.room.avatar`, `m.room.canonical_alias`, `m.room.encryption` を追加。
+  - E2EE ルームでの招待時にクライアントが暗号化状態を判定できるようになった。
+
+- **プッシュルール デフォルトセット拡充** (`server/api/client/events.rs`):
+  - override に追加: `.m.rule.invite_for_me`（招待通知）, `.m.rule.member_event`（メンバーイベント抑制）, `.m.rule.tombstone`（廃止部屋通知）, `.m.rule.reaction`（リアクション抑制）, `.m.rule.room.server_acl`（ACL 抑制）。
+  - underride に追加: `.m.rule.call`（通話招待）, `.m.rule.encrypted_room_one_to_one`（1対1暗号化）, `.m.rule.room_one_to_one`（1対1メッセージ）。
 
 ## v0.37.0 でやったこと
 
@@ -182,13 +198,13 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.38.0 候補
+## v0.39.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
 2. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
-3. **`/pushrules` 評価エンジン** — イベント投稿時にサーバーサイドでプッシュルールを評価し通知を生成
-4. **`/rooms/{roomId}/report/{eventId}`** — コンテンツ報告エンドポイント（MSC2414）
-5. **`/sync` の `rooms.invite` 改善** — 招待状態のルームに `invite_state` イベントリストを含める
+3. **`/rooms/{roomId}/upgrade`** — ルームバージョンアップグレード（MSC1849）
+4. **`GET /publicRooms` の改善** — サーバー横断検索（?server= パラメータ）と include_all_networks 対応
+5. **`/capabilities` の拡充** — `m.change_password`, `m.room_versions` を正確に返す
 
 ## 開発フロー（おさらい）
 
