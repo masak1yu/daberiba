@@ -21,6 +21,7 @@ pub fn build(state: AppState) -> Router {
         .merge(api::client::rooms::routes())
         .merge(api::client::room_state::routes())
         .merge(api::client::events::routes())
+        .merge(api::client::global_events::routes())
         .merge(api::client::presence::routes())
         .merge(api::client::profile::routes())
         .merge(api::client::sync::routes())

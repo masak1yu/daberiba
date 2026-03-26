@@ -26,7 +26,6 @@ struct GetPublicRoomsParams {
 struct PostPublicRoomsBody {
     limit: Option<u64>,
     since: Option<String>,
-    #[allow(dead_code)]
     server: Option<String>,
     filter: Option<PostPublicRoomsFilter>,
 }
@@ -40,8 +39,17 @@ async fn get_public_rooms(
     State(state): State<AppState>,
     Query(params): Query<GetPublicRoomsParams>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    // 他サーバへのプロキシは未対応（自サーバのルームのみ返す）
-    let _ = params.server;
+    // ?server= が指定された場合は federation 経由でリモートサーバにプロキシ
+    if let Some(server) = params.server.as_deref() {
+        return proxy_to_server(
+            &state,
+            server,
+            params.limit,
+            params.since.as_deref(),
+            params.filter.as_deref(),
+        )
+        .await;
+    }
     let limit = params.limit.unwrap_or(30).min(500);
     let offset = parse_since(params.since.as_deref());
     let filter = params.filter.as_deref();
@@ -52,6 +60,14 @@ async fn post_public_rooms(
     State(state): State<AppState>,
     Json(body): Json<PostPublicRoomsBody>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    // body.server が指定された場合はリモートサーバにプロキシ
+    if let Some(server) = body.server.as_deref() {
+        let filter = body
+            .filter
+            .as_ref()
+            .and_then(|f| f.generic_search_term.as_deref());
+        return proxy_to_server(&state, server, body.limit, body.since.as_deref(), filter).await;
+    }
     let limit = body.limit.unwrap_or(30).min(500);
     let offset = parse_since(body.since.as_deref());
     let filter = body
@@ -59,6 +75,59 @@ async fn post_public_rooms(
         .as_ref()
         .and_then(|f| f.generic_search_term.as_deref());
     public_rooms_response(&state, filter, limit, offset).await
+}
+
+/// 指定サーバーの `/_matrix/federation/v1/publicRooms` にプロキシする。
+async fn proxy_to_server(
+    state: &AppState,
+    server: &str,
+    limit: Option<u64>,
+    since: Option<&str>,
+    filter: Option<&str>,
+) -> ApiResult<Json<serde_json::Value>> {
+    use crate::error::AppError;
+
+    let mut url = format!("https://{}/_matrix/federation/v1/publicRooms", server);
+    let mut sep = '?';
+    if let Some(l) = limit {
+        url.push_str(&format!("{}limit={}", sep, l));
+        sep = '&';
+    }
+    if let Some(s) = since {
+        url.push_str(&format!("{}since={}", sep, s));
+        sep = '&';
+    }
+    if let Some(f) = filter {
+        url.push_str(&format!("{}filter={}", sep, percent_encode(f)));
+    }
+
+    let resp = state
+        .http
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    let body: serde_json::Value = resp
+        .json()
+        .await
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    Ok(Json(body))
+}
+
+/// URL パーセントエンコード（スペース・特殊文字のみ簡易エスケープ）。
+fn percent_encode(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(b as char);
+            }
+            _ => out.push_str(&format!("%{:02X}", b)),
+        }
+    }
+    out
 }
 
 fn parse_since(since: Option<&str>) -> u64 {
