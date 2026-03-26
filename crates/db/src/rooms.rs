@@ -548,6 +548,31 @@ pub async fn forget(pool: &MySqlPool, room_id: &str, user_id: &str) -> Result<()
     Ok(())
 }
 
+/// ルームをノックする（membership = 'knock' に設定）。
+pub async fn knock(pool: &MySqlPool, user_id: &str, room_id: &str) -> Result<()> {
+    sqlx::query(
+        r#"INSERT INTO room_memberships (room_id, user_id, membership)
+           VALUES (?, ?, 'knock')
+           ON DUPLICATE KEY UPDATE membership = 'knock'"#,
+    )
+    .bind(room_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+/// ユーザーが knock 中のルーム一覧を返す（sync の rooms.knock 用）。
+pub async fn knock_rooms(pool: &MySqlPool, user_id: &str) -> Result<Vec<String>> {
+    let rows: Vec<(String,)> = sqlx::query_as(
+        "SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'knock'",
+    )
+    .bind(user_id)
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(|(id,)| id).collect())
+}
+
 /// ユーザーのルームに対する membership を取得する。レコードがない場合は None。
 pub async fn get_membership(
     pool: &MySqlPool,

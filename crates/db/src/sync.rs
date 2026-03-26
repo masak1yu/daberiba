@@ -284,6 +284,36 @@ pub async fn sync(
         );
     }
 
+    // rooms.knock: membership = 'knock' なルームを knock_state（stripped state）で返す
+    let knock_room_ids = crate::rooms::knock_rooms(pool, user_id).await?;
+    let mut knock_map = serde_json::Map::new();
+    for room_id in knock_room_ids {
+        let mut knock_state_events: Vec<serde_json::Value> = Vec::new();
+
+        for event_type in &[
+            "m.room.name",
+            "m.room.avatar",
+            "m.room.join_rules",
+            "m.room.canonical_alias",
+            "m.room.encryption",
+        ] {
+            if let Ok(Some(content)) =
+                crate::room_state::get_event(pool, &room_id, event_type, "").await
+            {
+                knock_state_events.push(serde_json::json!({
+                    "type": event_type,
+                    "state_key": "",
+                    "content": content,
+                }));
+            }
+        }
+
+        knock_map.insert(
+            room_id,
+            serde_json::json!({ "knock_state": { "events": knock_state_events } }),
+        );
+    }
+
     // rooms.leave: 増分 sync 時、since_ordering より後に leave になったルームを返す
     let mut leave_map = serde_json::Map::new();
     if !is_initial {
@@ -339,6 +369,7 @@ pub async fn sync(
             "join": join_map,
             "invite": invite_map,
             "leave": leave_map,
+            "knock": knock_map,
         },
         "presence": { "events": [] },
     }))
