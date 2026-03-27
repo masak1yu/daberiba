@@ -179,6 +179,51 @@ fn hash_password(password: &str) -> Result<String> {
     Ok(hash.to_string())
 }
 
+/// ユーザーディレクトリ検索結果。
+pub struct UserSearchResult {
+    pub user_id: String,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+}
+
+/// ユーザーディレクトリを検索する。
+///
+/// `term` で user_id または display_name を部分一致検索する。
+/// `limit` 件まで返す（デフォルト 10、最大 50）。
+/// 非アクティブユーザーは除外する。
+pub async fn search_directory(
+    pool: &MySqlPool,
+    term: &str,
+    limit: u64,
+) -> Result<Vec<UserSearchResult>> {
+    use sqlx::Row;
+
+    let pattern = format!("%{}%", term);
+    let rows = sqlx::query(
+        "SELECT u.user_id, p.display_name, p.avatar_url \
+         FROM users u \
+         LEFT JOIN profiles p ON p.user_id = u.user_id \
+         WHERE u.deactivated = 0 \
+           AND (u.user_id LIKE ? OR p.display_name LIKE ?) \
+         ORDER BY p.display_name ASC, u.user_id ASC \
+         LIMIT ?",
+    )
+    .bind(&pattern)
+    .bind(&pattern)
+    .bind(limit as i64)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|r| UserSearchResult {
+            user_id: r.get("user_id"),
+            display_name: r.get("display_name"),
+            avatar_url: r.get("avatar_url"),
+        })
+        .collect())
+}
+
 fn verify_password(password: &str, hash: &str) -> Result<()> {
     let parsed = PasswordHash::new(hash).map_err(|e| anyhow::anyhow!("invalid hash: {}", e))?;
     Argon2::default()

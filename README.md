@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.44.0 — Client-Server API Phase 35 (global event stream, publicRooms cross-server proxy) (functional, not production-ready)
+**Status:** v0.45.0 — Client-Server API Phase 36 (user directory search, media thumbnail, MSC3916 media endpoints) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -82,6 +82,8 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | POST | `/_matrix/client/v3/pushers/set` | Register / delete pusher |
 | GET/POST | `/_matrix/client/v3/publicRooms` | Public room directory (?limit=, ?since=, ?filter=, ?server= cross-server proxy) |
 | GET | `/_matrix/client/v3/events` | Legacy global event stream (?from=, ?timeout=, ?room_id=) |
+| POST | `/_matrix/client/v3/user_directory/search` | User directory search (user_id / display_name LIKE, ?limit=) |
+| GET | `/_matrix/client/v3/thirdparty/protocols` | Third-party protocol list (returns empty object, no bridges configured) |
 | PUT | `/_matrix/client/v3/directory/room/{roomAlias}` | Create room alias |
 | GET | `/_matrix/client/v3/directory/room/{roomAlias}` | Resolve room alias |
 | DELETE | `/_matrix/client/v3/directory/room/{roomAlias}` | Delete room alias |
@@ -125,6 +127,10 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET/PUT/DELETE | `/_matrix/client/v3/room_keys/keys/{roomId}/{sessionId}` | Single session key (backup) |
 | POST | `/_matrix/media/v3/upload` | Upload media |
 | GET | `/_matrix/media/v3/download/{serverName}/{mediaId}` | Download media |
+| GET | `/_matrix/media/v3/thumbnail/{serverName}/{mediaId}` | Thumbnail (returns full image, no resize) |
+| POST | `/_matrix/client/v1/media/upload` | MSC3916 authenticated upload |
+| GET | `/_matrix/client/v1/media/download/{serverName}/{mediaId}` | MSC3916 authenticated download |
+| GET | `/_matrix/client/v1/media/thumbnail/{serverName}/{mediaId}` | MSC3916 authenticated thumbnail |
 | GET | `/_matrix/client/v3/admin/whois/{userId}` | User session info (self or admin) |
 | GET | `/_synapse/admin/v1/users` | List all users (admin only, ?from=&limit=) |
 | GET | `/_synapse/admin/v1/users/{userId}` | Get user details (admin only) |
