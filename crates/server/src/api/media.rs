@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
+        // 旧 v3 メディア API
         .route("/_matrix/media/v3/upload", post(upload))
         .route(
             "/_matrix/media/v3/download/:server_name/:media_id",
@@ -25,6 +26,25 @@ pub fn routes() -> Router<AppState> {
         .route(
             "/_matrix/media/v3/download/:server_name/:media_id/:filename",
             get(download_with_filename),
+        )
+        // サムネイル（v3・MSC3916 v1 共通: フル画像を返す）
+        .route(
+            "/_matrix/media/v3/thumbnail/:server_name/:media_id",
+            get(thumbnail),
+        )
+        // MSC3916 認証済みメディア API（v1）
+        .route("/_matrix/client/v1/media/upload", post(upload))
+        .route(
+            "/_matrix/client/v1/media/download/:server_name/:media_id",
+            get(download),
+        )
+        .route(
+            "/_matrix/client/v1/media/download/:server_name/:media_id/:filename",
+            get(download_with_filename),
+        )
+        .route(
+            "/_matrix/client/v1/media/thumbnail/:server_name/:media_id",
+            get(thumbnail),
         )
 }
 
@@ -82,6 +102,27 @@ async fn download_with_filename(
     axum::Extension(user): axum::Extension<AuthUser>,
     Path((server_name, media_id, _filename)): Path<(String, String, String)>,
 ) -> Result<Response, AppError> {
+    serve_media(&state, &server_name, &media_id, &user.user_id).await
+}
+
+/// サムネイルクエリパラメータ（width/height/method は受け付けるが無視してフル画像を返す）。
+#[derive(Deserialize)]
+struct ThumbnailQuery {
+    #[allow(dead_code)]
+    width: Option<u32>,
+    #[allow(dead_code)]
+    height: Option<u32>,
+    #[allow(dead_code)]
+    method: Option<String>,
+}
+
+async fn thumbnail(
+    State(state): State<AppState>,
+    axum::Extension(user): axum::Extension<AuthUser>,
+    Path((server_name, media_id)): Path<(String, String)>,
+    Query(_query): Query<ThumbnailQuery>,
+) -> Result<Response, AppError> {
+    // サムネイル生成は未実装 — フル画像をそのまま返す
     serve_media(&state, &server_name, &media_id, &user.user_id).await
 }
 

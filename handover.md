@@ -1,4 +1,22 @@
-# Handover — v0.44.0 → v0.45.0
+# Handover — v0.45.0 → v0.46.0
+
+## v0.45.0 でやったこと
+
+- **ユーザーディレクトリ検索** (`db/users.rs`, `server/api/client/user_directory.rs`):
+  - `db::users::search_directory(pool, term, limit)` 新設。`users` テーブルを `profiles` と LEFT JOIN し、`user_id LIKE` または `display_name LIKE` で部分一致検索。非アクティブユーザーは除外。
+  - `POST /_matrix/client/v3/user_directory/search` を新設。`{ search_term, limit }` を受け取り `{ results: [{user_id, display_name?, avatar_url?}], limited }` を返す。
+
+- **メディアサムネイル** (`server/api/media.rs`):
+  - `GET /_matrix/media/v3/thumbnail/{serverName}/{mediaId}` を新設。`?width=`/`?height=`/`?method=` を受け付けるが、現状はリサイズせずフル画像を返す。
+  - `GET /_matrix/client/v1/media/thumbnail/{serverName}/{mediaId}` も同様（MSC3916）。
+
+- **MSC3916 認証済みメディアエンドポイント** (`server/api/media.rs`):
+  - `POST /_matrix/client/v1/media/upload` — 既存 upload ハンドラを流用。
+  - `GET /_matrix/client/v1/media/download/{serverName}/{mediaId}[/{filename}]` — 既存 download ハンドラを流用。
+  - `GET /_matrix/client/v1/media/thumbnail/{serverName}/{mediaId}` — 既存 thumbnail ハンドラを流用。
+
+- **サードパーティプロトコルスタブ** (`server/api/client/thirdparty.rs`):
+  - `GET /_matrix/client/v3/thirdparty/protocols` を新設。ブリッジ未設定のため空オブジェクト `{}` を返す。
 
 ## v0.44.0 でやったこと
 
@@ -292,13 +310,13 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.45.0 候補
+## v0.46.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
 2. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
-3. **`/_matrix/client/v3/login/token`** — `m.login.token` フローの実装（QR コードログイン準備）
-4. **`/rooms/{roomId}/aliases`** — ルームのエイリアス一覧取得エンドポイント
-5. **`/user/{userId}/account_data` の個別 GET** — グローバルアカウントデータの取得（現状は sync 経由のみ）
+3. **メディアサムネイルリサイズ** — `image` クレートを追加し、`?width=&height=&method=` に応じた実際のリサイズ処理
+4. **`/_matrix/client/v3/join/{roomIdOrAlias}` の via パラメータ対応** — `?server_name=` で federation 経由参加
+5. **`/rooms/{roomId}/send` でのメンバーシップ確認** — 非メンバーのイベント送信を 403 で拒否
 
 ## 開発フロー（おさらい）
 
