@@ -1,4 +1,14 @@
-# Handover — v0.47.0 → v0.48.0
+# Handover — v0.48.0 → v0.49.0
+
+## v0.48.0 でやったこと
+
+- **通常イベント送信のパワーレベル確認** (`server/api/client/events.rs`):
+  - `check_send_event_power()` ヘルパー新設。`m.room.power_levels` を取得し、ユーザーの power level と `events[event_type]`（なければ `events_default: 0`）を比較。
+  - `PUT /rooms/{roomId}/send/{eventType}/{txnId}` でメンバーシップ確認を `check_send_event_power()` に統合。従来の個別 membership チェックを削除し、`check_send_event_power()` に一元化。
+
+- **sync rooms.leave に ban イベントを追加** (`db/rooms.rs`, `db/sync.rs`):
+  - `leave_rooms_since()`: `membership IN ('leave', 'ban')` かつ `content LIKE '%"membership":"ban"%'` も対象に拡張。
+  - sync leave timeline クエリ: `content LIKE '%"membership":"ban"%'` もマッチするよう変更。これにより BAN されたユーザーが次回 sync で `rooms.leave` に正しく表示される。
 
 ## v0.47.0 でやったこと
 
@@ -341,13 +351,13 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.48.0 候補
+## v0.49.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
 2. **複数 OIDC プロバイダー対応** — 複数の OIDC プロバイダーを同時設定（例: Google + Keycloak）
-3. **メッセージ送信 power level 確認** — `m.room.power_levels` の `events_default` に基づいた送信権限チェック
-4. **`/sync` の `rooms.leave` 拡充** — leave 時の timeline に `m.room.member` イベントを含め、クライアントが退室理由を表示できるようにする
-5. **`/_matrix/client/v3/rooms/{roomId}/state` (room state snapshot) の最適化** — 現状は全イベントを返すが、最新 (type, state_key) ペアのみ返すよう変更
+3. **`/sync` の knock 対応改善** — knock 状態ルームで `knock_state` に部屋名・アバターなど基本情報を含める
+4. **`/rooms/{roomId}/upgrade`** — ルームバージョンアップグレード (MSC1849) — 新ルームを作成して tombstone/create イベントを送信
+5. **`/_matrix/client/v3/capabilities` 精度向上** — `m.change_password`, `m.room_versions` を正確に返す
 
 ## 開発フロー（おさらい）
 

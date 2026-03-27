@@ -50,11 +50,8 @@ async fn send_event(
     Path(path): Path<SendEventPath>,
     Json(content): Json<serde_json::Value>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    // メンバーシップ確認: 非メンバーのイベント送信を 403 で拒否
-    let membership = db::rooms::get_membership(&state.pool, &path.room_id, &user.user_id).await?;
-    if membership.as_deref() != Some("join") {
-        return Err(crate::error::AppError::Forbidden);
-    }
+    // メンバーシップ確認とパワーレベルチェック
+    check_send_event_power(&state, &path.room_id, &user.user_id, &path.event_type).await?;
 
     // txn_id 冪等性チェック: 同一 (user, device, txn_id) の場合は保存済み event_id を返す
     if let Some(cached_event_id) = db::sent_transactions::get_event_id(
@@ -626,6 +623,55 @@ async fn get_event(
         .await?
         .ok_or(crate::error::AppError::NotFound)?;
     Ok(Json(event))
+}
+
+/// 通常イベント送信前のメンバーシップ確認とパワーレベルチェック。
+///
+/// - 未参加（非 join）ユーザーは 403。
+/// - ユーザーのパワーレベル < イベントタイプの要求レベルは 403。
+///   要求レベル: `events[event_type]` または `events_default`（デフォルト 0）。
+async fn check_send_event_power(
+    state: &crate::state::AppState,
+    room_id: &str,
+    user_id: &str,
+    event_type: &str,
+) -> crate::error::ApiResult<()> {
+    use crate::error::AppError;
+
+    // メンバーシップ確認
+    let membership = db::rooms::get_membership(&state.pool, room_id, user_id).await?;
+    if membership.as_deref() != Some("join") {
+        return Err(AppError::Forbidden);
+    }
+
+    // m.room.power_levels を取得してユーザーのレベルを確認
+    let pl_content =
+        db::room_state::get_event(&state.pool, room_id, "m.room.power_levels", "").await?;
+
+    let Some(pl) = pl_content else {
+        // power_levels がまだない場合は通過（ルーム作成直後）
+        return Ok(());
+    };
+
+    // ユーザーのパワーレベル（デフォルト: users_default、なければ 0）
+    let users_default = pl["users_default"].as_i64().unwrap_or(0);
+    let user_level = pl["users"]
+        .get(user_id)
+        .and_then(|v| v.as_i64())
+        .unwrap_or(users_default);
+
+    // イベントタイプの要求レベル（events_default のデフォルトは 0）
+    let events_default = pl["events_default"].as_i64().unwrap_or(0);
+    let required_level = pl["events"]
+        .get(event_type)
+        .and_then(|v| v.as_i64())
+        .unwrap_or(events_default);
+
+    if user_level < required_level {
+        return Err(AppError::Forbidden);
+    }
+
+    Ok(())
 }
 
 /// state イベント送信前のメンバーシップ確認とパワーレベルチェック。
