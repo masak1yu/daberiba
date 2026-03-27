@@ -1,4 +1,20 @@
-# Handover — v0.46.0 → v0.47.0
+# Handover — v0.47.0 → v0.48.0
+
+## v0.47.0 でやったこと
+
+- **非メンバーのイベント送信を 403 で拒否** (`server/api/client/events.rs`):
+  - `PUT /rooms/{roomId}/send/{eventType}/{txnId}` で `db::rooms::get_membership()` を呼び出し、`membership != 'join'` の場合 403 Forbidden を返すよう変更。
+
+- **state イベント送信のパワーレベル確認** (`server/api/client/events.rs`):
+  - `check_state_event_power()` ヘルパー新設。`m.room.power_levels` 状態イベントを取得し、ユーザーの power level と `events[event_type]`（なければ `state_default: 50`）を比較。
+  - `PUT /rooms/{roomId}/state/{type}` および `PUT /rooms/{roomId}/state/{type}/{key}` の両ハンドラで呼び出す。
+  - メンバーシップ確認も内包（非 join ユーザーは 403）。
+
+- **メディアサムネイルリサイズ** (`server/api/media.rs`, `Cargo.toml`):
+  - `image = "0.25"` クレートを workspace に追加（jpeg/png/webp/gif のみ有効化）。
+  - `GET /thumbnail/{serverName}/{mediaId}?width=W&height=H&method=scale|crop` で実際にリサイズして JPEG で返すよう変更。
+  - `?width=`/`?height=` が未指定の場合、または `image/*` 以外の場合はフル画像をそのまま返す。
+  - `method=crop` は `resize_to_fill`（Lanczos3）、`scale`（デフォルト）は `resize`。
 
 ## v0.46.0 でやったこと
 
@@ -325,13 +341,13 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.47.0 候補
+## v0.48.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **メディアサムネイルリサイズ** — `image` クレートを追加し、`?width=&height=&method=` に応じた実際のリサイズ処理
-3. **`/rooms/{roomId}/send` でのメンバーシップ確認** — 非メンバーのイベント送信を 403 で拒否（現状は DB 外部キー制約のみ）
-4. **複数 OIDC プロバイダー対応** — `SSO_PROVIDERS=google,github` 形式で複数設定を管理
-5. **`/_matrix/client/v3/account/password/email/requestToken`** — メールアドレスを使ったパスワードリセットフロー
+2. **複数 OIDC プロバイダー対応** — 複数の OIDC プロバイダーを同時設定（例: Google + Keycloak）
+3. **メッセージ送信 power level 確認** — `m.room.power_levels` の `events_default` に基づいた送信権限チェック
+4. **`/sync` の `rooms.leave` 拡充** — leave 時の timeline に `m.room.member` イベントを含め、クライアントが退室理由を表示できるようにする
+5. **`/_matrix/client/v3/rooms/{roomId}/state` (room state snapshot) の最適化** — 現状は全イベントを返すが、最新 (type, state_key) ペアのみ返すよう変更
 
 ## 開発フロー（おさらい）
 
