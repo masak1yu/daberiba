@@ -54,7 +54,7 @@ export default function RoomPage() {
     .map((id) => memberNames?.[id] ?? id)
 
   // ルーム入室時・新着イベント受信時に既読送信
-  const lastEventIdRef = useRef<string | undefined>()
+  const lastEventIdRef = useRef<string | undefined>(undefined)
   useEffect(() => {
     const lastEvent = events.at(-1)
     if (!lastEvent?.event_id) return
