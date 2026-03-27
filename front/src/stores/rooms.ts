@@ -11,6 +11,7 @@ import { STORAGE_KEY } from '../api/client'
 export interface RoomSummary {
   roomId: string
   name?: string
+  topic?: string
   lastEvent?: MatrixEvent
   notificationCount: number
   highlightCount: number
@@ -55,6 +56,10 @@ interface RoomsActions {
   loadHistory: (roomId: string) => Promise<void>
   /** ルームを開いたときに未読カウントをローカルでリセットする */
   markRoomRead: (roomId: string) => void
+  /** イベントをタイムラインから削除する（redaction） */
+  redactEvent: (roomId: string, eventId: string) => void
+  /** イベントの body を編集内容で更新する（m.replace） */
+  applyEdit: (roomId: string, eventId: string, newContent: Record<string, unknown>) => void
   setSyncing: (v: boolean) => void
   setError: (e: string | null) => void
   reset: () => void
@@ -147,22 +152,68 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
       const timelineEvents = room.timeline.events ?? []
       const allEvents = [...stateEvents, ...timelineEvents]
 
-      // ルーム名
+      // ルーム名・トピック
       const nameEv = allEvents.findLast((e) => e.type === 'm.room.name')
       const name = nameEv ? String((nameEv.content as { name?: string }).name ?? '') : undefined
+      const topicEv = allEvents.findLast((e) => e.type === 'm.room.topic')
+      const topic = topicEv
+        ? String((topicEv.content as { topic?: string }).topic ?? '')
+        : undefined
 
       // displayName / avatar_url マップ（state + timeline の m.room.member から）
       nextMemberNames[roomId] = mergeMemberNames(nextMemberNames[roomId] ?? {}, allEvents)
       nextMemberAvatars[roomId] = mergeMemberAvatars(nextMemberAvatars[roomId] ?? {}, allEvents)
 
-      // m.reaction をリアクション集計へ、それ以外のメッセージイベントをタイムラインへ
+      // m.reaction をリアクション集計へ
       const reactionEvents = timelineEvents.filter((e) => e.type === 'm.reaction')
-      const msgEvents = timelineEvents.filter(
-        (e) => e.state_key === undefined && e.type !== 'm.reaction'
+      nextReactions[roomId] = mergeReactions(nextReactions[roomId] ?? {}, reactionEvents)
+
+      // m.room.redaction — タイムラインから対象イベントを削除
+      const redactedIds = new Set(
+        timelineEvents
+          .filter((e) => e.type === 'm.room.redaction')
+          .map((e) => String((e.content as { redacts?: string }).redacts ?? e.redacts ?? ''))
+          .filter(Boolean)
       )
 
-      nextTimelines[roomId] = [...(nextTimelines[roomId] ?? []), ...msgEvents]
-      nextReactions[roomId] = mergeReactions(nextReactions[roomId] ?? {}, reactionEvents)
+      // m.replace (編集) — 対象イベントの content を更新
+      const replacements = new Map<string, Record<string, unknown>>()
+      for (const ev of timelineEvents) {
+        const rel = (ev.content as { 'm.relates_to'?: { rel_type?: string; event_id?: string } })[
+          'm.relates_to'
+        ]
+        if (rel?.rel_type === 'm.replace' && rel.event_id) {
+          const newContent = (ev.content as { 'm.new_content'?: Record<string, unknown> })[
+            'm.new_content'
+          ]
+          if (newContent) replacements.set(rel.event_id, newContent)
+        }
+      }
+
+      // メッセージイベント（state/reaction/replace/redaction 以外）
+      const msgEvents = timelineEvents.filter((e) => {
+        if (e.state_key !== undefined) return false
+        if (e.type === 'm.reaction') return false
+        if (e.type === 'm.room.redaction') return false
+        const rel = (e.content as { 'm.relates_to'?: { rel_type?: string } })['m.relates_to']
+        if (rel?.rel_type === 'm.replace') return false
+        return true
+      })
+
+      // 既存タイムラインに redaction / replace を適用してから新イベントを追加
+      const prevTimeline = nextTimelines[roomId] ?? []
+      const applied = prevTimeline
+        .filter((e) => !e.event_id || !redactedIds.has(e.event_id))
+        .map((e) => {
+          if (e.event_id && replacements.has(e.event_id)) {
+            return { ...e, content: { ...e.content, ...replacements.get(e.event_id) } }
+          }
+          return e
+        })
+      nextTimelines[roomId] = [
+        ...applied,
+        ...msgEvents.filter((e) => !redactedIds.has(e.event_id ?? '')),
+      ]
 
       // ephemeral: m.typing
       const typingEv = (room.ephemeral?.events ?? []).find((e) => e.type === 'm.typing')
@@ -178,6 +229,7 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
       nextRooms[roomId] = {
         roomId,
         name: name || prev[roomId]?.name,
+        topic: topic ?? prev[roomId]?.topic,
         lastEvent: msgEvents.at(-1) ?? prev[roomId]?.lastEvent,
         notificationCount:
           room.unread_notifications?.notification_count ?? prev[roomId]?.notificationCount ?? 0,
@@ -251,6 +303,26 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
         },
       }
     })
+  },
+
+  redactEvent(roomId, eventId) {
+    set((s) => ({
+      timelines: {
+        ...s.timelines,
+        [roomId]: (s.timelines[roomId] ?? []).filter((e) => e.event_id !== eventId),
+      },
+    }))
+  },
+
+  applyEdit(roomId, eventId, newContent) {
+    set((s) => ({
+      timelines: {
+        ...s.timelines,
+        [roomId]: (s.timelines[roomId] ?? []).map((e) =>
+          e.event_id === eventId ? { ...e, content: { ...e.content, ...newContent } } : e
+        ),
+      },
+    }))
   },
 
   setSyncing: (v) => set({ syncing: v }),

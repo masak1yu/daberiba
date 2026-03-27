@@ -8,6 +8,8 @@ export interface MatrixEvent {
   origin_server_ts?: number
   content: Record<string, unknown>
   state_key?: string
+  /** m.room.redaction イベントが削除対象 event_id を持つ */
+  redacts?: string
 }
 
 export interface JoinedRoom {
@@ -76,6 +78,7 @@ export async function syncOnce(
 
 /**
  * 継続的な sync ループを開始する。
+ * - バックグラウンド復帰時（visibilitychange）に即リトライ
  * 返り値の関数を呼ぶと停止する。
  */
 export function startSyncLoop(
@@ -85,18 +88,38 @@ export function startSyncLoop(
 ): () => void {
   let active = true
   let since: string | undefined
+  // バックグラウンド復帰を通知するための resolve 関数
+  let wakeResolve: (() => void) | null = null
+
+  function onVisibilityChange() {
+    if (document.visibilityState === 'visible' && wakeResolve) {
+      wakeResolve()
+      wakeResolve = null
+    }
+  }
+  document.addEventListener('visibilitychange', onVisibilityChange)
 
   async function loop() {
     while (active) {
       try {
-        const data = await syncOnce(client, since)
+        // バックグラウンド中は short timeout で polling（長時間 fetch でハングしない）
+        const timeout = document.visibilityState === 'hidden' ? 5_000 : 30_000
+        const data = await syncOnce(client, since, timeout)
         since = data.next_batch
         if (active) onUpdate(data)
       } catch (err) {
         if (!active) break
         onError?.(err)
-        // エラー後は 3 秒待ってリトライ
-        await new Promise((r) => setTimeout(r, 3_000))
+        // バックグラウンド時は visibilitychange まで待機、フォアグラウンド時は 3s 待ってリトライ
+        if (document.visibilityState === 'hidden') {
+          await new Promise<void>((resolve) => {
+            wakeResolve = resolve
+            // 最大 60s 待機してもフォアグラウンドに戻らなければリトライ
+            setTimeout(resolve, 60_000)
+          })
+        } else {
+          await new Promise((r) => setTimeout(r, 3_000))
+        }
       }
     }
   }
@@ -104,5 +127,6 @@ export function startSyncLoop(
   loop()
   return () => {
     active = false
+    document.removeEventListener('visibilitychange', onVisibilityChange)
   }
 }

@@ -43,6 +43,27 @@ export async function setRoomTopic(
   return putRoomState(homeserver, token, roomId, 'm.room.topic', { topic })
 }
 
+/** PUT /_matrix/client/v3/rooms/{roomId}/redact/{eventId}/{txnId} */
+export async function redactEvent(
+  homeserver: string,
+  token: string,
+  roomId: string,
+  eventId: string,
+  reason?: string
+): Promise<void> {
+  const txnId = `redact.${Date.now()}.${Math.random().toString(36).slice(2)}`
+  const url = `${homeserver}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/redact/${encodeURIComponent(eventId)}/${txnId}`
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(reason ? { reason } : {}),
+  })
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string }
+    throw new Error(err.error ?? `redact failed: ${res.status}`)
+  }
+}
+
 /**
  * PUT /rooms/{roomId}/send/m.reaction/{txnId}
  * m.reaction は state ではなく通常イベントだが便宜上ここに置く

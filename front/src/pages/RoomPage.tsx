@@ -10,7 +10,7 @@ import { sendReadReceipt } from '../api/messages'
 import { leaveRoom } from '../api/rooms'
 import { uploadMedia } from '../api/profile'
 import { sendTyping } from '../api/sync'
-import { sendReaction } from '../api/roomState'
+import { sendReaction, redactEvent } from '../api/roomState'
 import { useSwipeBack } from '../hooks/useSwipeBack'
 import AppShell from '../components/layout/AppShell'
 import Timeline from '../components/room/Timeline'
@@ -37,6 +37,8 @@ export default function RoomPage() {
   const allMemberNames = useRoomsStore((s) => s.memberNames)
   const allMemberAvatars = useRoomsStore((s) => s.memberAvatars)
   const markRoomRead = useRoomsStore((s) => s.markRoomRead)
+  const storeRedactEvent = useRoomsStore((s) => s.redactEvent)
+  const storeApplyEdit = useRoomsStore((s) => s.applyEdit)
 
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -214,11 +216,40 @@ export default function RoomPage() {
     }
   }
 
-  // ルームのトピックを state から取得
-  const roomTopic = useMemo(() => {
-    const topicEv = (timelines[decodedRoomId] ?? []).findLast((e) => e.type === 'm.room.topic')
-    return topicEv ? String((topicEv.content as { topic?: string }).topic ?? '') : undefined
-  }, [timelines, decodedRoomId])
+  async function handleDelete(eventId: string) {
+    const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
+    const token = localStorage.getItem(STORAGE_KEY.ACCESS_TOKEN)
+    if (!homeserver || !token) return
+    storeRedactEvent(decodedRoomId, eventId)
+    try {
+      await redactEvent(homeserver, token, decodedRoomId, eventId)
+    } catch {
+      // 失敗は silent — sync で再同期される
+    }
+  }
+
+  async function handleEdit(eventId: string, newBody: string) {
+    const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
+    const token = localStorage.getItem(STORAGE_KEY.ACCESS_TOKEN)
+    if (!homeserver || !token) return
+    const newContent = { msgtype: 'm.text', body: newBody }
+    storeApplyEdit(decodedRoomId, eventId, newContent)
+    try {
+      const txnId = `edit.${Date.now()}.${++txnRef.current}`
+      const url = `${homeserver}/_matrix/client/v3/rooms/${encodeURIComponent(decodedRoomId)}/send/m.room.message/${txnId}`
+      await fetch(url, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newContent,
+          'm.relates_to': { rel_type: 'm.replace', event_id: eventId },
+          'm.new_content': newContent,
+        }),
+      })
+    } catch {
+      // 失敗は silent
+    }
+  }
 
   return (
     <>
@@ -264,6 +295,8 @@ export default function RoomPage() {
               historyLoading={isHistoryLoading}
               onLoadMore={handleLoadMore}
               onReact={handleReact}
+              onDelete={(id) => void handleDelete(id)}
+              onEdit={(id, body) => void handleEdit(id, body)}
             />
           </div>
 
@@ -324,7 +357,7 @@ export default function RoomPage() {
         <RoomSettingsModal
           roomId={decodedRoomId}
           currentName={room?.name}
-          currentTopic={roomTopic}
+          currentTopic={room?.topic}
           onClose={() => setShowRoomSettings(false)}
         />
       )}
