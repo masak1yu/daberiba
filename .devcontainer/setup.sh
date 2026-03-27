@@ -13,9 +13,14 @@ curl -fsSL https://claude.ai/install.sh | bash
 # Node.js + pnpm のインストール（フロントエンド開発用）
 curl -fsSL https://fnm.vercel.app/install | bash -s -- --install-dir "$HOME/.local/share/fnm" --skip-shell
 export PATH="$HOME/.local/share/fnm:$PATH"
+eval "$(fnm env --shell bash)"
 fnm install --lts
 fnm use lts-latest
 npm install -g pnpm
+# bash / zsh 両方に fnm の初期化を追記
+FNM_INIT='export PATH="$HOME/.local/share/fnm:$PATH" && eval "$(fnm env --shell bash)"'
+grep -qF 'fnm env' "$HOME/.bashrc" || echo "$FNM_INIT" >> "$HOME/.bashrc"
+grep -qF 'fnm env' "$HOME/.zshrc"  || echo "$FNM_INIT" >> "$HOME/.zshrc"
 # フロントエンド依存インストール
 (cd front && pnpm install --frozen-lockfile) || true
 
