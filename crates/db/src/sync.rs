@@ -319,13 +319,14 @@ pub async fn sync(
     if !is_initial {
         let leave_room_ids = crate::rooms::leave_rooms_since(pool, user_id, since_ordering).await?;
         for room_id in leave_room_ids {
-            // leave イベント（m.room.member / state_key = user_id）を取得
+            // leave/ban イベント（m.room.member / state_key = user_id）を取得
             let leave_events: Vec<serde_json::Value> = sqlx::query(
                 r#"SELECT event_id, sender, event_type, state_key, content, created_at
                    FROM events
                    WHERE room_id = ? AND event_type = 'm.room.member' AND state_key = ?
                      AND stream_ordering > ?
-                     AND content LIKE '%"membership":"leave"%'
+                     AND (content LIKE '%"membership":"leave"%'
+                       OR content LIKE '%"membership":"ban"%')
                    ORDER BY stream_ordering DESC LIMIT 1"#,
             )
             .bind(&room_id)

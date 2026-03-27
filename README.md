@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.47.0 — Client-Server API Phase 38 (membership/power-level enforcement, media thumbnail resize) (functional, not production-ready)
+**Status:** v0.48.0 — Client-Server API Phase 39 (message send power-level check, sync leave/ban, ban event fix) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 

@@ -475,6 +475,7 @@ pub async fn leave_rooms_since(
     since_ordering: u64,
 ) -> Result<Vec<String>> {
     use sqlx::Row;
+    // leave（退室・キック）と ban（BAN）両方を対象とする
     let rows = sqlx::query(
         r#"SELECT DISTINCT rm.room_id
            FROM room_memberships rm
@@ -482,8 +483,9 @@ pub async fn leave_rooms_since(
              AND e.event_type = 'm.room.member'
              AND e.state_key = ?
              AND e.stream_ordering > ?
-             AND e.content LIKE '%"membership":"leave"%'
-           WHERE rm.user_id = ? AND rm.membership = 'leave'"#,
+             AND (e.content LIKE '%"membership":"leave"%'
+               OR e.content LIKE '%"membership":"ban"%')
+           WHERE rm.user_id = ? AND rm.membership IN ('leave', 'ban')"#,
     )
     .bind(user_id)
     .bind(since_ordering)
