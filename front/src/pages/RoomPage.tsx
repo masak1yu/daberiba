@@ -1,7 +1,7 @@
 /**
  * ルームページ — タイムライン表示 + メッセージ送信
  */
-import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth'
 import { useRoomsStore } from '../stores/rooms'
@@ -42,7 +42,7 @@ export default function RoomPage() {
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const decodedRoomId = roomId ? decodeURIComponent(roomId) : ''
-  const events = timelines[decodedRoomId] ?? []
+  const events = useMemo(() => timelines[decodedRoomId] ?? [], [timelines, decodedRoomId])
   const room = rooms[decodedRoomId]
   const hasMore = Boolean(prevBatches[decodedRoomId])
   const isHistoryLoading = historyLoading[decodedRoomId] ?? false
