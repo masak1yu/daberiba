@@ -952,7 +952,7 @@ dependencies = [
 
 [[package]]
 name = "db"
-version = "0.45.0"
+version = "0.46.0"
 dependencies = [
  "anyhow",
  "argon2",
@@ -2781,7 +2781,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.45.0"
+version = "0.46.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2809,6 +2809,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "urlencoding",
  "uuid",
 ]
 

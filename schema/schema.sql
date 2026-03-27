@@ -373,3 +373,22 @@ CREATE TABLE IF NOT EXISTS sent_transactions (
     PRIMARY KEY (user_id, device_id, txn_id),
     FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- SSO OAuth2/OIDC state テーブル。認可フロー開始時に state トークンと redirect_url を保存する。
+-- コールバック時に state を検証し redirect_url を取得する。有効期限は 5 分。
+CREATE TABLE IF NOT EXISTS sso_states (
+    state        VARCHAR(255) NOT NULL,
+    redirect_url TEXT         NOT NULL,
+    expires_at   BIGINT       NOT NULL COMMENT 'Unix milliseconds',
+    PRIMARY KEY (state)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- SSO アカウントマッピングテーブル。OIDC sub クレームと Matrix user_id の対応を保存する。
+-- 初回 SSO ログイン時に登録され、以降のログインで user_id を解決する。
+CREATE TABLE IF NOT EXISTS sso_accounts (
+    sub        VARCHAR(255) NOT NULL COMMENT 'OIDC sub (provider:sub 形式)',
+    user_id    VARCHAR(255) NOT NULL,
+    PRIMARY KEY (sub),
+    INDEX idx_sso_accounts_user_id (user_id),
+    FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

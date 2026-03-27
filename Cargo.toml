@@ -6,7 +6,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.45.0"
+version = "0.46.0"
 edition = "2021"
 
 [workspace.dependencies]
@@ -32,3 +32,4 @@ ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
 base64 = "0.22"
 sha2 = "0.10"
+urlencoding = "2"

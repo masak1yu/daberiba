@@ -1,5 +1,6 @@
 use crate::media_store::MediaStore;
 use crate::signing_key::ServerSigningKey;
+use crate::sso::SsoConfig;
 use crate::typing_store::TypingStore;
 use crate::uia::UiaStore;
 use dashmap::DashMap;
@@ -19,6 +20,8 @@ pub struct AppState {
     pub signing_key: Arc<ServerSigningKey>,
     /// Federation 公開鍵キャッシュ: "{server_name}/{key_id}" -> (key_bytes, valid_until_ms)
     pub fed_key_cache: Arc<DashMap<String, (Vec<u8>, u64)>>,
+    /// SSO/OIDC 設定（OIDC_ISSUER が未設定の場合は None）
+    pub sso: Option<Arc<SsoConfig>>,
 }
 
 impl AppState {
@@ -27,15 +30,18 @@ impl AppState {
         let server_name: Arc<str> = std::env::var("SERVER_NAME")
             .unwrap_or_else(|_| "localhost".to_string())
             .into();
+        let http = reqwest::Client::new();
+        let sso = SsoConfig::load_from_env(&http).await.map(Arc::new);
         Self {
             pool,
             media,
             uia: UiaStore::new(),
             typing: TypingStore::new(),
-            http: reqwest::Client::new(),
+            http,
             server_name,
             signing_key,
             fed_key_cache: Arc::new(DashMap::new()),
+            sso,
         }
     }
 }
