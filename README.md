@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.45.0 — Client-Server API Phase 36 (user directory search, media thumbnail, MSC3916 media endpoints) (functional, not production-ready)
+**Status:** v0.46.0 — Client-Server API Phase 37 (SSO/OIDC login flow) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -23,8 +23,11 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | Method | Path | Description |
 |---|---|---|
 | GET | `/_matrix/client/versions` | Supported spec versions |
-| GET | `/_matrix/client/v3/login` | Login flows |
+| GET | `/_matrix/client/v3/login` | Login flows (includes m.login.sso if OIDC_ISSUER is configured) |
 | POST | `/_matrix/client/v3/login` | Login (m.login.password, m.login.token) |
+| GET | `/_matrix/client/v3/login/sso/redirect` | SSO redirect to OIDC provider (?redirectUrl=) |
+| GET | `/_matrix/client/v3/login/sso/redirect/{idpId}` | SSO redirect (specific provider) |
+| GET | `/_matrix/client/v3/login/sso/callback` | SSO callback — exchanges code, issues loginToken |
 | POST | `/_matrix/client/v3/register` | Register |
 | GET | `/_matrix/client/v3/capabilities` | Server capabilities |
 | GET | `/.well-known/matrix/client` | Client discovery |

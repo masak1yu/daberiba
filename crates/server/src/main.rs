@@ -12,6 +12,7 @@ mod middleware;
 mod push_eval;
 mod router;
 mod signing_key;
+mod sso;
 mod state;
 mod state_res;
 mod typing_store;

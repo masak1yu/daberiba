@@ -1,4 +1,19 @@
-# Handover — v0.45.0 → v0.46.0
+# Handover — v0.46.0 → v0.47.0
+
+## v0.46.0 でやったこと
+
+- **SSO/OIDC ログインフロー** (`schema/schema.sql`, `db/sso.rs`, `server/sso.rs`, `server/api/client/auth.rs`):
+  - `sso_states` テーブル新設（state トークン → redirect_url、5 分有効、使い捨て）。
+  - `sso_accounts` テーブル新設（OIDC sub → Matrix user_id マッピング）。
+  - `db::sso::create_state()` / `consume_state()` / `find_user_by_sub()` / `link_account()` 新設。
+  - `server::sso::SsoConfig` 構造体 — 起動時に `OIDC_ISSUER` の discovery エンドポイントを叩いて auth/token/userinfo URL を取得。`OIDC_ISSUER` が未設定なら SSO 無効。
+  - `AppState.sso: Option<Arc<SsoConfig>>` を追加。
+  - `GET /_matrix/client/v3/login` — SSO 有効時は `m.login.sso` フローと `identity_providers` を含めるよう変更。
+  - `GET /_matrix/client/v3/login/sso/redirect?redirectUrl=<url>` — state を生成して OIDC 認可 URL へリダイレクト（HTTP 307）。
+  - `GET /_matrix/client/v3/login/sso/redirect/{idpId}` — 同上（現状は idpId 無視、1 プロバイダーのみ）。
+  - `GET /_matrix/client/v3/login/sso/callback?code=...&state=...` — code を token に交換 → userinfo 取得 → sso_accounts でユーザーを解決（初回は自動登録・display_name セット）→ login_token を発行 → `redirectUrl?loginToken=<token>` へリダイレクト。
+  - `derive_localpart()` / `sanitize_localpart()` / `make_unique_localpart()` ヘルパー追加。
+  - `urlencoding` クレートを workspace に追加。
 
 ## v0.45.0 でやったこと
 
@@ -310,13 +325,13 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.46.0 候補
+## v0.47.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **`/login/sso/redirect` + `m.login.sso`** — SSO フローの追加（identity provider 連携）
-3. **メディアサムネイルリサイズ** — `image` クレートを追加し、`?width=&height=&method=` に応じた実際のリサイズ処理
-4. **`/_matrix/client/v3/join/{roomIdOrAlias}` の via パラメータ対応** — `?server_name=` で federation 経由参加
-5. **`/rooms/{roomId}/send` でのメンバーシップ確認** — 非メンバーのイベント送信を 403 で拒否
+2. **メディアサムネイルリサイズ** — `image` クレートを追加し、`?width=&height=&method=` に応じた実際のリサイズ処理
+3. **`/rooms/{roomId}/send` でのメンバーシップ確認** — 非メンバーのイベント送信を 403 で拒否（現状は DB 外部キー制約のみ）
+4. **複数 OIDC プロバイダー対応** — `SSO_PROVIDERS=google,github` 形式で複数設定を管理
+5. **`/_matrix/client/v3/account/password/email/requestToken`** — メールアドレスを使ったパスワードリセットフロー
 
 ## 開発フロー（おさらい）
 
