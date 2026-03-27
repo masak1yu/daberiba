@@ -32,6 +32,7 @@ export default function RoomPage() {
   const allReactions = useRoomsStore((s) => s.reactions)
   const allTyping = useRoomsStore((s) => s.typing)
   const allMemberNames = useRoomsStore((s) => s.memberNames)
+  const markRoomRead = useRoomsStore((s) => s.markRoomRead)
 
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
@@ -53,6 +54,11 @@ export default function RoomPage() {
     .filter((id) => id !== userId)
     .map((id) => memberNames?.[id] ?? id)
 
+  // ルーム入室時に未読カウントをリセット
+  useEffect(() => {
+    markRoomRead(decodedRoomId)
+  }, [decodedRoomId, markRoomRead])
+
   // ルーム入室時・新着イベント受信時に既読送信
   const lastEventIdRef = useRef<string | undefined>(undefined)
   useEffect(() => {
@@ -61,12 +67,13 @@ export default function RoomPage() {
     if (lastEvent.event_id === lastEventIdRef.current) return
     lastEventIdRef.current = lastEvent.event_id
 
+    markRoomRead(decodedRoomId)
     const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
     const token = localStorage.getItem(STORAGE_KEY.ACCESS_TOKEN)
     if (homeserver && token) {
       void sendReadReceipt(homeserver, token, decodedRoomId, lastEvent.event_id)
     }
-  }, [decodedRoomId, events])
+  }, [decodedRoomId, events, markRoomRead])
 
   const handleLoadMore = useCallback(() => {
     void loadHistory(decodedRoomId)

@@ -6,19 +6,22 @@ import { startSyncLoop } from '../api/sync'
 import AppShell from '../components/layout/AppShell'
 import RoomList from '../components/room/RoomList'
 import CreateRoomModal from '../components/room/CreateRoomModal'
+import PublicRoomsModal from '../components/room/PublicRoomsModal'
 import ProfileModal from '../components/common/ProfileModal'
 
 export default function HomePage() {
   const client = useAuthStore((s) => s.client)
   const userId = useAuthStore((s) => s.userId)
-  const { applySyncResponse, setSyncing, setError, reset } = useRoomsStore((s) => ({
+  const { applySyncResponse, setSyncing, setError, reset, markRoomRead } = useRoomsStore((s) => ({
     applySyncResponse: s.applySyncResponse,
     setSyncing: s.setSyncing,
     setError: s.setError,
     reset: s.reset,
+    markRoomRead: s.markRoomRead,
   }))
   const navigate = useNavigate()
   const [showCreate, setShowCreate] = useState(false)
+  const [showPublic, setShowPublic] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
 
   useEffect(() => {
@@ -42,13 +45,21 @@ export default function HomePage() {
       <AppShell
         headerRight={
           <div className="ml-2 flex items-center gap-1.5">
-            {/* プロフィール編集 */}
+            {/* 設定 */}
             <button
-              onClick={() => setShowProfile(true)}
+              onClick={() => navigate('/settings')}
               className="text-gray-400 hover:text-white text-sm"
-              title="プロフィール"
+              title="設定"
             >
               ⚙
+            </button>
+            {/* パブリックルーム検索 */}
+            <button
+              onClick={() => setShowPublic(true)}
+              className="text-gray-400 hover:text-white text-sm"
+              title="パブリックルームを探す"
+            >
+              🔍
             </button>
             {/* 新規ルーム作成 */}
             <button
@@ -61,7 +72,12 @@ export default function HomePage() {
           </div>
         }
       >
-        <RoomList onSelect={(roomId) => navigate(`/room/${encodeURIComponent(roomId)}`)} />
+        <RoomList
+          onSelect={(roomId) => {
+            markRoomRead(roomId)
+            navigate(`/room/${encodeURIComponent(roomId)}`)
+          }}
+        />
       </AppShell>
 
       {showCreate && (
@@ -71,6 +87,17 @@ export default function HomePage() {
             navigate(`/room/${encodeURIComponent(roomId)}`)
           }}
           onClose={() => setShowCreate(false)}
+        />
+      )}
+
+      {showPublic && (
+        <PublicRoomsModal
+          onJoined={(roomId) => {
+            setShowPublic(false)
+            markRoomRead(roomId)
+            navigate(`/room/${encodeURIComponent(roomId)}`)
+          }}
+          onClose={() => setShowPublic(false)}
         />
       )}
 

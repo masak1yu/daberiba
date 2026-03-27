@@ -53,6 +53,8 @@ interface RoomsState {
 interface RoomsActions {
   applySyncResponse: (resp: SyncResponse) => void
   loadHistory: (roomId: string) => Promise<void>
+  /** ルームを開いたときに未読カウントをローカルでリセットする */
+  markRoomRead: (roomId: string) => void
   setSyncing: (v: boolean) => void
   setError: (e: string | null) => void
   reset: () => void
@@ -236,6 +238,19 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
     } finally {
       set((s) => ({ historyLoading: { ...s.historyLoading, [roomId]: false } }))
     }
+  },
+
+  markRoomRead(roomId) {
+    set((s) => {
+      const room = s.rooms[roomId]
+      if (!room) return {}
+      return {
+        rooms: {
+          ...s.rooms,
+          [roomId]: { ...room, notificationCount: 0, highlightCount: 0 },
+        },
+      }
+    })
   },
 
   setSyncing: (v) => set({ syncing: v }),

@@ -19,7 +19,7 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const result = await login({ homeserver, username, password })
-      setClient(result.client, result.userId)
+      setClient(result.client, result.userId, result.deviceId)
       navigate('/', { replace: true })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'ログインに失敗しました')

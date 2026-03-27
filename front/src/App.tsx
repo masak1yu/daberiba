@@ -6,6 +6,7 @@ import RequireAuth from './components/common/RequireAuth'
 import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
 import RoomPage from './pages/RoomPage'
+import SettingsPage from './pages/SettingsPage'
 
 export default function App() {
   const hydrate = useAuthStore((s) => s.hydrate)
@@ -35,6 +36,14 @@ export default function App() {
           element={
             <RequireAuth>
               <RoomPage />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <RequireAuth>
+              <SettingsPage />
             </RequireAuth>
           }
         />
