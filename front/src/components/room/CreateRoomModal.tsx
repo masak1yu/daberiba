@@ -41,7 +41,9 @@ export default function CreateRoomModal({ onCreated, onClose }: Props) {
     // バックドロップ
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
     >
       <div className="w-full max-w-sm rounded-2xl bg-gray-900 p-6 shadow-xl">
         <h2 className="mb-4 text-lg font-bold">新しいルームを作成</h2>

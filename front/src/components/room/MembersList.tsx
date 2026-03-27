@@ -14,7 +14,11 @@ interface Props {
 function MemberItem({ member }: { member: RoomMember }) {
   return (
     <li className="flex items-center gap-3 px-4 py-2">
-      <Avatar userId={member.userId} displayName={member.displayName} avatarUrl={member.avatarUrl} />
+      <Avatar
+        userId={member.userId}
+        displayName={member.displayName}
+        avatarUrl={member.avatarUrl}
+      />
       <div className="min-w-0">
         {member.displayName && (
           <p className="truncate text-sm font-medium text-white">{member.displayName}</p>
@@ -84,7 +88,10 @@ export default function MembersList({ roomId, onClose }: Props) {
       {/* ドロワー本体（右から） */}
       <div
         className="fixed inset-y-0 right-0 z-50 flex w-72 max-w-full flex-col bg-gray-900 shadow-xl"
-        style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+        style={{
+          paddingTop: 'env(safe-area-inset-top)',
+          paddingBottom: 'env(safe-area-inset-bottom)',
+        }}
       >
         <div className="flex items-center justify-between border-b border-gray-800 px-4 py-3">
           <h2 className="font-semibold">メンバー</h2>

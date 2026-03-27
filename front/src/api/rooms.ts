@@ -44,7 +44,10 @@ export async function fetchMembers(
   )
   if (!res.ok) throw new Error(`members failed: ${res.status}`)
   const data = (await res.json()) as {
-    chunk: { state_key: string; content: { membership: string; displayname?: string; avatar_url?: string } }[]
+    chunk: {
+      state_key: string
+      content: { membership: string; displayname?: string; avatar_url?: string }
+    }[]
   }
   return data.chunk
     .filter((ev) => ev.content.membership === 'join')
@@ -57,11 +60,7 @@ export async function fetchMembers(
 }
 
 /** POST /_matrix/client/v3/rooms/{roomId}/leave */
-export async function leaveRoom(
-  homeserver: string,
-  token: string,
-  roomId: string
-): Promise<void> {
+export async function leaveRoom(homeserver: string, token: string, roomId: string): Promise<void> {
   const res = await fetch(
     `${homeserver}/_matrix/client/v3/rooms/${encodeURIComponent(roomId)}/leave`,
     {

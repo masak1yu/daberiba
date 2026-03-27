@@ -26,15 +26,14 @@ export function mxcToHttp(mxc: string, homeserver: string): string {
  * @param width     最大幅 px（デフォルト 800）
  * @param height    最大高さ px（デフォルト 600）
  */
-export function mxcToThumbnail(
-  mxc: string,
-  homeserver: string,
-  width = 800,
-  height = 600
-): string {
+export function mxcToThumbnail(mxc: string, homeserver: string, width = 800, height = 600): string {
   const match = /^mxc:\/\/([^/]+)\/(.+)$/.exec(mxc)
   if (!match) return mxc
   const [, serverName, mediaId] = match
-  const params = new URLSearchParams({ width: String(width), height: String(height), method: 'scale' })
+  const params = new URLSearchParams({
+    width: String(width),
+    height: String(height),
+    method: 'scale',
+  })
   return `${homeserver}/_matrix/media/v3/thumbnail/${serverName}/${mediaId}?${params}`
 }

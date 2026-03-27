@@ -45,9 +45,7 @@ export default function Avatar({ userId, displayName, avatarUrl, size = 'md' }: 
   }
 
   return (
-    <div
-      className={`${cls} flex items-center justify-center bg-indigo-700 font-bold select-none`}
-    >
+    <div className={`${cls} flex items-center justify-center bg-indigo-700 font-bold select-none`}>
       {getInitial(userId, displayName)}
     </div>
   )

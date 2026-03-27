@@ -11,7 +11,11 @@ interface Props {
   onClose: () => void
 }
 
-async function fetchDisplayName(homeserver: string, token: string, userId: string): Promise<string> {
+async function fetchDisplayName(
+  homeserver: string,
+  token: string,
+  userId: string
+): Promise<string> {
   const res = await fetch(
     `${homeserver}/_matrix/client/v3/profile/${encodeURIComponent(userId)}/displayname`,
     { headers: { Authorization: `Bearer ${token}` } }
@@ -21,7 +25,12 @@ async function fetchDisplayName(homeserver: string, token: string, userId: strin
   return data.displayname ?? ''
 }
 
-async function putDisplayName(homeserver: string, token: string, userId: string, name: string): Promise<void> {
+async function putDisplayName(
+  homeserver: string,
+  token: string,
+  userId: string,
+  name: string
+): Promise<void> {
   const res = await fetch(
     `${homeserver}/_matrix/client/v3/profile/${encodeURIComponent(userId)}/displayname`,
     {
@@ -49,7 +58,10 @@ export default function ProfileModal({ userId, onClose }: Props) {
   useEffect(() => {
     const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
     const token = localStorage.getItem(STORAGE_KEY.ACCESS_TOKEN)
-    if (!homeserver || !token) { setLoading(false); return }
+    if (!homeserver || !token) {
+      setLoading(false)
+      return
+    }
 
     Promise.all([
       fetchDisplayName(homeserver, token, userId),
@@ -59,7 +71,9 @@ export default function ProfileModal({ userId, onClose }: Props) {
         setDisplayName(name)
         setAvatarUrl(url)
       })
-      .catch(() => {/* 取得失敗は空欄のまま */})
+      .catch(() => {
+        /* 取得失敗は空欄のまま */
+      })
       .finally(() => setLoading(false))
   }, [userId])
 
@@ -109,12 +123,16 @@ export default function ProfileModal({ userId, onClose }: Props) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose()
+      }}
     >
       <div className="w-full max-w-sm rounded-2xl bg-gray-900 p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold">プロフィール</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">×</button>
+          <button onClick={onClose} className="text-xl leading-none text-gray-400 hover:text-white">
+            ×
+          </button>
         </div>
 
         {/* アバター */}

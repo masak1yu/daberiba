@@ -77,7 +77,9 @@ function mergeReactions(base: Reactions, events: MatrixEvent[]): Reactions {
   const next = { ...base }
   for (const ev of events) {
     if (ev.type !== 'm.reaction') continue
-    const rel = (ev.content as { 'm.relates_to'?: { event_id?: string; key?: string } })['m.relates_to']
+    const rel = (ev.content as { 'm.relates_to'?: { event_id?: string; key?: string } })[
+      'm.relates_to'
+    ]
     if (!rel?.event_id || !rel.key || !ev.sender) continue
 
     const targetId = rel.event_id
@@ -153,7 +155,9 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
 
       // m.reaction をリアクション集計へ、それ以外のメッセージイベントをタイムラインへ
       const reactionEvents = timelineEvents.filter((e) => e.type === 'm.reaction')
-      const msgEvents = timelineEvents.filter((e) => e.state_key === undefined && e.type !== 'm.reaction')
+      const msgEvents = timelineEvents.filter(
+        (e) => e.state_key === undefined && e.type !== 'm.reaction'
+      )
 
       nextTimelines[roomId] = [...(nextTimelines[roomId] ?? []), ...msgEvents]
       nextReactions[roomId] = mergeReactions(nextReactions[roomId] ?? {}, reactionEvents)
@@ -205,7 +209,9 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
     try {
       const resp = await fetchHistory(homeserver, token, roomId, from)
       const reversed = [...resp.chunk].reverse()
-      const newMsgEvents = reversed.filter((e) => e.state_key === undefined && e.type !== 'm.reaction')
+      const newMsgEvents = reversed.filter(
+        (e) => e.state_key === undefined && e.type !== 'm.reaction'
+      )
       const newReactionEvents = reversed.filter((e) => e.type === 'm.reaction')
       // 過去ログからも m.room.member を拾う
       const newMemberEvents = reversed.filter((e) => e.type === 'm.room.member')

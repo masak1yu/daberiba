@@ -102,7 +102,7 @@ export default function RoomPage() {
         void sendTyping(homeserver, token, decodedRoomId, userId, false)
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decodedRoomId])
 
   async function handleLeave() {
@@ -137,7 +137,10 @@ export default function RoomPage() {
     try {
       // 送信直前に typing=false を即時送信
       if (userId) void sendTyping(homeserver, accessToken, decodedRoomId, userId, false)
-      if (typingTimerRef.current) { clearTimeout(typingTimerRef.current); typingTimerRef.current = null }
+      if (typingTimerRef.current) {
+        clearTimeout(typingTimerRef.current)
+        typingTimerRef.current = null
+      }
 
       // PUT /_matrix/client/v3/rooms/{roomId}/send/m.room.message/{txnId}
       const url = `${homeserver}/_matrix/client/v3/rooms/${encodeURIComponent(decodedRoomId)}/send/m.room.message/${txnId}`
@@ -226,15 +229,15 @@ export default function RoomPage() {
         </div>
       </AppShell>
 
-      {showMembers && (
-        <MembersList roomId={decodedRoomId} onClose={() => setShowMembers(false)} />
-      )}
+      {showMembers && <MembersList roomId={decodedRoomId} onClose={() => setShowMembers(false)} />}
 
       {/* 退出確認ダイアログ */}
       {confirmLeave && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4"
-          onClick={(e) => { if (e.target === e.currentTarget) setConfirmLeave(false) }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setConfirmLeave(false)
+          }}
         >
           <div className="w-full max-w-xs rounded-2xl bg-gray-900 p-6 shadow-xl">
             <h2 className="mb-2 text-base font-bold">ルームを退出しますか？</h2>

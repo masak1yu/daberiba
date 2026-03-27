@@ -41,11 +41,7 @@ export async function putAvatarUrl(
 /**
  * POST /_matrix/media/v3/upload — ファイルをアップロードして mxc:// URI を返す
  */
-export async function uploadMedia(
-  homeserver: string,
-  token: string,
-  file: File
-): Promise<string> {
+export async function uploadMedia(homeserver: string, token: string, file: File): Promise<string> {
   const params = new URLSearchParams({ filename: file.name })
   const res = await fetch(`${homeserver}/_matrix/media/v3/upload?${params}`, {
     method: 'POST',

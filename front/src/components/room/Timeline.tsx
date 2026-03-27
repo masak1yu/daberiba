@@ -67,7 +67,16 @@ function MessageContent({ content }: { content: Record<string, unknown> }) {
   return <span className="whitespace-pre-wrap">{body}</span>
 }
 
-export default function Timeline({ events, myUserId, reactions, memberNames, memberAvatars, hasMore, historyLoading, onLoadMore }: Props) {
+export default function Timeline({
+  events,
+  myUserId,
+  reactions,
+  memberNames,
+  memberAvatars,
+  hasMore,
+  historyLoading,
+  onLoadMore,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
@@ -152,7 +161,10 @@ export default function Timeline({ events, myUserId, reactions, memberNames, mem
           const senderAvatar = ev.sender ? memberAvatars?.[ev.sender] : undefined
 
           return (
-            <div key={ev.event_id} className={`flex items-end gap-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
+            <div
+              key={ev.event_id}
+              className={`flex items-end gap-2 ${isMine ? 'justify-end' : 'justify-start'}`}
+            >
               {/* 他ユーザーのアバター（左端に配置） */}
               {!isMine && (
                 <Avatar
@@ -163,7 +175,9 @@ export default function Timeline({ events, myUserId, reactions, memberNames, mem
                 />
               )}
 
-              <div className={`flex min-w-0 max-w-[75%] flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+              <div
+                className={`flex min-w-0 max-w-[75%] flex-col ${isMine ? 'items-end' : 'items-start'}`}
+              >
                 {!isMine && <span className="mb-0.5 text-xs text-gray-500">{senderName}</span>}
                 <div
                   className={`break-words rounded-2xl px-3 py-2 text-sm ${
