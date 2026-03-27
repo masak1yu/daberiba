@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.46.0 — Client-Server API Phase 37 (SSO/OIDC login flow) (functional, not production-ready)
+**Status:** v0.47.0 — Client-Server API Phase 38 (membership/power-level enforcement, media thumbnail resize) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -130,10 +130,10 @@ A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backe
 | GET/PUT/DELETE | `/_matrix/client/v3/room_keys/keys/{roomId}/{sessionId}` | Single session key (backup) |
 | POST | `/_matrix/media/v3/upload` | Upload media |
 | GET | `/_matrix/media/v3/download/{serverName}/{mediaId}` | Download media |
-| GET | `/_matrix/media/v3/thumbnail/{serverName}/{mediaId}` | Thumbnail (returns full image, no resize) |
+| GET | `/_matrix/media/v3/thumbnail/{serverName}/{mediaId}` | Thumbnail (?width=, ?height=, ?method=scale|crop — JPEG output via `image` crate) |
 | POST | `/_matrix/client/v1/media/upload` | MSC3916 authenticated upload |
 | GET | `/_matrix/client/v1/media/download/{serverName}/{mediaId}` | MSC3916 authenticated download |
-| GET | `/_matrix/client/v1/media/thumbnail/{serverName}/{mediaId}` | MSC3916 authenticated thumbnail |
+| GET | `/_matrix/client/v1/media/thumbnail/{serverName}/{mediaId}` | MSC3916 authenticated thumbnail (with resize) |
 | GET | `/_matrix/client/v3/admin/whois/{userId}` | User session info (self or admin) |
 | GET | `/_synapse/admin/v1/users` | List all users (admin only, ?from=&limit=) |
 | GET | `/_synapse/admin/v1/users/{userId}` | Get user details (admin only) |

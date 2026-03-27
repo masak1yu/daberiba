@@ -105,14 +105,12 @@ async fn download_with_filename(
     serve_media(&state, &server_name, &media_id, &user.user_id).await
 }
 
-/// サムネイルクエリパラメータ（width/height/method は受け付けるが無視してフル画像を返す）。
+/// サムネイルクエリパラメータ。
 #[derive(Deserialize)]
 struct ThumbnailQuery {
-    #[allow(dead_code)]
     width: Option<u32>,
-    #[allow(dead_code)]
     height: Option<u32>,
-    #[allow(dead_code)]
+    /// "scale"（アスペクト比維持）または "crop"（クロップ）。デフォルト "scale"。
     method: Option<String>,
 }
 
@@ -120,10 +118,62 @@ async fn thumbnail(
     State(state): State<AppState>,
     axum::Extension(user): axum::Extension<AuthUser>,
     Path((server_name, media_id)): Path<(String, String)>,
-    Query(_query): Query<ThumbnailQuery>,
+    Query(query): Query<ThumbnailQuery>,
 ) -> Result<Response, AppError> {
-    // サムネイル生成は未実装 — フル画像をそのまま返す
-    serve_media(&state, &server_name, &media_id, &user.user_id).await
+    let record = db::media::get(&state.pool, &server_name, &media_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    let accessible = db::media::is_accessible_by(&state.pool, &record, &user.user_id)
+        .await
+        .map_err(AppError::Internal)?;
+    if !accessible {
+        return Err(AppError::Forbidden);
+    }
+
+    let data = state
+        .media
+        .fetch(&media_id)
+        .await?
+        .ok_or(AppError::NotFound)?;
+
+    // width/height 未指定、または画像でない場合はフル画像をそのまま返す
+    let (Some(w), Some(h)) = (query.width, query.height) else {
+        return build_response(&record.content_type, data);
+    };
+
+    // content_type が image/* でない場合はそのまま返す
+    if !record.content_type.starts_with("image/") {
+        return build_response(&record.content_type, data);
+    }
+
+    // image クレートでリサイズ
+    let img = image::load_from_memory(&data).map_err(|e| AppError::Internal(e.into()))?;
+
+    let resized = if query.method.as_deref() == Some("crop") {
+        // crop: アスペクト比を無視してクロップ
+        img.resize_to_fill(w, h, image::imageops::FilterType::Lanczos3)
+    } else {
+        // scale（デフォルト）: アスペクト比を維持して縮小
+        img.resize(w, h, image::imageops::FilterType::Lanczos3)
+    };
+
+    // JPEG でエンコードして返す
+    let mut buf = std::io::Cursor::new(Vec::new());
+    resized
+        .write_to(&mut buf, image::ImageFormat::Jpeg)
+        .map_err(|e| AppError::Internal(e.into()))?;
+
+    build_response("image/jpeg", bytes::Bytes::from(buf.into_inner()))
+}
+
+fn build_response(content_type: &str, data: bytes::Bytes) -> Result<Response, AppError> {
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, content_type)
+        .header(header::CONTENT_LENGTH, data.len())
+        .body(Body::from(data))
+        .map_err(|e| AppError::Internal(e.into()))
 }
 
 async fn serve_media(
@@ -150,12 +200,7 @@ async fn serve_media(
         .await?
         .ok_or(AppError::NotFound)?;
 
-    let response = Response::builder()
-        .status(StatusCode::OK)
-        .header(header::CONTENT_TYPE, record.content_type)
-        .header(header::CONTENT_LENGTH, data.len())
-        .body(Body::from(data))
-        .map_err(|e| AppError::Internal(e.into()))?;
+    let response = build_response(&record.content_type, data)?;
 
     Ok(response)
 }

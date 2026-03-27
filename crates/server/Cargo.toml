@@ -21,6 +21,7 @@ dotenvy = { workspace = true }
 sqlx = { workspace = true }
 url = "2"
 urlencoding = { workspace = true }
+image = { workspace = true }
 async-trait = { workspace = true }
 bytes = { workspace = true }
 dashmap = { workspace = true }
