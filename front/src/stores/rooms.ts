@@ -25,6 +25,9 @@ export type Reactions = Record<string, Record<string, string[]>>
 /** room_id → userId → displayName（未設定なら undefined） */
 export type MemberNames = Record<string, string | undefined>
 
+/** room_id → userId → avatar_url mxc URI（未設定なら undefined） */
+export type MemberAvatars = Record<string, string | undefined>
+
 interface RoomsState {
   /** 次の sync に使う since トークン */
   since: string | undefined
@@ -41,6 +44,8 @@ interface RoomsState {
   typing: Record<string, string[]>
   /** room_id → userId → displayName */
   memberNames: Record<string, MemberNames>
+  /** room_id → userId → avatar_url */
+  memberAvatars: Record<string, MemberAvatars>
   syncing: boolean
   error: string | null
 }
@@ -62,6 +67,7 @@ const INITIAL: RoomsState = {
   reactions: {},
   typing: {},
   memberNames: {},
+  memberAvatars: {},
   syncing: false,
   error: null,
 }
@@ -100,6 +106,17 @@ function mergeMemberNames(base: MemberNames, events: MatrixEvent[]): MemberNames
   return next
 }
 
+/** m.room.member イベントから avatar_url マップを更新する */
+function mergeMemberAvatars(base: MemberAvatars, events: MatrixEvent[]): MemberAvatars {
+  const next = { ...base }
+  for (const ev of events) {
+    if (ev.type !== 'm.room.member' || !ev.state_key) continue
+    const avatar_url = (ev.content as { avatar_url?: string }).avatar_url
+    if (avatar_url) next[ev.state_key] = avatar_url
+  }
+  return next
+}
+
 export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
   ...INITIAL,
 
@@ -111,6 +128,7 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
       reactions: prevReactions,
       typing: prevTyping,
       memberNames: prevMemberNames,
+      memberAvatars: prevMemberAvatars,
     } = get()
     const nextRooms = { ...prev }
     const nextTimelines = { ...prevTimelines }
@@ -118,6 +136,7 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
     const nextReactions = { ...prevReactions }
     const nextTyping = { ...prevTyping }
     const nextMemberNames = { ...prevMemberNames }
+    const nextMemberAvatars = { ...prevMemberAvatars }
 
     for (const [roomId, room] of Object.entries(resp.rooms?.join ?? {})) {
       const stateEvents = room.state?.events ?? []
@@ -128,11 +147,9 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
       const nameEv = allEvents.findLast((e) => e.type === 'm.room.name')
       const name = nameEv ? String((nameEv.content as { name?: string }).name ?? '') : undefined
 
-      // displayName マップ（state + timeline の m.room.member から）
-      nextMemberNames[roomId] = mergeMemberNames(
-        nextMemberNames[roomId] ?? {},
-        allEvents
-      )
+      // displayName / avatar_url マップ（state + timeline の m.room.member から）
+      nextMemberNames[roomId] = mergeMemberNames(nextMemberNames[roomId] ?? {}, allEvents)
+      nextMemberAvatars[roomId] = mergeMemberAvatars(nextMemberAvatars[roomId] ?? {}, allEvents)
 
       // m.reaction をリアクション集計へ、それ以外のメッセージイベントをタイムラインへ
       const reactionEvents = timelineEvents.filter((e) => e.type === 'm.reaction')
@@ -171,6 +188,7 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
       reactions: nextReactions,
       typing: nextTyping,
       memberNames: nextMemberNames,
+      memberAvatars: nextMemberAvatars,
     })
   },
 
@@ -201,6 +219,10 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
         memberNames: {
           ...s.memberNames,
           [roomId]: mergeMemberNames(s.memberNames[roomId] ?? {}, newMemberEvents),
+        },
+        memberAvatars: {
+          ...s.memberAvatars,
+          [roomId]: mergeMemberAvatars(s.memberAvatars[roomId] ?? {}, newMemberEvents),
         },
       }))
     } catch {

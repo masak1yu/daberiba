@@ -9,15 +9,17 @@
  */
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { MatrixEvent } from '../../api/sync'
-import type { MemberNames, Reactions } from '../../stores/rooms'
+import type { MemberAvatars, MemberNames, Reactions } from '../../stores/rooms'
 import { mxcToHttp, mxcToThumbnail } from '../../api/media'
 import { STORAGE_KEY } from '../../api/client'
+import Avatar from '../common/Avatar'
 
 interface Props {
   events: MatrixEvent[]
   myUserId: string | null
   reactions?: Reactions
   memberNames?: MemberNames
+  memberAvatars?: MemberAvatars
   hasMore?: boolean
   historyLoading?: boolean
   onLoadMore?: () => void
@@ -65,7 +67,7 @@ function MessageContent({ content }: { content: Record<string, unknown> }) {
   return <span className="whitespace-pre-wrap">{body}</span>
 }
 
-export default function Timeline({ events, myUserId, reactions, memberNames, hasMore, historyLoading, onLoadMore }: Props) {
+export default function Timeline({ events, myUserId, reactions, memberNames, memberAvatars, hasMore, historyLoading, onLoadMore }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
@@ -147,10 +149,21 @@ export default function Timeline({ events, myUserId, reactions, memberNames, has
           const eventReactions = ev.event_id ? (reactions?.[ev.event_id] ?? {}) : {}
           const reactionEntries = Object.entries(eventReactions)
           const senderName = (ev.sender && memberNames?.[ev.sender]) ?? ev.sender ?? ''
+          const senderAvatar = ev.sender ? memberAvatars?.[ev.sender] : undefined
 
           return (
-            <div key={ev.event_id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
-              <div className={`flex max-w-[75%] flex-col ${isMine ? 'items-end' : 'items-start'}`}>
+            <div key={ev.event_id} className={`flex items-end gap-2 ${isMine ? 'justify-end' : 'justify-start'}`}>
+              {/* 他ユーザーのアバター（左端に配置） */}
+              {!isMine && (
+                <Avatar
+                  userId={ev.sender ?? ''}
+                  displayName={senderName}
+                  avatarUrl={senderAvatar}
+                  size="sm"
+                />
+              )}
+
+              <div className={`flex min-w-0 max-w-[75%] flex-col ${isMine ? 'items-end' : 'items-start'}`}>
                 {!isMine && <span className="mb-0.5 text-xs text-gray-500">{senderName}</span>}
                 <div
                   className={`break-words rounded-2xl px-3 py-2 text-sm ${

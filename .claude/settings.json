@@ -37,7 +37,11 @@
       "Bash(SQLX_OFFLINE=true cargo fmt)",
       "Bash(/home/vscode/.local/bin/gh pr:*)",
       "Read(//home/**)",
-      "Bash(curl -s -X POST -H \"Authorization: token $GITHUB_TOKEN\" -H \"Accept: application/vnd.github+json\" https://api.github.com/repos/masak1yu/daberiba/pulls -d '{:*)"
+      "Bash(curl -s -X POST -H \"Authorization: token $GITHUB_TOKEN\" -H \"Accept: application/vnd.github+json\" https://api.github.com/repos/masak1yu/daberiba/pulls -d '{:*)",
+      "Bash(git tag:*)",
+      "Bash(git checkout:*)",
+      "Bash(git worktree:*)",
+      "Bash(gh release:*)"
     ]
   },
   "hooks": {

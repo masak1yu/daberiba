@@ -1,8 +1,10 @@
 /**
- * プロフィール編集モーダル — 表示名の変更
+ * プロフィール編集モーダル — 表示名・アバター画像の変更
  */
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { STORAGE_KEY } from '../../api/client'
+import { fetchAvatarUrl, putAvatarUrl, uploadMedia } from '../../api/profile'
+import Avatar from './Avatar'
 
 interface Props {
   userId: string
@@ -36,21 +38,53 @@ async function putDisplayName(homeserver: string, token: string, userId: string,
 
 export default function ProfileModal({ userId, onClose }: Props) {
   const [displayName, setDisplayName] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
     const token = localStorage.getItem(STORAGE_KEY.ACCESS_TOKEN)
     if (!homeserver || !token) { setLoading(false); return }
 
-    fetchDisplayName(homeserver, token, userId)
-      .then((name) => setDisplayName(name))
+    Promise.all([
+      fetchDisplayName(homeserver, token, userId),
+      fetchAvatarUrl(homeserver, token, userId),
+    ])
+      .then(([name, url]) => {
+        setDisplayName(name)
+        setAvatarUrl(url)
+      })
       .catch(() => {/* 取得失敗は空欄のまま */})
       .finally(() => setLoading(false))
   }, [userId])
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
+    const token = localStorage.getItem(STORAGE_KEY.ACCESS_TOKEN)
+    if (!homeserver || !token) return
+
+    setUploading(true)
+    setError(null)
+    try {
+      const mxc = await uploadMedia(homeserver, token, file)
+      await putAvatarUrl(homeserver, token, userId, mxc)
+      setAvatarUrl(mxc)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'アップロードに失敗しました')
+    } finally {
+      setUploading(false)
+      // input をリセットして同じファイルを再選択できるようにする
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   async function handleSave(e: FormEvent) {
     e.preventDefault()
@@ -81,6 +115,31 @@ export default function ProfileModal({ userId, onClose }: Props) {
         <div className="mb-4 flex items-center justify-between">
           <h2 className="text-lg font-bold">プロフィール</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-white text-xl leading-none">×</button>
+        </div>
+
+        {/* アバター */}
+        <div className="mb-4 flex flex-col items-center gap-3">
+          <Avatar
+            userId={userId}
+            displayName={displayName || undefined}
+            avatarUrl={avatarUrl ?? undefined}
+            size="lg"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || loading}
+            className="rounded-lg bg-gray-700 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-600 disabled:opacity-50"
+          >
+            {uploading ? 'アップロード中…' : 'アバターを変更'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => void handleAvatarChange(e)}
+          />
         </div>
 
         <p className="mb-4 truncate text-sm text-gray-400">{userId}</p>

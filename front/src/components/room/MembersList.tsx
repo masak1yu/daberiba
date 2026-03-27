@@ -4,6 +4,7 @@
 import { type FormEvent, useEffect, useState } from 'react'
 import { fetchMembers, inviteUser, type RoomMember } from '../../api/rooms'
 import { STORAGE_KEY } from '../../api/client'
+import Avatar from '../common/Avatar'
 
 interface Props {
   roomId: string
@@ -11,14 +12,9 @@ interface Props {
 }
 
 function MemberItem({ member }: { member: RoomMember }) {
-  const label = member.displayName ?? member.userId
-  const initial = label.startsWith('@') ? label.charAt(1).toUpperCase() : label.charAt(0).toUpperCase()
-
   return (
     <li className="flex items-center gap-3 px-4 py-2">
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-700 text-sm font-bold select-none">
-        {initial}
-      </div>
+      <Avatar userId={member.userId} displayName={member.displayName} avatarUrl={member.avatarUrl} />
       <div className="min-w-0">
         {member.displayName && (
           <p className="truncate text-sm font-medium text-white">{member.displayName}</p>

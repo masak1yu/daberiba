@@ -9,6 +9,7 @@ export interface CreateRoomResponse {
 export interface RoomMember {
   userId: string
   displayName?: string
+  avatarUrl?: string
   membership: string
 }
 
@@ -43,13 +44,14 @@ export async function fetchMembers(
   )
   if (!res.ok) throw new Error(`members failed: ${res.status}`)
   const data = (await res.json()) as {
-    chunk: { state_key: string; content: { membership: string; displayname?: string } }[]
+    chunk: { state_key: string; content: { membership: string; displayname?: string; avatar_url?: string } }[]
   }
   return data.chunk
     .filter((ev) => ev.content.membership === 'join')
     .map((ev) => ({
       userId: ev.state_key,
       displayName: ev.content.displayname,
+      avatarUrl: ev.content.avatar_url,
       membership: ev.content.membership,
     }))
 }
