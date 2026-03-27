@@ -1,0 +1,46 @@
+name: CI (frontend)
+
+on:
+  push:
+    branches: ["main", "frontend", "feat/**"]
+    paths: ["front/**"]
+  pull_request:
+    branches: ["main", "frontend"]
+    paths: ["front/**"]
+
+defaults:
+  run:
+    working-directory: front
+
+jobs:
+  check:
+    name: Type-check, Lint & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: front/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type-check
+        run: pnpm type-check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Build
+        run: pnpm build
