@@ -8,11 +8,14 @@ import { useRoomsStore } from '../stores/rooms'
 import { STORAGE_KEY } from '../api/client'
 import { sendReadReceipt } from '../api/messages'
 import { leaveRoom } from '../api/rooms'
+import { uploadMedia } from '../api/profile'
 import { sendTyping } from '../api/sync'
+import { sendReaction } from '../api/roomState'
 import { useSwipeBack } from '../hooks/useSwipeBack'
 import AppShell from '../components/layout/AppShell'
 import Timeline from '../components/room/Timeline'
 import MembersList from '../components/room/MembersList'
+import RoomSettingsModal from '../components/room/RoomSettingsModal'
 
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>()
@@ -32,15 +35,19 @@ export default function RoomPage() {
   const allReactions = useRoomsStore((s) => s.reactions)
   const allTyping = useRoomsStore((s) => s.typing)
   const allMemberNames = useRoomsStore((s) => s.memberNames)
+  const allMemberAvatars = useRoomsStore((s) => s.memberAvatars)
   const markRoomRead = useRoomsStore((s) => s.markRoomRead)
 
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [showMembers, setShowMembers] = useState(false)
+  const [showRoomSettings, setShowRoomSettings] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
   const [leaving, setLeaving] = useState(false)
   const txnRef = useRef(0)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const decodedRoomId = roomId ? decodeURIComponent(roomId) : ''
   const events = useMemo(() => timelines[decodedRoomId] ?? [], [timelines, decodedRoomId])
@@ -49,6 +56,7 @@ export default function RoomPage() {
   const isHistoryLoading = historyLoading[decodedRoomId] ?? false
   const reactions = allReactions[decodedRoomId]
   const memberNames = allMemberNames[decodedRoomId]
+  const memberAvatars = allMemberAvatars[decodedRoomId]
   // 自分以外のタイピング中ユーザー（displayName 優先で表示）
   const typingUsers = (allTyping[decodedRoomId] ?? [])
     .filter((id) => id !== userId)
@@ -79,7 +87,7 @@ export default function RoomPage() {
     void loadHistory(decodedRoomId)
   }, [decodedRoomId, loadHistory])
 
-  // 入力中に typing=true を送信し、500ms 無入力で typing=false を送る
+  // 入力中に typing=true を送信し、8s 無入力で typing=false を送る
   function handleInputChange(value: string) {
     setInput(value)
 
@@ -164,6 +172,54 @@ export default function RoomPage() {
     }
   }
 
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
+    const accessToken = localStorage.getItem(STORAGE_KEY.ACCESS_TOKEN)
+    if (!homeserver || !accessToken) return
+
+    setUploading(true)
+    try {
+      const mxc = await uploadMedia(homeserver, accessToken, file)
+      const isImage = file.type.startsWith('image/')
+      const isVideo = file.type.startsWith('video/')
+      const isAudio = file.type.startsWith('audio/')
+      const msgtype = isImage ? 'm.image' : isVideo ? 'm.video' : isAudio ? 'm.audio' : 'm.file'
+
+      const txnId = `m${Date.now()}.${++txnRef.current}`
+      const url = `${homeserver}/_matrix/client/v3/rooms/${encodeURIComponent(decodedRoomId)}/send/m.room.message/${txnId}`
+      await fetch(url, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ msgtype, body: file.name, url: mxc }),
+      })
+    } catch {
+      // 失敗は silent
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
+
+  async function handleReact(eventId: string, emoji: string) {
+    const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
+    const token = localStorage.getItem(STORAGE_KEY.ACCESS_TOKEN)
+    if (!homeserver || !token) return
+    try {
+      await sendReaction(homeserver, token, decodedRoomId, eventId, emoji)
+    } catch {
+      // 失敗は silent
+    }
+  }
+
+  // ルームのトピックを state から取得
+  const roomTopic = useMemo(() => {
+    const topicEv = (timelines[decodedRoomId] ?? []).findLast((e) => e.type === 'm.room.topic')
+    return topicEv ? String((topicEv.content as { topic?: string }).topic ?? '') : undefined
+  }, [timelines, decodedRoomId])
+
   return (
     <>
       <AppShell
@@ -172,6 +228,13 @@ export default function RoomPage() {
         onBack={() => navigate('/')}
         headerRight={
           <div className="ml-2 flex items-center gap-1">
+            <button
+              onClick={() => setShowRoomSettings(true)}
+              className="text-gray-400 hover:text-white text-sm px-1"
+              title="ルーム設定"
+            >
+              ⚙
+            </button>
             <button
               onClick={() => setShowMembers(true)}
               className="text-gray-400 hover:text-white text-lg"
@@ -196,9 +259,11 @@ export default function RoomPage() {
               myUserId={userId}
               reactions={reactions}
               memberNames={memberNames}
+              memberAvatars={memberAvatars}
               hasMore={hasMore}
               historyLoading={isHistoryLoading}
               onLoadMore={handleLoadMore}
+              onReact={handleReact}
             />
           </div>
 
@@ -217,6 +282,23 @@ export default function RoomPage() {
             style={{ paddingBottom: 'max(env(safe-area-inset-bottom), 0.75rem)' }}
           >
             <div className="flex gap-2">
+              {/* ファイル添付ボタン */}
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="shrink-0 rounded-lg bg-gray-800 px-3 py-2 text-gray-400 hover:bg-gray-700 hover:text-white disabled:opacity-50"
+                title="ファイルを添付"
+              >
+                {uploading ? '…' : '📎'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => void handleFileChange(e)}
+              />
+
               <input
                 type="text"
                 value={input}
@@ -237,6 +319,15 @@ export default function RoomPage() {
       </AppShell>
 
       {showMembers && <MembersList roomId={decodedRoomId} onClose={() => setShowMembers(false)} />}
+
+      {showRoomSettings && (
+        <RoomSettingsModal
+          roomId={decodedRoomId}
+          currentName={room?.name}
+          currentTopic={roomTopic}
+          onClose={() => setShowRoomSettings(false)}
+        />
+      )}
 
       {/* 退出確認ダイアログ */}
       {confirmLeave && (

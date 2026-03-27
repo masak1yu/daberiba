@@ -5,14 +5,17 @@
  * - 上端センチネルの IntersectionObserver で過去ログを遡り読み込み
  * - 過去ログ挿入後はスクロール位置を復元して表示位置が飛ばないようにする
  * - リアクション（m.reaction）を絵文字バッジとして吹き出し下に表示
+ * - バブルタップで絵文字ピッカーを表示してリアクションを送信できる
  * - m.image はサムネイル表示、m.file はダウンロードリンク表示
  */
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MatrixEvent } from '../../api/sync'
 import type { MemberAvatars, MemberNames, Reactions } from '../../stores/rooms'
 import { mxcToHttp, mxcToThumbnail } from '../../api/media'
 import { STORAGE_KEY } from '../../api/client'
 import Avatar from '../common/Avatar'
+
+const EMOJI_LIST = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🎉', '🔥']
 
 interface Props {
   events: MatrixEvent[]
@@ -23,6 +26,7 @@ interface Props {
   hasMore?: boolean
   historyLoading?: boolean
   onLoadMore?: () => void
+  onReact?: (eventId: string, emoji: string) => void
 }
 
 /** msgtype ごとのバブル内コンテンツ */
@@ -67,6 +71,32 @@ function MessageContent({ content }: { content: Record<string, unknown> }) {
   return <span className="whitespace-pre-wrap">{body}</span>
 }
 
+/** 絵文字ピッカー */
+function EmojiPicker({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (emoji: string) => void
+  onClose: () => void
+}) {
+  return (
+    <div className="absolute bottom-full mb-1 z-20 flex gap-1 rounded-xl bg-gray-800 p-1.5 shadow-lg">
+      {EMOJI_LIST.map((emoji) => (
+        <button
+          key={emoji}
+          onClick={() => {
+            onSelect(emoji)
+            onClose()
+          }}
+          className="rounded-lg p-1 text-lg hover:bg-gray-700 active:scale-90"
+        >
+          {emoji}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function Timeline({
   events,
   myUserId,
@@ -76,10 +106,12 @@ export default function Timeline({
   hasMore,
   historyLoading,
   onLoadMore,
+  onReact,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const topSentinelRef = useRef<HTMLDivElement>(null)
+  const [pickerEventId, setPickerEventId] = useState<string | null>(null)
 
   // スクロール位置復元用: onLoadMore 呼び出し前に保存しておく
   const savedScrollRef = useRef<{ height: number; top: number } | null>(null)
@@ -128,6 +160,14 @@ export default function Timeline({
     return () => observer.disconnect()
   }, [onLoadMore, hasMore, historyLoading])
 
+  // ピッカー外タップで閉じる
+  useEffect(() => {
+    if (!pickerEventId) return
+    const handler = () => setPickerEventId(null)
+    document.addEventListener('click', handler, { capture: true })
+    return () => document.removeEventListener('click', handler, { capture: true })
+  }, [pickerEventId])
+
   if (events.length === 0) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-gray-500">
@@ -159,6 +199,7 @@ export default function Timeline({
           const reactionEntries = Object.entries(eventReactions)
           const senderName = (ev.sender && memberNames?.[ev.sender]) ?? ev.sender ?? ''
           const senderAvatar = ev.sender ? memberAvatars?.[ev.sender] : undefined
+          const showPicker = pickerEventId === ev.event_id
 
           return (
             <div
@@ -179,14 +220,37 @@ export default function Timeline({
                 className={`flex min-w-0 max-w-[75%] flex-col ${isMine ? 'items-end' : 'items-start'}`}
               >
                 {!isMine && <span className="mb-0.5 text-xs text-gray-500">{senderName}</span>}
-                <div
-                  className={`break-words rounded-2xl px-3 py-2 text-sm ${
-                    isMine
-                      ? 'rounded-br-sm bg-indigo-600 text-white'
-                      : 'rounded-bl-sm bg-gray-800 text-gray-100'
-                  }`}
-                >
-                  <MessageContent content={ev.content} />
+
+                {/* バブル + ピッカー */}
+                <div className="relative">
+                  {showPicker && onReact && ev.event_id && (
+                    <EmojiPicker
+                      onSelect={(emoji) => onReact(ev.event_id!, emoji)}
+                      onClose={() => setPickerEventId(null)}
+                    />
+                  )}
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (onReact && ev.event_id) {
+                        setPickerEventId(showPicker ? null : ev.event_id)
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && onReact && ev.event_id) {
+                        setPickerEventId(showPicker ? null : ev.event_id)
+                      }
+                    }}
+                    className={`break-words rounded-2xl px-3 py-2 text-sm cursor-default ${
+                      isMine
+                        ? 'rounded-br-sm bg-indigo-600 text-white'
+                        : 'rounded-bl-sm bg-gray-800 text-gray-100'
+                    }`}
+                  >
+                    <MessageContent content={ev.content} />
+                  </div>
                 </div>
 
                 {/* リアクションバッジ */}

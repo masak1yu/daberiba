@@ -13,6 +13,7 @@ import {
   type Device,
 } from '../api/devices'
 import AppShell from '../components/layout/AppShell'
+import ProfileModal from '../components/common/ProfileModal'
 
 // ---------------------------------------------------------------------------
 // デバイス一覧
@@ -298,6 +299,7 @@ export default function SettingsPage() {
   const [loadingDevices, setLoadingDevices] = useState(true)
   const [devicesError, setDevicesError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null)
+  const [showProfile, setShowProfile] = useState(false)
 
   useEffect(() => {
     const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
@@ -336,6 +338,32 @@ export default function SettingsPage() {
     <>
       <AppShell title="設定" showBack onBack={() => navigate(-1)}>
         <div className="h-full overflow-y-auto py-6 flex flex-col gap-6">
+          {/* プロフィール */}
+          {userId && (
+            <section>
+              <h2 className="mb-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                プロフィール
+              </h2>
+              <div className="mx-4 rounded-xl bg-gray-900">
+                <button
+                  onClick={() => setShowProfile(true)}
+                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-gray-800 rounded-xl"
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-700 text-sm font-bold select-none">
+                    {userId.charAt(1).toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-white">
+                      表示名・アバターを変更
+                    </p>
+                    <p className="truncate text-xs text-gray-500">{userId}</p>
+                  </div>
+                  <span className="text-gray-600">›</span>
+                </button>
+              </div>
+            </section>
+          )}
+
           {/* デバイス管理 */}
           <section>
             <h2 className="mb-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500">
@@ -364,6 +392,10 @@ export default function SettingsPage() {
           {userId && <PasswordSection userId={userId} />}
         </div>
       </AppShell>
+
+      {showProfile && userId && (
+        <ProfileModal userId={userId} onClose={() => setShowProfile(false)} />
+      )}
 
       {deleteTarget && (
         <DeleteDeviceDialog
