@@ -6,6 +6,7 @@ use axum::{
 };
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
+use std::time::Duration;
 
 pub fn routes() -> Router<AppState> {
     Router::new().route("/_matrix/client/v3/sync", get(sync))
@@ -14,7 +15,7 @@ pub fn routes() -> Router<AppState> {
 #[derive(Deserialize)]
 struct SyncQuery {
     since: Option<String>,
-    #[allow(dead_code)]
+    /// long-polling タイムアウト（ミリ秒）。0 または未指定は即時返却。
     timeout: Option<u64>,
     filter: Option<String>,
 }
@@ -52,6 +53,35 @@ async fn sync(
         timeline_limit,
     )
     .await?;
+
+    // long-polling: since あり・timeout > 0・新イベントなし の場合は待機してから再試行
+    let timeout_ms = query.timeout.unwrap_or(0);
+    if timeout_ms > 0 && since_stream.is_some() && !sync_has_new_events(&result) {
+        let notify = state.event_notify.clone();
+        let deadline = tokio::time::sleep(Duration::from_millis(timeout_ms.min(30_000)));
+        tokio::pin!(deadline);
+        loop {
+            tokio::select! {
+                _ = &mut deadline => break,
+                _ = notify.notified() => {
+                    result = db::sync::sync(
+                        &state.pool,
+                        &user.user_id,
+                        since_stream.as_deref(),
+                        timeline_limit,
+                    )
+                    .await?;
+                    if sync_has_new_events(&result) {
+                        break;
+                    }
+                    // まだ新イベントがなければ引き続き待つ
+                }
+            }
+        }
+    }
+
+    // sync 時にプレゼンス last_active_ts を更新（ベストエフォート）
+    let _ = db::presence::set_active(&state.pool, &user.user_id).await;
 
     // ルームごとのタグ（account_data m.tag 用）
     let all_tags = db::room_tags::get_all_for_user(&state.pool, &user.user_id)
@@ -367,4 +397,37 @@ fn parse_since(since: Option<&str>) -> (Option<String>, u64, Option<u64>) {
         .unwrap_or(0);
     let since_ms = parts.get(2).and_then(|v| v.parse::<u64>().ok());
     (ord, acked, since_ms)
+}
+
+/// 増分 sync 結果に新しいイベント（join timeline / invite / leave / to_device）があるか判定する。
+/// long-polling の「起床後に新イベントがあるか」チェックに使う。
+fn sync_has_new_events(result: &serde_json::Value) -> bool {
+    // rooms.join に timeline イベントがあるか
+    if let Some(join) = result["rooms"]["join"].as_object() {
+        for room in join.values() {
+            if let Some(events) = room["timeline"]["events"].as_array() {
+                if !events.is_empty() {
+                    return true;
+                }
+            }
+        }
+    }
+    // rooms.invite / rooms.leave に何かあるか
+    if let Some(invite) = result["rooms"]["invite"].as_object() {
+        if !invite.is_empty() {
+            return true;
+        }
+    }
+    if let Some(leave) = result["rooms"]["leave"].as_object() {
+        if !leave.is_empty() {
+            return true;
+        }
+    }
+    // to_device に何かあるか
+    if let Some(events) = result["to_device"]["events"].as_array() {
+        if !events.is_empty() {
+            return true;
+        }
+    }
+    false
 }

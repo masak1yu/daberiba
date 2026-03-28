@@ -10,6 +10,10 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/_matrix/client/v3/rooms/{roomId}/state", get(get_state))
         .route(
+            "/_matrix/client/v3/rooms/{roomId}/state/{eventType}",
+            get(get_state_event_no_key),
+        )
+        .route(
             "/_matrix/client/v3/rooms/{roomId}/state/{eventType}/{stateKey}",
             get(get_state_event),
         )
@@ -35,6 +39,19 @@ async fn get_state(
 ) -> ApiResult<Json<serde_json::Value>> {
     let events = db::room_state::get_all(&state.pool, &room_id).await?;
     Ok(Json(serde_json::json!(events)))
+}
+
+/// GET /_matrix/client/v3/rooms/{roomId}/state/{eventType}
+/// state_key が空文字列のイベントコンテンツを返す（m.room.name, m.room.power_levels 等）。
+async fn get_state_event_no_key(
+    State(state): State<AppState>,
+    axum::Extension(_user): axum::Extension<AuthUser>,
+    Path((room_id, event_type)): Path<(String, String)>,
+) -> ApiResult<Json<serde_json::Value>> {
+    let content = db::room_state::get_event(&state.pool, &room_id, &event_type, "")
+        .await?
+        .ok_or(crate::error::AppError::NotFound)?;
+    Ok(Json(content))
 }
 
 #[derive(Deserialize)]

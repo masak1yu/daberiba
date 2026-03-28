@@ -103,6 +103,9 @@ async fn send_event(
     )
     .await?;
 
+    // /sync long-polling を起床させる
+    state.event_notify.notify_waiters();
+
     // federation 配送（背景タスク、ベストエフォート）
     let mut pdu = pdu_for_hash;
     pdu["event_id"] = serde_json::Value::String(event_id.clone());

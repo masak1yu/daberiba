@@ -113,3 +113,19 @@ pub async fn get_for_room_members(pool: &MySqlPool, room_id: &str) -> Result<Vec
         })
         .collect())
 }
+
+/// sync 時に last_active_ts を現在時刻に更新する。
+/// presence レコードがない場合は 'online' で新規作成する。
+pub async fn set_active(pool: &MySqlPool, user_id: &str) -> Result<()> {
+    let ts = chrono::Utc::now().timestamp_millis();
+    sqlx::query(
+        r#"INSERT INTO presence (user_id, presence, status_msg, last_active_ts)
+           VALUES (?, 'online', NULL, ?)
+           ON DUPLICATE KEY UPDATE last_active_ts = VALUES(last_active_ts)"#,
+    )
+    .bind(user_id)
+    .bind(ts)
+    .execute(pool)
+    .await?;
+    Ok(())
+}

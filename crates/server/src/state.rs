@@ -6,6 +6,7 @@ use crate::uia::UiaStore;
 use dashmap::DashMap;
 use sqlx::MySqlPool;
 use std::sync::Arc;
+use tokio::sync::Notify;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -22,6 +23,8 @@ pub struct AppState {
     pub fed_key_cache: Arc<DashMap<String, (Vec<u8>, u64)>>,
     /// SSO/OIDC 設定（OIDC_ISSUER が未設定の場合は None）
     pub sso: Option<Arc<SsoConfig>>,
+    /// 新イベント書き込み時に notify_waiters() を呼んで /sync long-polling を起床させる
+    pub event_notify: Arc<Notify>,
 }
 
 impl AppState {
@@ -42,6 +45,7 @@ impl AppState {
             signing_key,
             fed_key_cache: Arc::new(DashMap::new()),
             sso,
+            event_notify: Arc::new(Notify::new()),
         }
     }
 }

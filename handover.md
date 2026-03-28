@@ -1,4 +1,20 @@
-# Handover — v0.48.0 → v0.49.0
+# Handover — v0.49.0 → v0.50.0
+
+## v0.49.0 でやったこと
+
+- **`/sync` long-polling 実装** (`server/state.rs`, `server/api/client/sync.rs`, `server/api/client/events.rs`, `server/api/client/rooms.rs`, `server/api/federation/send_transaction.rs`):
+  - `AppState` に `event_notify: Arc<tokio::sync::Notify>` を追加。
+  - イベント書き込み時（`send_event()`, `store_state_event()`, federation `send_transaction()`）に `notify_waiters()` を呼び出す。
+  - `/sync` で `timeout > 0` かつ `since` あり かつ 新イベントなし の場合、`tokio::select!` でタイムアウト（最大 30 秒）まで待機。Notify 起床後に新イベントがなければ引き続き待つ。
+  - `sync_has_new_events()` ヘルパー追加（join timeline / invite / leave / to_device の有無を判定）。
+
+- **`GET /rooms/{roomId}/state/{eventType}` ルート追加** (`server/api/client/room_state.rs`):
+  - state_key なしで state イベントコンテンツを返す `get_state_event_no_key()` ハンドラを新設。
+  - `m.room.name`, `m.room.power_levels` などをパス `/{eventType}` で直接取得できるようになった。
+
+- **Sync 時のプレゼンス自動更新** (`db/presence.rs`, `server/api/client/sync.rs`):
+  - `db::presence::set_active()` 新設。sync ごとに `last_active_ts` を現在時刻に更新（レコードがない場合は "online" で作成）。
+  - `/sync` ハンドラの最後に `set_active()` を呼び出す（ベストエフォート）。
 
 ## v0.48.0 でやったこと
 
@@ -351,13 +367,13 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.49.0 候補
+## v0.50.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
 2. **複数 OIDC プロバイダー対応** — 複数の OIDC プロバイダーを同時設定（例: Google + Keycloak）
-3. **`/sync` の knock 対応改善** — knock 状態ルームで `knock_state` に部屋名・アバターなど基本情報を含める
-4. **`/rooms/{roomId}/upgrade`** — ルームバージョンアップグレード (MSC1849) — 新ルームを作成して tombstone/create イベントを送信
-5. **`/_matrix/client/v3/capabilities` 精度向上** — `m.change_password`, `m.room_versions` を正確に返す
+3. **`/sync` typing 通知の差分配信** — since 以降に変化した typing_users のみ返す（全メンバー毎回返すのをやめる）
+4. **受信 PDU の power level 検証** — federation 受信イベントに対して `m.room.power_levels` を使ったパワーレベルチェックを追加
+5. **`/_matrix/client/v3/rooms/{roomId}/messages` の `dir=f` ページネーション精度向上** — forward 方向で正しく from トークンを扱う
 
 ## 開発フロー（おさらい）
 

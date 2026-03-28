@@ -216,6 +216,8 @@ async fn store_state_event(
         },
     )
     .await?;
+    // /sync long-polling を起床させる
+    state.event_notify.notify_waiters();
     Ok((event_id, pdu_for_hash))
 }
 
