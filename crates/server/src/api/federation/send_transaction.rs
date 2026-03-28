@@ -55,6 +55,9 @@ async fn send_transaction(
         }
     }
 
+    // フェデレーションで受信したイベントの /sync long-polling を起床させる
+    state.event_notify.notify_waiters();
+
     Ok(Json(json!({ "pdus": pdu_results })))
 }
 
