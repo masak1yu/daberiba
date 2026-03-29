@@ -110,6 +110,21 @@ async fn process_pdu(
         return Ok(());
     }
 
+    // power level 検証（m.room.member と m.room.create は除外）
+    if event_type != "m.room.member" && event_type != "m.room.create" {
+        if let Err(e) = check_pdu_power_level(
+            &state.pool,
+            room_id,
+            sender,
+            event_type,
+            state_key.is_some(),
+        )
+        .await
+        {
+            anyhow::bail!("power level check failed: {e}");
+        }
+    }
+
     let auth_events = pdu.get("auth_events");
     let prev_events = pdu.get("prev_events");
     db::events::store_pdu(
@@ -144,5 +159,47 @@ async fn process_pdu(
         }
     }
 
+    Ok(())
+}
+
+/// 受信 PDU の送信者が十分なパワーレベルを持っているか検証する。
+/// power_levels が未設定の場合（ルーム作成直後）は通過させる。
+async fn check_pdu_power_level(
+    pool: &sqlx::MySqlPool,
+    room_id: &str,
+    sender: &str,
+    event_type: &str,
+    is_state: bool,
+) -> anyhow::Result<()> {
+    let Some(pl) = db::room_state::get_event(pool, room_id, "m.room.power_levels", "").await?
+    else {
+        return Ok(());
+    };
+
+    let users_default = pl["users_default"].as_i64().unwrap_or(0);
+    let user_level = pl["users"]
+        .get(sender)
+        .and_then(|v| v.as_i64())
+        .unwrap_or(users_default);
+
+    let required_level = if is_state {
+        let state_default = pl["state_default"].as_i64().unwrap_or(50);
+        pl["events"]
+            .get(event_type)
+            .and_then(|v| v.as_i64())
+            .unwrap_or(state_default)
+    } else {
+        let events_default = pl["events_default"].as_i64().unwrap_or(0);
+        pl["events"]
+            .get(event_type)
+            .and_then(|v| v.as_i64())
+            .unwrap_or(events_default)
+    };
+
+    if user_level < required_level {
+        anyhow::bail!(
+            "sender {sender} has power level {user_level}, need {required_level} for {event_type}"
+        );
+    }
     Ok(())
 }

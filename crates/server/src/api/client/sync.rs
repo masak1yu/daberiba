@@ -41,8 +41,8 @@ async fn sync(
     };
     let filter = filter_json.as_ref().map(FilterDef::from_json);
 
-    // since トークンを解析: "{stream_ordering}_{acked_to_device_id}_{since_ms}" または旧形式
-    let (since_stream, acked_to_device_id, account_data_since_ms) =
+    // since トークンを解析: "{stream_ordering}_{acked_to_device_id}_{since_ms}_{typing_version}" または旧形式
+    let (since_stream, acked_to_device_id, account_data_since_ms, since_typing_version) =
         parse_since(query.since.as_deref());
 
     let timeline_limit = filter.as_ref().and_then(|f| f.timeline_limit).unwrap_or(50);
@@ -125,6 +125,14 @@ async fn sync(
         }
     }
 
+    // typing 差分: since_typing_version 以降に変化したルームのセットを計算
+    let (typing_changed, current_typing_version) =
+        state.typing.get_changed_since(since_typing_version);
+    let typing_changed_rooms: HashSet<String> = typing_changed
+        .into_iter()
+        .map(|(room_id, _)| room_id)
+        .collect();
+
     let mut presence_user_ids: HashSet<String> = HashSet::new();
 
     if let Some(join_map) = result
@@ -203,11 +211,20 @@ async fn sync(
             // ephemeral イベント（m.typing / m.receipt）
             let mut ephemeral_events: Vec<serde_json::Value> = Vec::new();
 
-            let typing_users = state.typing.get_typing(room_id);
-            ephemeral_events.push(serde_json::json!({
-                "type": "m.typing",
-                "content": { "user_ids": typing_users },
-            }));
+            // typing 差分配信: since_typing_version より後に変化したルームのみ送信
+            // 初回 sync（since なし）は全ルームの typing を送信する
+            let include_typing = if since_typing_version > 0 {
+                typing_changed_rooms.contains(room_id)
+            } else {
+                true
+            };
+            if include_typing {
+                let typing_users = state.typing.get_typing(room_id);
+                ephemeral_events.push(serde_json::json!({
+                    "type": "m.typing",
+                    "content": { "user_ids": typing_users },
+                }));
+            }
 
             if let Ok(receipts) = db::receipts::get_for_room(&state.pool, room_id).await {
                 if !receipts.is_empty() {
@@ -374,29 +391,34 @@ async fn sync(
         "left": device_lists_left,
     });
 
-    // next_batch を "{stream_ordering}_{max_to_device_id}_{now_ms}" に更新
+    // next_batch を "{stream_ordering}_{max_to_device_id}_{now_ms}_{typing_version}" に更新
     let stream_ordering = result["next_batch"].as_str().unwrap_or("0").to_string();
     let now_ms = chrono::Utc::now().timestamp_millis() as u64;
-    result["next_batch"] =
-        serde_json::json!(format!("{stream_ordering}_{max_to_device_id}_{now_ms}"));
+    result["next_batch"] = serde_json::json!(format!(
+        "{stream_ordering}_{max_to_device_id}_{now_ms}_{current_typing_version}"
+    ));
 
     Ok(Json(result))
 }
 
-/// since トークンを解析して (stream_ordering, acked_to_device_id, account_data_since_ms) を返す
-/// フォーマット: "{ord}_{to_device_id}_{since_ms}" / "{ord}_{to_device_id}" / "{ord}"
-fn parse_since(since: Option<&str>) -> (Option<String>, u64, Option<u64>) {
+/// since トークンを解析して (stream_ordering, acked_to_device_id, account_data_since_ms, typing_version) を返す
+/// フォーマット: "{ord}_{to_device_id}_{since_ms}_{typing_ver}" / 旧形式も後方互換
+fn parse_since(since: Option<&str>) -> (Option<String>, u64, Option<u64>, u64) {
     let Some(s) = since else {
-        return (None, 0, None);
+        return (None, 0, None, 0);
     };
-    let parts: Vec<&str> = s.splitn(3, '_').collect();
+    let parts: Vec<&str> = s.splitn(4, '_').collect();
     let ord = Some(parts[0].to_string());
     let acked = parts
         .get(1)
         .and_then(|v| v.parse::<u64>().ok())
         .unwrap_or(0);
     let since_ms = parts.get(2).and_then(|v| v.parse::<u64>().ok());
-    (ord, acked, since_ms)
+    let typing_ver = parts
+        .get(3)
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(0);
+    (ord, acked, since_ms, typing_ver)
 }
 
 /// 増分 sync 結果に新しいイベント（join timeline / invite / leave / to_device）があるか判定する。

@@ -451,9 +451,15 @@ pub async fn get_messages(
         &rows[..]
     };
 
-    let start = rows
-        .first()
-        .map(|r| ordering_to_token(r.get("stream_ordering")))
+    // dir=b: start = from（または先頭イベントのトークン）、end = 末尾イベントのトークン
+    // dir=f: start = from（または先頭イベントのトークン）、end = 末尾イベントのトークン（次ページ用）
+    // end は has_more 時のみ設定（次ページがない場合はクライアントが繰り返しポーリングしなくてよい）
+    let start = from
+        .map(ordering_to_token)
+        .or_else(|| {
+            rows.first()
+                .map(|r| ordering_to_token(r.get("stream_ordering")))
+        })
         .unwrap_or_default();
 
     let end = if has_more {

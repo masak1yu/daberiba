@@ -1,4 +1,22 @@
-# Handover — v0.49.0 → v0.50.0
+# Handover — v0.50.0 → v0.51.0
+
+## v0.50.0 でやったこと
+
+- **`/sync` typing 通知の差分配信** (`server/typing_store.rs`, `server/api/client/sync.rs`):
+  - `TypingStore` にグローバルバージョンカウンター（`AtomicU64`）を追加。`set()`/`unset()` のたびにインクリメント。
+  - `get_changed_since(since_version)` メソッド追加。変化したルームと typing ユーザー一覧を返す。
+  - `next_batch` フォーマットを `{ord}_{to_device}_{ms}_{typing_ver}` に拡張（旧形式も後方互換）。
+  - 増分 sync では `since_typing_version` より後に変化したルームのみ `m.typing` を送信。初回 sync は全ルーム送信。
+
+- **受信 PDU の power level 検証** (`server/api/federation/send_transaction.rs`):
+  - `check_pdu_power_level()` 関数新設。`m.room.power_levels` を読み取り、sender のレベルと要求レベルを比較。
+  - `m.room.member` / `m.room.create` は除外（メンバーシップ変更は別ロジックで管理）。
+  - power_levels 未設定（ルーム作成直後）は通過。
+
+- **`/messages` の `dir=f` ページネーション精度向上** (`db/events.rs`):
+  - `start` トークンを `from` パラメータの値で固定（既存の「最初のイベントのトークン」から変更）。
+  - `from` が指定されていない場合は従来通り最初のイベントのトークンを使用。
+  - これにより `dir=f` で `from` を指定した場合に `start` がズレる問題を修正。
 
 ## v0.49.0 でやったこと
 
@@ -367,13 +385,13 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.50.0 候補
+## v0.51.0 候補
 
 1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
 2. **複数 OIDC プロバイダー対応** — 複数の OIDC プロバイダーを同時設定（例: Google + Keycloak）
-3. **`/sync` typing 通知の差分配信** — since 以降に変化した typing_users のみ返す（全メンバー毎回返すのをやめる）
-4. **受信 PDU の power level 検証** — federation 受信イベントに対して `m.room.power_levels` を使ったパワーレベルチェックを追加
-5. **`/_matrix/client/v3/rooms/{roomId}/messages` の `dir=f` ページネーション精度向上** — forward 方向で正しく from トークンを扱う
+3. **`/sync` long-polling の Notify 強化** — `event_notify` を typing 変化時にも発火させ、タイピング通知をリアルタイム配信
+4. **`/_matrix/client/v3/account/deactivate`** — アカウント無効化エンドポイントの実装（パスワード確認 → 全デバイス削除 → ルーム退室）
+5. **federation backfill 精度向上** — `/_matrix/federation/v1/backfill/{roomId}` での `limit` パラメータ対応と `prev_events` グラフ遡及
 
 ## 開発フロー（おさらい）
 
