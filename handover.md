@@ -1,4 +1,24 @@
-# Handover — v0.50.0 → v0.51.0
+# Handover — v0.51.0 → v0.52.0
+
+## v0.51.0 でやったこと
+
+- **typing 変化による long-poll 即時起床** (`server/api/client/typing_notif.rs`, `server/api/client/sync.rs`):
+  - `PUT /rooms/{roomId}/typing/{userId}` ハンドラで `state.event_notify.notify_waiters()` を呼び出すよう追加。
+  - `/sync` long-polling のブレーク条件を拡張: `sync_has_new_events(&result) || new_typing_ver > since_typing_version`。
+  - typing 変化時に待機中の `/sync` を即時起床させ、`m.typing` 差分を即座に配信できるようにした。
+
+- **アカウント無効化時に全ルームから退室** (`db/rooms.rs`, `server/api/client/account.rs`):
+  - `db::rooms::leave_all()` を新設: `UPDATE room_memberships SET membership = 'leave' WHERE user_id = ? AND membership = 'join'`。
+  - `POST /account/deactivate` ハンドラで全トークン失効 → 全ルーム退室 → アカウント無効化の順で実行。
+
+## v0.52.0 候補
+
+- read receipt の `/sync` 返却 (`m.receipt` ephemeral イベント)
+- 招待された状態でのルーム join 時の membership 変更
+- long-poll の `timeout` パラメータを正確に解析して上限を設定
+- `m.room.encryption` state イベントの presence による暗号化フラグ管理
+
+---
 
 ## v0.50.0 でやったこと
 

@@ -41,5 +41,7 @@ async fn set_typing(
     } else {
         state.typing.unset(&path.room_id, &user.user_id);
     }
+    // typing 変化を /sync long-polling に通知する
+    state.event_notify.notify_waiters();
     Ok(StatusCode::OK)
 }

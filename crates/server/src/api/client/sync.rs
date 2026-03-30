@@ -71,10 +71,12 @@ async fn sync(
                         timeline_limit,
                     )
                     .await?;
-                    if sync_has_new_events(&result) {
+                    // 新イベントがあるか、typing が変化しているか（since_typing_version より後）
+                    let (_, new_typing_ver) = state.typing.get_changed_since(since_typing_version);
+                    if sync_has_new_events(&result) || new_typing_ver > since_typing_version {
                         break;
                     }
-                    // まだ新イベントがなければ引き続き待つ
+                    // まだ変化がなければ引き続き待つ
                 }
             }
         }

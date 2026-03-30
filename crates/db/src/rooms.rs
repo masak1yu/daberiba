@@ -62,6 +62,17 @@ pub async fn leave(pool: &MySqlPool, user_id: &str, room_id: &str) -> Result<()>
     Ok(())
 }
 
+/// ユーザーが参加している全ルームから一括退室させる（アカウント無効化用）。
+pub async fn leave_all(pool: &MySqlPool, user_id: &str) -> Result<()> {
+    sqlx::query(
+        "UPDATE room_memberships SET membership = 'leave' WHERE user_id = ? AND membership = 'join'",
+    )
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
 pub async fn joined_rooms(pool: &MySqlPool, user_id: &str) -> Result<Vec<String>> {
     let rows = sqlx::query!(
         "SELECT room_id FROM room_memberships WHERE user_id = ? AND membership = 'join'",

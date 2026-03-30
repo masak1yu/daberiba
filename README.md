@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.50.0 — Client-Server API Phase 41 (typing diff delivery, PDU power-level check, /messages dir=f fix) (functional, not production-ready)
+**Status:** v0.51.0 — Client-Server API Phase 42 (typing long-poll wake, deactivate leave-all, sync break on typing change) (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 

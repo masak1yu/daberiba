@@ -106,8 +106,9 @@ async fn deactivate_account(
         _ => return AppError::Forbidden.into_response(),
     }
 
-    // 全トークン失効 + アカウント無効化
+    // 全トークン失効 + 全ルーム退室 + アカウント無効化
     let _ = db::access_tokens::revoke_all(&state.pool, &user.user_id).await;
+    let _ = db::rooms::leave_all(&state.pool, &user.user_id).await;
     let _ = db::users::deactivate(&state.pool, &user.user_id).await;
 
     Json(serde_json::json!({ "id_server_unbind_result": "no-support" })).into_response()
