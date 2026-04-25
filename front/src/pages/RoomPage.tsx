@@ -367,7 +367,7 @@ export default function RoomPage() {
         {/* コンポーザー（Element 風） */}
         <div className="shrink-0 px-4 pb-4 pt-1">
           <div
-            className="overflow-hidden rounded-xl"
+            className="rounded-xl"
             style={{ background: '#21262d', border: '1px solid #2d3440' }}
           >
             <form onSubmit={(e) => void handleSend(e)}>
@@ -404,7 +404,7 @@ export default function RoomPage() {
                   {/* 絵文字ピッカー */}
                   {showEmojiPicker && (
                     <div
-                      className="absolute bottom-full right-0 mb-2 grid grid-cols-8 gap-0.5 rounded-xl p-2 shadow-2xl"
+                      className="absolute bottom-full right-0 mb-2 grid w-max grid-cols-8 gap-0.5 rounded-xl p-2 shadow-2xl"
                       style={{
                         background: '#21262d',
                         border: '1px solid #2d3440',
