@@ -50,9 +50,11 @@ export default function RoomPage() {
   const [showRoomSettings, setShowRoomSettings] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
   const [leaving, setLeaving] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const txnRef = useRef(0)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     markRoomRead(decodedRoomId)
@@ -75,6 +77,24 @@ export default function RoomPage() {
   const handleLoadMore = useCallback(() => {
     void loadHistory(decodedRoomId)
   }, [decodedRoomId, loadHistory])
+
+  function handleEmojiInsert(emoji: string) {
+    const ta = textareaRef.current
+    if (!ta) {
+      handleInputChange(input + emoji)
+      return
+    }
+    const start = ta.selectionStart ?? input.length
+    const end = ta.selectionEnd ?? input.length
+    const next = input.slice(0, start) + emoji + input.slice(end)
+    handleInputChange(next)
+    setShowEmojiPicker(false)
+    // フォーカスとカーソル位置を復元
+    requestAnimationFrame(() => {
+      ta.focus()
+      ta.setSelectionRange(start + emoji.length, start + emoji.length)
+    })
+  }
 
   function handleInputChange(value: string) {
     setInput(value)
@@ -360,6 +380,7 @@ export default function RoomPage() {
 
                 {/* テキスト入力 */}
                 <textarea
+                  ref={textareaRef}
                   value={input}
                   onChange={(e) => {
                     handleInputChange(e.target.value)
@@ -367,7 +388,7 @@ export default function RoomPage() {
                     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === 'Enter' && e.shiftKey) {
                       e.preventDefault()
                       void handleSend(e as unknown as FormEvent)
                     }
@@ -379,30 +400,80 @@ export default function RoomPage() {
                 />
 
                 {/* 右側アクション */}
-                <div className="ml-2 flex shrink-0 items-center gap-0.5">
-                  {/* 絵文字 */}
-                  {!input.trim() && (
-                    <button
-                      type="button"
-                      className="rounded p-1.5 transition-colors hover:bg-white/10"
-                      style={{ color: '#8d99a6' }}
-                      title="絵文字"
+                <div className="relative ml-2 flex shrink-0 items-center gap-0.5">
+                  {/* 絵文字ピッカー */}
+                  {showEmojiPicker && (
+                    <div
+                      className="absolute bottom-full right-0 mb-2 grid grid-cols-8 gap-0.5 rounded-xl p-2 shadow-2xl"
+                      style={{
+                        background: '#21262d',
+                        border: '1px solid #2d3440',
+                        zIndex: 50,
+                      }}
                     >
-                      <svg
-                        className="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.8}
-                          d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                    </button>
+                      {[
+                        '😀',
+                        '😂',
+                        '🥹',
+                        '😊',
+                        '😎',
+                        '🥰',
+                        '😍',
+                        '🤩',
+                        '😅',
+                        '😭',
+                        '😤',
+                        '🤔',
+                        '🫠',
+                        '😶',
+                        '🥲',
+                        '😬',
+                        '👍',
+                        '👎',
+                        '👏',
+                        '🙌',
+                        '🤝',
+                        '🙏',
+                        '💪',
+                        '✌️',
+                        '❤️',
+                        '🔥',
+                        '✨',
+                        '🎉',
+                        '💯',
+                        '⚡',
+                        '💀',
+                        '👀',
+                      ].map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => handleEmojiInsert(emoji)}
+                          className="rounded p-1 text-lg hover:bg-white/10"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
                   )}
+
+                  {/* 絵文字ボタン */}
+                  <button
+                    type="button"
+                    onClick={() => setShowEmojiPicker((v) => !v)}
+                    className="rounded p-1.5 transition-colors hover:bg-white/10"
+                    style={{ color: showEmojiPicker ? '#0dbd8b' : '#8d99a6' }}
+                    title="絵文字"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.8}
+                        d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </button>
 
                   {/* ファイル添付 */}
                   {!input.trim() && (
@@ -434,30 +505,6 @@ export default function RoomPage() {
                           />
                         </svg>
                       )}
-                    </button>
-                  )}
-
-                  {/* その他（空のときのみ） */}
-                  {!input.trim() && (
-                    <button
-                      type="button"
-                      className="rounded p-1.5 transition-colors hover:bg-white/10"
-                      style={{ color: '#8d99a6' }}
-                      title="その他"
-                    >
-                      <svg
-                        className="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.8}
-                          d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"
-                        />
-                      </svg>
                     </button>
                   )}
 
