@@ -10,7 +10,7 @@ use std::collections::HashMap;
 
 pub fn routes() -> Router<AppState> {
     Router::new().route(
-        "/_matrix/client/v3/sendToDevice/{eventType}/{txnId}",
+        "/_matrix/client/v3/sendToDevice/:eventType/:txnId",
         put(send_to_device),
     )
 }

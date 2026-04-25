@@ -8,7 +8,7 @@ use axum::{
 
 pub fn routes() -> Router<AppState> {
     Router::new().route(
-        "/_matrix/client/v3/rooms/{roomId}/receipt/{receiptType}/{eventId}",
+        "/_matrix/client/v3/rooms/:roomId/receipt/:receiptType/:eventId",
         post(send_receipt),
     )
 }

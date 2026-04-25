@@ -8,26 +8,26 @@ use serde::Deserialize;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/_matrix/client/v3/rooms/{roomId}/state", get(get_state))
+        .route("/_matrix/client/v3/rooms/:roomId/state", get(get_state))
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/state/{eventType}",
+            "/_matrix/client/v3/rooms/:roomId/state/:eventType",
             get(get_state_event_no_key),
         )
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/state/{eventType}/{stateKey}",
+            "/_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey",
             get(get_state_event),
         )
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/members",
+            "/_matrix/client/v3/rooms/:roomId/members",
             get(get_members),
         )
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/joined_members",
+            "/_matrix/client/v3/rooms/:roomId/joined_members",
             get(get_joined_members),
         )
-        .route("/_matrix/client/v3/rooms/{roomId}/invite", post(invite))
+        .route("/_matrix/client/v3/rooms/:roomId/invite", post(invite))
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/report/{eventId}",
+            "/_matrix/client/v3/rooms/:roomId/report/:eventId",
             post(report_event),
         )
 }
@@ -41,7 +41,7 @@ async fn get_state(
     Ok(Json(serde_json::json!(events)))
 }
 
-/// GET /_matrix/client/v3/rooms/{roomId}/state/{eventType}
+/// GET /_matrix/client/v3/rooms/:roomId/state/:eventType
 /// state_key が空文字列のイベントコンテンツを返す（m.room.name, m.room.power_levels 等）。
 async fn get_state_event_no_key(
     State(state): State<AppState>,
@@ -179,7 +179,7 @@ struct ReportBody {
     reason: Option<String>,
 }
 
-/// POST /_matrix/client/v3/rooms/{roomId}/report/{eventId}
+/// POST /_matrix/client/v3/rooms/:roomId/report/:eventId
 /// コンテンツ報告を記録する。
 async fn report_event(
     State(state): State<AppState>,

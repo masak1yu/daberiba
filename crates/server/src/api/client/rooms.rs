@@ -9,27 +9,27 @@ use serde::{Deserialize, Serialize};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/_matrix/client/v3/createRoom", post(create_room))
-        .route("/_matrix/client/v3/join/{roomIdOrAlias}", post(join_room))
-        .route("/_matrix/client/v3/rooms/{roomId}/leave", post(leave_room))
+        .route("/_matrix/client/v3/join/:roomIdOrAlias", post(join_room))
+        .route("/_matrix/client/v3/rooms/:roomId/leave", post(leave_room))
         .route("/_matrix/client/v3/joined_rooms", get(joined_rooms))
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/redact/{eventId}/{txnId}",
+            "/_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId",
             put(redact_event),
         )
-        .route("/_matrix/client/v3/rooms/{roomId}/kick", post(kick_user))
-        .route("/_matrix/client/v3/rooms/{roomId}/ban", post(ban_user))
-        .route("/_matrix/client/v3/rooms/{roomId}/unban", post(unban_user))
+        .route("/_matrix/client/v3/rooms/:roomId/kick", post(kick_user))
+        .route("/_matrix/client/v3/rooms/:roomId/ban", post(ban_user))
+        .route("/_matrix/client/v3/rooms/:roomId/unban", post(unban_user))
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/forget",
+            "/_matrix/client/v3/rooms/:roomId/forget",
             post(forget_room),
         )
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/upgrade",
+            "/_matrix/client/v3/rooms/:roomId/upgrade",
             post(upgrade_room),
         )
-        .route("/_matrix/client/v3/rooms/{roomId}/knock", post(knock_room))
+        .route("/_matrix/client/v3/rooms/:roomId/knock", post(knock_room))
         .route(
-            "/_matrix/client/v3/knock/{roomIdOrAlias}",
+            "/_matrix/client/v3/knock/:roomIdOrAlias",
             post(knock_room_alias),
         )
 }
@@ -241,7 +241,7 @@ async fn join_room(
             .await
             .map_err(|e| {
                 tracing::warn!(room_id, error = %e, "federation join 失敗");
-                AppError::BadRequest(format!("federation join failed: {e}"))
+                AppError::BadRequest(format!("federation join failed: :e"))
             })?;
         return Ok(Json(serde_json::json!({ "room_id": room_id })));
     }
@@ -302,7 +302,7 @@ async fn leave_room(
             .await
             .map_err(|e| {
                 tracing::warn!(room_id, error = %e, "federation leave 失敗");
-                AppError::BadRequest(format!("federation leave failed: {e}"))
+                AppError::BadRequest(format!("federation leave failed: :e"))
             })?;
         return Ok(Json(serde_json::json!({})));
     }
@@ -338,7 +338,7 @@ struct KnockRequest {
     via: Option<Vec<String>>,
 }
 
-/// POST /_matrix/client/v3/rooms/{roomId}/knock — ノック（入室申請）
+/// POST /_matrix/client/v3/rooms/:roomId/knock — ノック（入室申請）
 async fn knock_room(
     State(state): State<AppState>,
     axum::Extension(user): axum::Extension<AuthUser>,
@@ -354,7 +354,7 @@ async fn knock_room(
     .await
 }
 
-/// POST /_matrix/client/v3/knock/{roomIdOrAlias}
+/// POST /_matrix/client/v3/knock/:roomIdOrAlias
 async fn knock_room_alias(
     State(state): State<AppState>,
     axum::Extension(user): axum::Extension<AuthUser>,
@@ -428,7 +428,7 @@ struct RedactRequest {
     reason: Option<String>,
 }
 
-/// PUT /_matrix/client/v3/rooms/{roomId}/redact/{eventId}/{txnId}
+/// PUT /_matrix/client/v3/rooms/:roomId/redact/:eventId/:txnId
 async fn redact_event(
     State(state): State<AppState>,
     axum::Extension(user): axum::Extension<AuthUser>,
@@ -475,7 +475,7 @@ struct ModerationRequest {
     reason: Option<String>,
 }
 
-/// POST /_matrix/client/v3/rooms/{roomId}/kick
+/// POST /_matrix/client/v3/rooms/:roomId/kick
 async fn kick_user(
     State(state): State<AppState>,
     axum::Extension(user): axum::Extension<AuthUser>,
@@ -508,7 +508,7 @@ async fn kick_user(
     Ok(Json(serde_json::json!({})))
 }
 
-/// POST /_matrix/client/v3/rooms/{roomId}/ban
+/// POST /_matrix/client/v3/rooms/:roomId/ban
 async fn ban_user(
     State(state): State<AppState>,
     axum::Extension(user): axum::Extension<AuthUser>,
@@ -541,7 +541,7 @@ async fn ban_user(
     Ok(Json(serde_json::json!({})))
 }
 
-/// POST /_matrix/client/v3/rooms/{roomId}/unban
+/// POST /_matrix/client/v3/rooms/:roomId/unban
 async fn unban_user(
     State(state): State<AppState>,
     axum::Extension(user): axum::Extension<AuthUser>,
@@ -561,7 +561,7 @@ async fn unban_user(
     Ok(Json(serde_json::json!({})))
 }
 
-/// POST /_matrix/client/v3/rooms/{roomId}/forget
+/// POST /_matrix/client/v3/rooms/:roomId/forget
 async fn forget_room(
     State(state): State<AppState>,
     axum::Extension(user): axum::Extension<AuthUser>,
@@ -576,7 +576,7 @@ struct UpgradeRoomRequest {
     new_version: String,
 }
 
-/// POST /_matrix/client/v3/rooms/{roomId}/upgrade
+/// POST /_matrix/client/v3/rooms/:roomId/upgrade
 /// ルームバージョンをアップグレードする。
 /// 旧ルームを tombstone 状態にし、新ルームを作成して m.room.create に predecessor を設定する。
 async fn upgrade_room(

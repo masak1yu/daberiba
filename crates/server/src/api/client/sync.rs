@@ -44,7 +44,7 @@ async fn sync(
     };
     let filter = filter_json.as_ref().map(FilterDef::from_json);
 
-    // since トークンを解析: "{stream_ordering}_{acked_to_device_id}_{since_ms}_{typing_version}" または旧形式
+    // since トークンを解析: ":stream_ordering_:acked_to_device_id_:since_ms_:typing_version" または旧形式
     let (since_stream, acked_to_device_id, account_data_since_ms, since_typing_version) =
         parse_since(query.since.as_deref());
 
@@ -403,18 +403,18 @@ async fn sync(
         "left": device_lists_left,
     });
 
-    // next_batch を "{stream_ordering}_{max_to_device_id}_{now_ms}_{typing_version}" に更新
+    // next_batch を ":stream_ordering_:max_to_device_id_:now_ms_:typing_version" に更新
     let stream_ordering = result["next_batch"].as_str().unwrap_or("0").to_string();
     let now_ms = chrono::Utc::now().timestamp_millis() as u64;
     result["next_batch"] = serde_json::json!(format!(
-        "{stream_ordering}_{max_to_device_id}_{now_ms}_{current_typing_version}"
+        ":stream_ordering_:max_to_device_id_:now_ms_:current_typing_version"
     ));
 
     Ok(Json(result))
 }
 
 /// since トークンを解析して (stream_ordering, acked_to_device_id, account_data_since_ms, typing_version) を返す
-/// フォーマット: "{ord}_{to_device_id}_{since_ms}_{typing_ver}" / 旧形式も後方互換
+/// フォーマット: ":ord_:to_device_id_:since_ms_:typing_ver" / 旧形式も後方互換
 fn parse_since(since: Option<&str>) -> (Option<String>, u64, Option<u64>, u64) {
     let Some(s) = since else {
         return (None, 0, None, 0);

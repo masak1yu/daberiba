@@ -9,12 +9,12 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         // グローバル account_data
         .route(
-            "/_matrix/client/v3/user/{userId}/account_data/{type}",
+            "/_matrix/client/v3/user/:userId/account_data/:type",
             put(set_global).get(get_global),
         )
         // ルーム固有 account_data
         .route(
-            "/_matrix/client/v3/user/{userId}/rooms/{roomId}/account_data/{type}",
+            "/_matrix/client/v3/user/:userId/rooms/:roomId/account_data/:type",
             put(set_room).get(get_room),
         )
 }

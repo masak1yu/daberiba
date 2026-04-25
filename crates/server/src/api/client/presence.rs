@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 pub fn routes() -> Router<AppState> {
     Router::new().route(
-        "/_matrix/client/v3/presence/{userId}/status",
+        "/_matrix/client/v3/presence/:userId/status",
         put(set_presence).get(get_presence),
     )
 }

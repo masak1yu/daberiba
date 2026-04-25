@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 pub fn routes() -> Router<AppState> {
     Router::new().route(
-        "/_matrix/client/v1/rooms/{roomId}/timestamp_to_event",
+        "/_matrix/client/v1/rooms/:roomId/timestamp_to_event",
         get(timestamp_to_event),
     )
 }
@@ -27,7 +27,7 @@ struct TimestampResponse {
     origin_server_ts: i64,
 }
 
-/// GET /_matrix/client/v1/rooms/{roomId}/timestamp_to_event
+/// GET /_matrix/client/v1/rooms/:roomId/timestamp_to_event
 /// 指定タイムスタンプに最も近いイベントを返す（MSC3030）。
 async fn timestamp_to_event(
     State(state): State<AppState>,

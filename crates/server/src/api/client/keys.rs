@@ -148,7 +148,7 @@ async fn keys_changes(
     axum::Extension(user): axum::Extension<AuthUser>,
     Query(query): Query<KeysChangesQuery>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    // from トークンから since_ms を抽出（sync トークン形式: "{ord}_{td_id}_{ms}"）
+    // from トークンから since_ms を抽出（sync トークン形式: ":ord_:td_id_:ms"）
     let since_ms = query.from.as_deref().and_then(|s| {
         let parts: Vec<&str> = s.splitn(3, '_').collect();
         parts.get(2).and_then(|v| v.parse::<u64>().ok())
@@ -227,7 +227,7 @@ async fn upload_signatures(
             .await
             {
                 failures.insert(
-                    format!("{target_user_id}/{key_id}"),
+                    format!(":target_user_id/:key_id"),
                     serde_json::json!({ "errcode": "M_UNKNOWN", "error": e.to_string() }),
                 );
             }

@@ -14,7 +14,7 @@ pub fn routes() -> Router<AppState> {
             post(create_version).get(get_latest_version),
         )
         .route(
-            "/_matrix/client/v3/room_keys/version/{version}",
+            "/_matrix/client/v3/room_keys/version/:version",
             get(get_version).put(put_version).delete(delete_version),
         )
         // 全キー操作
@@ -24,12 +24,12 @@ pub fn routes() -> Router<AppState> {
         )
         // ルーム単位のキー操作
         .route(
-            "/_matrix/client/v3/room_keys/keys/{roomId}",
+            "/_matrix/client/v3/room_keys/keys/:roomId",
             put(put_room_keys).get(get_room_keys).delete(del_room_keys),
         )
         // セッション単位のキー操作
         .route(
-            "/_matrix/client/v3/room_keys/keys/{roomId}/{sessionId}",
+            "/_matrix/client/v3/room_keys/keys/:roomId/:sessionId",
             put(put_session_key)
                 .get(get_session_key)
                 .delete(del_session_key),

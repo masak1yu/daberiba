@@ -9,11 +9,11 @@ use serde::Deserialize;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
-            "/_matrix/client/v3/user/{userId}/filter",
+            "/_matrix/client/v3/user/:userId/filter",
             post(create_filter),
         )
         .route(
-            "/_matrix/client/v3/user/{userId}/filter/{filterId}",
+            "/_matrix/client/v3/user/:userId/filter/:filterId",
             get(get_filter),
         )
 }

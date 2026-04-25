@@ -11,11 +11,11 @@ use std::collections::HashMap;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
-            "/_matrix/client/v3/user/{userId}/rooms/{roomId}/tags",
+            "/_matrix/client/v3/user/:userId/rooms/:roomId/tags",
             get(get_tags),
         )
         .route(
-            "/_matrix/client/v3/user/{userId}/rooms/{roomId}/tags/{tag}",
+            "/_matrix/client/v3/user/:userId/rooms/:roomId/tags/:tag",
             put(set_tag).delete(delete_tag),
         )
 }

@@ -12,13 +12,13 @@ use serde::Deserialize;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/_matrix/client/v3/profile/{userId}", get(get_profile))
+        .route("/_matrix/client/v3/profile/:userId", get(get_profile))
         .route(
-            "/_matrix/client/v3/profile/{userId}/displayname",
+            "/_matrix/client/v3/profile/:userId/displayname",
             get(get_displayname).put(set_displayname),
         )
         .route(
-            "/_matrix/client/v3/profile/{userId}/avatar_url",
+            "/_matrix/client/v3/profile/:userId/avatar_url",
             get(get_avatar_url).put(set_avatar_url),
         )
 }

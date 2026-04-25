@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 pub fn routes() -> Router<AppState> {
     Router::new().route(
-        "/_matrix/client/v3/rooms/{roomId}/typing/{userId}",
+        "/_matrix/client/v3/rooms/:roomId/typing/:userId",
         put(set_typing),
     )
 }

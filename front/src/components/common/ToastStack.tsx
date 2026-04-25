@@ -1,3 +1,4 @@
+import { useShallow } from 'zustand/react/shallow'
 import { useUiStore } from '../../stores/ui'
 
 const TYPE_CLASSES = {
@@ -7,10 +8,9 @@ const TYPE_CLASSES = {
 }
 
 export default function ToastStack() {
-  const { toasts, dismissToast } = useUiStore((s) => ({
-    toasts: s.toasts,
-    dismissToast: s.dismissToast,
-  }))
+  const { toasts, dismissToast } = useUiStore(
+    useShallow((s) => ({ toasts: s.toasts, dismissToast: s.dismissToast }))
+  )
 
   if (toasts.length === 0) return null
 
