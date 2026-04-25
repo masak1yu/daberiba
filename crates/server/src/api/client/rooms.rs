@@ -246,6 +246,29 @@ async fn join_room(
         return Ok(Json(serde_json::json!({ "room_id": room_id })));
     }
 
+    // 現在の membership と join_rules を並列取得
+    let (membership_res, join_rule_res) = tokio::join!(
+        db::rooms::get_membership(&state.pool, &room_id, &user.user_id),
+        db::room_state::get_event(&state.pool, &room_id, "m.room.join_rules", ""),
+    );
+    let membership = membership_res?;
+
+    // BAN されている場合は拒否
+    if membership.as_deref() == Some("ban") {
+        return Err(AppError::Forbidden);
+    }
+
+    // join_rules を確認: public 以外は招待が必要
+    let join_rule = join_rule_res
+        .ok()
+        .flatten()
+        .and_then(|v| v["join_rule"].as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "invite".to_string());
+
+    if join_rule != "public" && membership.as_deref() != Some("invite") {
+        return Err(AppError::Forbidden);
+    }
+
     db::rooms::join(&state.pool, &user.user_id, &room_id).await?;
 
     // join イベントを保存して外部サーバーへ配送
