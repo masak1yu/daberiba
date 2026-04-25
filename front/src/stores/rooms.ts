@@ -264,9 +264,7 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
     try {
       const resp = await fetchHistory(homeserver, token, roomId, from)
       const reversed = [...resp.chunk].reverse()
-      const newMsgEvents = reversed.filter(
-        (e) => e.state_key == null && e.type !== 'm.reaction'
-      )
+      const newMsgEvents = reversed.filter((e) => e.state_key == null && e.type !== 'm.reaction')
       const newReactionEvents = reversed.filter((e) => e.type === 'm.reaction')
       // 過去ログからも m.room.member を拾う
       const newMemberEvents = reversed.filter((e) => e.type === 'm.room.member')
