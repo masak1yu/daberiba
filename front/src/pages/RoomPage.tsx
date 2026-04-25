@@ -1,12 +1,13 @@
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { useShallow } from 'zustand/react/shallow'
 import { useAuthStore } from '../stores/auth'
 import { useRoomsStore } from '../stores/rooms'
 import { STORAGE_KEY } from '../api/client'
 import { sendReadReceipt } from '../api/messages'
 import { leaveRoom } from '../api/rooms'
 import { uploadMedia } from '../api/profile'
-import { sendTyping } from '../api/sync'
+import { sendTyping, type MatrixEvent } from '../api/sync'
 import { sendReaction, redactEvent } from '../api/roomState'
 import Timeline from '../components/room/Timeline'
 import MembersList from '../components/room/MembersList'
@@ -14,21 +15,25 @@ import RoomSettingsModal from '../components/room/RoomSettingsModal'
 import { userColor } from '../utils/userColor'
 import { useUiStore } from '../stores/ui'
 
+const EMPTY_EVENTS: MatrixEvent[] = []
+
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>()
   const decodedRoomId = roomId ? decodeURIComponent(roomId) : ''
 
   const userId = useAuthStore((s) => s.userId)
-  const events = useRoomsStore((s) => s.timelines[decodedRoomId] ?? [])
+  const events = useRoomsStore((s) => s.timelines[decodedRoomId] ?? EMPTY_EVENTS)
   const room = useRoomsStore((s) => s.rooms[decodedRoomId])
   const hasMore = useRoomsStore((s) => Boolean(s.prevBatches[decodedRoomId]))
   const isHistoryLoading = useRoomsStore((s) => s.historyLoading[decodedRoomId] ?? false)
   const loadHistory = useRoomsStore((s) => s.loadHistory)
   const reactions = useRoomsStore((s) => s.reactions[decodedRoomId])
-  const typingUsers = useRoomsStore((s) =>
-    (s.typing[decodedRoomId] ?? [])
-      .filter((id) => id !== userId)
-      .map((id) => s.memberNames[decodedRoomId]?.[id] ?? id)
+  const typingUsers = useRoomsStore(
+    useShallow((s) =>
+      (s.typing[decodedRoomId] ?? [])
+        .filter((id) => id !== userId)
+        .map((id) => s.memberNames[decodedRoomId]?.[id] ?? id)
+    )
   )
   const memberNames = useRoomsStore((s) => s.memberNames[decodedRoomId])
   const memberAvatars = useRoomsStore((s) => s.memberAvatars[decodedRoomId])

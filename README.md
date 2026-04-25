@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v1.0.0 — Full-stack Matrix platform: Rust homeserver (Client-Server API Phase 43+) + React/TypeScript frontend client with Element-style UI (functional, not production-ready)
+**Status:** v1.2.0 — Full-stack Matrix platform: Rust homeserver (Client-Server API Phase 43+) + React/TypeScript frontend client with Slack-style timeline UI (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 

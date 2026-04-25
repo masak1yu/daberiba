@@ -15,12 +15,18 @@ interface AuthState {
   logout: () => Promise<void>
 }
 
+// ストア生成時に localStorage から同期的に読み込む（リロード後の再認証防止）
+const _initialClient = getClient()
+const _initialDeviceId = _initialClient ? localStorage.getItem(STORAGE_KEY.DEVICE_ID) : null
+
 export const useAuthStore = create<AuthState>((set, get) => ({
-  client: null,
-  userId: null,
-  deviceId: null,
+  client: _initialClient,
+  userId: _initialClient?.getUserId() ?? null,
+  deviceId: _initialDeviceId,
 
   hydrate() {
+    // 初期化済みなら何もしない
+    if (get().client) return
     const client = getClient()
     if (client) {
       const deviceId = localStorage.getItem(STORAGE_KEY.DEVICE_ID)
