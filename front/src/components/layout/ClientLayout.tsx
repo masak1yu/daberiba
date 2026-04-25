@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAuthStore } from '../../stores/auth'
 import { useRoomsStore } from '../../stores/rooms'
 import { startSyncLoop } from '../../api/sync'
+import NarrowStrip from './NarrowStrip'
 import Sidebar from './Sidebar'
 import ToastStack from '../common/ToastStack'
 
@@ -34,6 +35,7 @@ export default function ClientLayout() {
 
   return (
     <div className="flex h-dvh overflow-hidden" style={{ background: '#15191e', color: '#e9edf1' }}>
+      <NarrowStrip />
       <Sidebar />
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <Outlet />

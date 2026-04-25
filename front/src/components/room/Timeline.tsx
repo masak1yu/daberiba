@@ -1,37 +1,42 @@
 /**
- * タイムライン — Element 風のフラットレイアウト
+ * タイムライン — Element 風の2カラムレイアウト
  *
- * - 同一送信者の連続メッセージをグループ化（アバター・名前は初回のみ）
- * - ホバーでアクションメニュー（リアクション・編集・削除）を表示
- * - 上端 IntersectionObserver で過去ログを自動ロード
- * - 新着メッセージで最下部へ自動スクロール（過去ログ挿入時は除外）
+ * 左カラム（52px）: グループ先頭はアバター、それ以外は時刻
+ * 右カラム（flex）: グループ先頭は送信者名、その後はメッセージ本文
  */
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { MatrixEvent } from '../../api/sync'
 import type { MemberAvatars, MemberNames, Reactions } from '../../stores/rooms'
 import { mxcToHttp, mxcToThumbnail } from '../../api/media'
 import { STORAGE_KEY } from '../../api/client'
-import Avatar from '../common/Avatar'
+import Avatar, { userColor } from '../common/Avatar'
 
 const EMOJI_LIST = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🎉', '🔥']
 
-// ユーザー ID から決定論的な色（Element 風）
-function senderColor(userId: string): string {
-  let hash = 0
-  for (let i = 0; i < userId.length; i++) {
-    hash = userId.charCodeAt(i) + ((hash << 5) - hash)
+function DateSeparator({ ts }: { ts: number }) {
+  const date = new Date(ts)
+  const now = new Date()
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+
+  let label: string
+  if (date.toDateString() === now.toDateString()) {
+    label = '今日'
+  } else if (date.toDateString() === yesterday.toDateString()) {
+    label = '昨日'
+  } else {
+    label = date.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })
   }
-  const palette = [
-    '#e53935',
-    '#8e24aa',
-    '#039be5',
-    '#00897b',
-    '#f4511e',
-    '#5c6bc0',
-    '#43a047',
-    '#fb8c00',
-  ]
-  return palette[Math.abs(hash) % palette.length]!
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <div className="flex-1" style={{ height: '1px', background: '#2d3440' }} />
+      <span className="shrink-0 rounded-full px-3 py-0.5 text-xs" style={{ background: '#21262d', color: '#636e7d', border: '1px solid #2d3440' }}>
+        {label}
+      </span>
+      <div className="flex-1" style={{ height: '1px', background: '#2d3440' }} />
+    </div>
+  )
 }
 
 interface Props {
@@ -61,7 +66,7 @@ function MessageContent({ content }: { content: Record<string, unknown> }) {
         <img
           src={src}
           alt={body}
-          className="max-h-72 max-w-full rounded-lg object-cover"
+          className="max-h-72 max-w-sm rounded-lg object-cover"
           loading="lazy"
         />
       </a>
@@ -77,11 +82,10 @@ function MessageContent({ content }: { content: Record<string, unknown> }) {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex items-center gap-1.5 underline underline-offset-2"
+        className="inline-flex items-center gap-1.5 underline underline-offset-2"
         style={{ color: '#0dbd8b' }}
       >
-        <span>{icon}</span>
-        <span className="break-all">{body}</span>
+        {icon} <span className="break-all">{body}</span>
       </a>
     )
   }
@@ -135,7 +139,7 @@ export default function Timeline({
     }
   }, [firstEventId])
 
-  // 上端センチネル（過去ログ自動ロード）
+  // 上端センチネル
   useEffect(() => {
     const sentinel = topSentinelRef.current
     if (!sentinel || !onLoadMore) return
@@ -153,7 +157,7 @@ export default function Timeline({
     return () => observer.disconnect()
   }, [onLoadMore, hasMore, historyLoading])
 
-  // スクロール位置監視
+  // スクロール↓ボタン制御
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
@@ -182,7 +186,7 @@ export default function Timeline({
 
   return (
     <div className="relative h-full">
-      <div ref={containerRef} className="flex h-full flex-col overflow-y-auto px-4 py-2">
+      <div ref={containerRef} className="h-full overflow-y-auto py-4">
         <div ref={topSentinelRef} />
 
         {historyLoading && (
@@ -197,6 +201,9 @@ export default function Timeline({
         {events.map((ev, idx) => {
           const prevEv = events[idx - 1]
           const isGroupStart = prevEv?.sender !== ev.sender
+          const currDate = new Date(ev.origin_server_ts ?? 0)
+          const prevDate = prevEv ? new Date(prevEv.origin_server_ts ?? 0) : null
+          const showDateSep = !prevDate || prevDate.toDateString() !== currDate.toDateString()
           const time = new Date(ev.origin_server_ts ?? 0).toLocaleTimeString('ja-JP', {
             hour: '2-digit',
             minute: '2-digit',
@@ -205,244 +212,220 @@ export default function Timeline({
           const reactionEntries = Object.entries(eventReactions)
           const senderName = (ev.sender && memberNames?.[ev.sender]) ?? ev.sender ?? ''
           const senderAvatar = ev.sender ? memberAvatars?.[ev.sender] : undefined
-          const isMine = ev.sender === myUserId
           const isActive = activeEventId === ev.event_id
           const isEditing = editingEventId === ev.event_id
+          const isMine = ev.sender === myUserId
           const body = String((ev.content as { body?: string }).body ?? '')
 
           return (
-            <div
-              key={ev.event_id}
-              className="group relative flex gap-3 rounded-lg px-2 py-0.5 transition-colors"
-              style={{
-                marginTop: isGroupStart ? '12px' : '1px',
-                background: isActive ? '#2d3440' : 'transparent',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) e.currentTarget.style.background = '#1c2129'
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) e.currentTarget.style.background = 'transparent'
-              }}
-            >
-              {/* アバター列（グループ先頭のみ表示、それ以外はスペーサー） */}
-              <div className="w-9 shrink-0 pt-0.5">
-                {isGroupStart ? (
-                  <Avatar
-                    userId={ev.sender ?? ''}
-                    displayName={senderName}
-                    avatarUrl={senderAvatar}
-                    size="sm"
-                  />
-                ) : (
+            <div key={ev.event_id}>
+              {showDateSep && <DateSeparator ts={ev.origin_server_ts ?? 0} />}
+              <div
+                className="group relative"
+                style={{ marginTop: !showDateSep && isGroupStart ? '16px' : '0' }}
+              >
+              {/* グループ先頭行: アバター + 送信者名 */}
+              {isGroupStart && (
+                <div className="flex items-center px-4" style={{ marginBottom: '2px' }}>
+                  <div className="w-[52px] flex shrink-0 items-center justify-center">
+                    <Avatar
+                      userId={ev.sender ?? ''}
+                      displayName={senderName}
+                      avatarUrl={senderAvatar}
+                      size="sm"
+                    />
+                  </div>
                   <span
-                    className="invisible block text-center text-xs leading-none group-hover:visible"
-                    style={{ color: '#636e7d', fontSize: '10px', paddingTop: '4px' }}
+                    className="text-sm font-semibold"
+                    style={{ color: userColor(ev.sender ?? '') }}
+                  >
+                    {senderName}
+                  </span>
+                </div>
+              )}
+
+              {/* メッセージ行: 時刻 + 本文 */}
+              <div
+                className="flex px-4 transition-colors"
+                style={{
+                  background: isActive ? '#2d3440' : 'transparent',
+                  paddingTop: '1px',
+                  paddingBottom: '1px',
+                }}
+                onMouseEnter={(e) => {
+                  if (!isActive) e.currentTarget.style.background = '#343a46'
+                }}
+                onMouseLeave={(e) => {
+                  if (!isActive) e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                {/* 左カラム: 時刻 */}
+                <div
+                  className="w-[52px] shrink-0 flex items-start justify-end pr-3 pt-0.5"
+                >
+                  <span
+                    className="text-[11px] leading-5"
+                    style={{ color: '#636e7d' }}
                   >
                     {time}
                   </span>
-                )}
-              </div>
+                </div>
 
-              {/* メッセージ本体 */}
-              <div className="min-w-0 flex-1">
-                {isGroupStart && (
-                  <div className="mb-0.5 flex items-baseline gap-2">
-                    <span
-                      className="text-sm font-semibold"
-                      style={{ color: isMine ? '#0dbd8b' : senderColor(ev.sender ?? '') }}
-                    >
-                      {senderName}
-                    </span>
-                    <span className="text-xs" style={{ color: '#636e7d' }}>
-                      {time}
-                    </span>
-                  </div>
-                )}
-
-                {isEditing ? (
-                  <div className="flex gap-2 py-1">
-                    <input
-                      value={editInput}
-                      onChange={(e) => setEditInput(e.target.value)}
-                      autoFocus
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault()
+                {/* 右カラム: メッセージ本文 */}
+                <div className="min-w-0 flex-1">
+                  {isEditing ? (
+                    <div className="flex gap-2 py-1">
+                      <input
+                        value={editInput}
+                        onChange={(e) => setEditInput(e.target.value)}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            if (editInput.trim() && onEdit) onEdit(ev.event_id!, editInput.trim())
+                            setEditingEventId(null)
+                          }
+                          if (e.key === 'Escape') setEditingEventId(null)
+                        }}
+                        className="min-w-0 flex-1 rounded-lg px-3 py-1.5 text-sm focus:outline-none"
+                        style={{
+                          background: '#2d3440',
+                          color: '#e9edf1',
+                          border: '1px solid #0dbd8b',
+                        }}
+                      />
+                      <button
+                        onClick={() => {
                           if (editInput.trim() && onEdit) onEdit(ev.event_id!, editInput.trim())
                           setEditingEventId(null)
-                        }
-                        if (e.key === 'Escape') setEditingEventId(null)
-                      }}
-                      className="min-w-0 flex-1 rounded-lg px-3 py-1.5 text-sm focus:outline-none"
-                      style={{
-                        background: '#2d3440',
-                        color: '#e9edf1',
-                        border: '1px solid #0dbd8b',
-                      }}
-                    />
-                    <button
-                      onClick={() => {
-                        if (editInput.trim() && onEdit) onEdit(ev.event_id!, editInput.trim())
-                        setEditingEventId(null)
-                      }}
-                      disabled={!editInput.trim()}
-                      className="rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-                      style={{ background: '#0dbd8b', color: 'white' }}
-                    >
-                      保存
-                    </button>
-                    <button
-                      onClick={() => setEditingEventId(null)}
-                      className="rounded-lg px-3 py-1.5 text-xs"
-                      style={{ background: '#2d3440', color: '#8d99a6' }}
-                    >
-                      取消
-                    </button>
-                  </div>
-                ) : (
-                  <div className="text-sm" style={{ color: '#e9edf1', lineHeight: '1.5' }}>
-                    <MessageContent content={ev.content} />
-                  </div>
-                )}
-
-                {/* リアクションバッジ */}
-                {reactionEntries.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {reactionEntries.map(([emoji, senders]) => {
-                      const reacted = senders.includes(myUserId ?? '')
-                      return (
-                        <button
-                          key={emoji}
-                          onClick={() => ev.event_id && onReact?.(ev.event_id, emoji)}
-                          className="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs transition-colors"
-                          style={{
-                            background: reacted ? 'rgba(13,189,139,0.15)' : '#2d3440',
-                            border: `1px solid ${reacted ? '#0dbd8b' : '#363c48'}`,
-                            color: reacted ? '#0dbd8b' : '#8d99a6',
-                          }}
-                        >
-                          {emoji}
-                          <span className="font-medium">{senders.length}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {/* ホバーアクションメニュー */}
-              <div
-                className="absolute right-2 top-0 -translate-y-1/2 z-10 hidden rounded-lg p-0.5 group-hover:flex"
-                style={{
-                  background: '#21262d',
-                  border: '1px solid #2d3440',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                {/* リアクション */}
-                {onReact && ev.event_id && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setActiveEventId(isActive ? null : (ev.event_id ?? null))}
-                      className="rounded p-1.5 transition-colors hover:bg-white/10"
-                      style={{ color: '#8d99a6' }}
-                      title="リアクション"
-                    >
-                      <svg
-                        className="h-3.5 w-3.5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                    </button>
-                    {isActive && (
-                      <div
-                        className="absolute bottom-full right-0 mb-1 flex gap-0.5 rounded-xl p-1.5"
-                        style={{
-                          background: '#21262d',
-                          border: '1px solid #2d3440',
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
                         }}
-                        onClick={(e) => e.stopPropagation()}
+                        disabled={!editInput.trim()}
+                        className="rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                        style={{ background: '#0dbd8b', color: 'white' }}
                       >
-                        {EMOJI_LIST.map((emoji) => (
+                        保存
+                      </button>
+                      <button
+                        onClick={() => setEditingEventId(null)}
+                        className="rounded-lg px-3 py-1.5 text-xs"
+                        style={{ background: '#2d3440', color: '#8d99a6' }}
+                      >
+                        取消
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-sm leading-relaxed" style={{ color: '#e9edf1' }}>
+                      <MessageContent content={ev.content} />
+                    </div>
+                  )}
+
+                  {/* リアクションバッジ */}
+                  {reactionEntries.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {reactionEntries.map(([emoji, senders]) => {
+                        const reacted = senders.includes(myUserId ?? '')
+                        return (
                           <button
                             key={emoji}
-                            onClick={() => {
-                              onReact(ev.event_id!, emoji)
-                              setActiveEventId(null)
+                            onClick={() => ev.event_id && onReact?.(ev.event_id, emoji)}
+                            className="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs transition-colors"
+                            style={{
+                              background: reacted ? 'rgba(13,189,139,0.15)' : '#2d3440',
+                              border: `1px solid ${reacted ? '#0dbd8b' : '#363c48'}`,
+                              color: reacted ? '#0dbd8b' : '#8d99a6',
                             }}
-                            className="rounded-lg p-1 text-base transition-colors hover:bg-white/10"
                           >
                             {emoji}
+                            <span className="font-medium">{senders.length}</span>
                           </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
 
-                {/* 編集（自分のメッセージのみ） */}
-                {isMine && onEdit && ev.event_id && (
-                  <button
-                    onClick={() => {
-                      setEditingEventId(ev.event_id!)
-                      setEditInput(body)
-                    }}
-                    className="rounded p-1.5 transition-colors hover:bg-white/10"
-                    style={{ color: '#8d99a6' }}
-                    title="編集"
-                  >
-                    <svg
-                      className="h-3.5 w-3.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                      />
-                    </svg>
-                  </button>
-                )}
+                {/* ホバーアクションメニュー（右端に浮かぶ） */}
+                <div
+                  className="absolute right-4 -top-3 z-10 hidden rounded-lg p-0.5 group-hover:flex"
+                  style={{
+                    background: '#21262d',
+                    border: '1px solid #2d3440',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* リアクション */}
+                  {onReact && ev.event_id && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setActiveEventId(isActive ? null : (ev.event_id ?? null))}
+                        className="rounded p-1.5 transition-colors hover:bg-white/10"
+                        style={{ color: '#8d99a6' }}
+                        title="リアクション"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                      </button>
+                      {isActive && (
+                        <div
+                          className="absolute bottom-full right-0 mb-1 flex gap-0.5 rounded-xl p-2"
+                          style={{
+                            background: '#21262d',
+                            border: '1px solid #2d3440',
+                            boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {EMOJI_LIST.map((emoji) => (
+                            <button
+                              key={emoji}
+                              onClick={() => {
+                                onReact(ev.event_id!, emoji)
+                                setActiveEventId(null)
+                              }}
+                              className="rounded-lg p-1.5 text-lg transition-colors hover:bg-white/10"
+                            >
+                              {emoji}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-                {/* 削除（自分のメッセージのみ） */}
-                {isMine && onDelete && ev.event_id && (
-                  <button
-                    onClick={() => {
-                      onDelete(ev.event_id!)
-                    }}
-                    className="rounded p-1.5 transition-colors hover:bg-white/10"
-                    style={{ color: '#e53935' }}
-                    title="削除"
-                  >
-                    <svg
-                      className="h-3.5 w-3.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
+                  {/* 編集（自分のみ） */}
+                  {isMine && onEdit && ev.event_id && (
+                    <button
+                      onClick={() => {
+                        setEditingEventId(ev.event_id!)
+                        setEditInput(body)
+                      }}
+                      className="rounded p-1.5 transition-colors hover:bg-white/10"
+                      style={{ color: '#8d99a6' }}
+                      title="編集"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
-                )}
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  )}
+
+                  {/* 削除（自分のみ） */}
+                  {isMine && onDelete && ev.event_id && (
+                    <button
+                      onClick={() => onDelete(ev.event_id!)}
+                      className="rounded p-1.5 transition-colors hover:bg-white/10"
+                      style={{ color: '#e53935' }}
+                      title="削除"
+                    >
+                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              </div>
               </div>
             </div>
           )
@@ -454,7 +437,7 @@ export default function Timeline({
       {showScrollBtn && (
         <button
           onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
-          className="absolute bottom-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full shadow-lg transition-colors"
+          className="absolute bottom-4 right-4 z-10 flex h-8 w-8 items-center justify-center rounded-full shadow-lg"
           style={{ background: '#0dbd8b', color: 'white' }}
           title="最新メッセージへ"
         >

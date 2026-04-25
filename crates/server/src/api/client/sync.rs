@@ -407,7 +407,8 @@ async fn sync(
     let stream_ordering = result["next_batch"].as_str().unwrap_or("0").to_string();
     let now_ms = chrono::Utc::now().timestamp_millis() as u64;
     result["next_batch"] = serde_json::json!(format!(
-        ":stream_ordering_:max_to_device_id_:now_ms_:current_typing_version"
+        "{}_{}_{}_{}",
+        stream_ordering, max_to_device_id, now_ms, current_typing_version
     ));
 
     Ok(Json(result))
