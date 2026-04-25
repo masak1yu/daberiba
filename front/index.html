@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>daberiba</title>
+    <!-- テーマカラー（Android Chrome のアドレスバー） -->
+    <meta name="theme-color" content="#1a1a2e" />
+    <!-- iOS PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="daberiba" />
+    <link rel="apple-touch-icon" href="/icons/192.png" />
+    <!--
+      iOS スプラッシュスクリーン: 実機アイコン画像（/icons/192.png）が
+      ホーム画面追加後の起動スプラッシュに使われる。
+      解像度別の apple-touch-startup-image は icons/ に追加する際に設定する。
+    -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
