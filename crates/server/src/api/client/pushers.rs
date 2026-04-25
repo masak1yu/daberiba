@@ -56,13 +56,11 @@ async fn set_pusher(
     axum::Extension(user): axum::Extension<AuthUser>,
     Json(body): Json<SetPusherBody>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    if body.kind.is_none() {
+    let Some(kind) = body.kind else {
         // kind = null → 削除
         db::pushers::delete(&state.pool, &user.user_id, &body.app_id, &body.pushkey).await?;
         return Ok(Json(serde_json::json!({})));
-    }
-
-    let kind = body.kind.unwrap();
+    };
     let app_display_name = body
         .app_display_name
         .ok_or_else(|| AppError::BadRequest("app_display_name required".into()))?;

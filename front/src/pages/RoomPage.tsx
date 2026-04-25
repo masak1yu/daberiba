@@ -1,12 +1,13 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { useShallow } from 'zustand/react/shallow'
 import { useAuthStore } from '../stores/auth'
 import { useRoomsStore } from '../stores/rooms'
 import { STORAGE_KEY } from '../api/client'
 import { sendReadReceipt } from '../api/messages'
 import { leaveRoom } from '../api/rooms'
 import { uploadMedia } from '../api/profile'
-import { sendTyping } from '../api/sync'
+import { sendTyping, type MatrixEvent } from '../api/sync'
 import { sendReaction, redactEvent } from '../api/roomState'
 import Timeline from '../components/room/Timeline'
 import MembersList from '../components/room/MembersList'
@@ -14,20 +15,28 @@ import RoomSettingsModal from '../components/room/RoomSettingsModal'
 import { userColor } from '../utils/userColor'
 import { useUiStore } from '../stores/ui'
 
+const EMPTY_EVENTS: MatrixEvent[] = []
+
 export default function RoomPage() {
   const { roomId } = useParams<{ roomId: string }>()
   const decodedRoomId = roomId ? decodeURIComponent(roomId) : ''
 
   const userId = useAuthStore((s) => s.userId)
-  const timelines = useRoomsStore((s) => s.timelines)
-  const rooms = useRoomsStore((s) => s.rooms)
-  const prevBatches = useRoomsStore((s) => s.prevBatches)
-  const historyLoading = useRoomsStore((s) => s.historyLoading)
+  const events = useRoomsStore((s) => s.timelines[decodedRoomId] ?? EMPTY_EVENTS)
+  const room = useRoomsStore((s) => s.rooms[decodedRoomId])
+  const hasMore = useRoomsStore((s) => Boolean(s.prevBatches[decodedRoomId]))
+  const isHistoryLoading = useRoomsStore((s) => s.historyLoading[decodedRoomId] ?? false)
   const loadHistory = useRoomsStore((s) => s.loadHistory)
-  const allReactions = useRoomsStore((s) => s.reactions)
-  const allTyping = useRoomsStore((s) => s.typing)
-  const allMemberNames = useRoomsStore((s) => s.memberNames)
-  const allMemberAvatars = useRoomsStore((s) => s.memberAvatars)
+  const reactions = useRoomsStore((s) => s.reactions[decodedRoomId])
+  const typingUsers = useRoomsStore(
+    useShallow((s) =>
+      (s.typing[decodedRoomId] ?? [])
+        .filter((id) => id !== userId)
+        .map((id) => s.memberNames[decodedRoomId]?.[id] ?? id)
+    )
+  )
+  const memberNames = useRoomsStore((s) => s.memberNames[decodedRoomId])
+  const memberAvatars = useRoomsStore((s) => s.memberAvatars[decodedRoomId])
   const markRoomRead = useRoomsStore((s) => s.markRoomRead)
   const storeRedactEvent = useRoomsStore((s) => s.redactEvent)
   const storeApplyEdit = useRoomsStore((s) => s.applyEdit)
@@ -41,20 +50,11 @@ export default function RoomPage() {
   const [showRoomSettings, setShowRoomSettings] = useState(false)
   const [confirmLeave, setConfirmLeave] = useState(false)
   const [leaving, setLeaving] = useState(false)
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false)
   const txnRef = useRef(0)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const events = useMemo(() => timelines[decodedRoomId] ?? [], [timelines, decodedRoomId])
-  const room = rooms[decodedRoomId]
-  const hasMore = Boolean(prevBatches[decodedRoomId])
-  const isHistoryLoading = historyLoading[decodedRoomId] ?? false
-  const reactions = allReactions[decodedRoomId]
-  const memberNames = allMemberNames[decodedRoomId]
-  const memberAvatars = allMemberAvatars[decodedRoomId]
-  const typingUsers = (allTyping[decodedRoomId] ?? [])
-    .filter((id) => id !== userId)
-    .map((id) => memberNames?.[id] ?? id)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     markRoomRead(decodedRoomId)
@@ -77,6 +77,24 @@ export default function RoomPage() {
   const handleLoadMore = useCallback(() => {
     void loadHistory(decodedRoomId)
   }, [decodedRoomId, loadHistory])
+
+  function handleEmojiInsert(emoji: string) {
+    const ta = textareaRef.current
+    if (!ta) {
+      handleInputChange(input + emoji)
+      return
+    }
+    const start = ta.selectionStart ?? input.length
+    const end = ta.selectionEnd ?? input.length
+    const next = input.slice(0, start) + emoji + input.slice(end)
+    handleInputChange(next)
+    setShowEmojiPicker(false)
+    // フォーカスとカーソル位置を復元
+    requestAnimationFrame(() => {
+      ta.focus()
+      ta.setSelectionRange(start + emoji.length, start + emoji.length)
+    })
+  }
 
   function handleInputChange(value: string) {
     setInput(value)
@@ -113,9 +131,11 @@ export default function RoomPage() {
     setLeaving(true)
     try {
       await leaveRoom(homeserver, token, decodedRoomId)
-    } catch {
-      setLeaving(false)
+    } catch (err) {
+      showToast(`退出に失敗しました: ${err instanceof Error ? err.message : String(err)}`, 'error')
       setConfirmLeave(false)
+    } finally {
+      setLeaving(false)
     }
   }
 
@@ -178,8 +198,11 @@ export default function RoomPage() {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ msgtype, body: file.name, url: mxc }),
       })
-    } catch {
-      // 失敗は silent
+    } catch (err) {
+      showToast(
+        `ファイル送信に失敗しました: ${err instanceof Error ? err.message : String(err)}`,
+        'error'
+      )
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -192,8 +215,11 @@ export default function RoomPage() {
     if (!homeserver || !token) return
     try {
       await sendReaction(homeserver, token, decodedRoomId, eventId, emoji)
-    } catch {
-      // 失敗は silent
+    } catch (err) {
+      showToast(
+        `リアクション送信に失敗しました: ${err instanceof Error ? err.message : String(err)}`,
+        'error'
+      )
     }
   }
 
@@ -204,8 +230,8 @@ export default function RoomPage() {
     storeRedactEvent(decodedRoomId, eventId)
     try {
       await redactEvent(homeserver, token, decodedRoomId, eventId)
-    } catch {
-      // 失敗は silent
+    } catch (err) {
+      showToast(`削除に失敗しました: ${err instanceof Error ? err.message : String(err)}`, 'error')
     }
   }
 
@@ -227,8 +253,8 @@ export default function RoomPage() {
           'm.new_content': newContent,
         }),
       })
-    } catch {
-      // 失敗は silent
+    } catch (err) {
+      showToast(`編集に失敗しました: ${err instanceof Error ? err.message : String(err)}`, 'error')
     }
   }
 
@@ -341,7 +367,7 @@ export default function RoomPage() {
         {/* コンポーザー（Element 風） */}
         <div className="shrink-0 px-4 pb-4 pt-1">
           <div
-            className="overflow-hidden rounded-xl"
+            className="rounded-xl"
             style={{ background: '#21262d', border: '1px solid #2d3440' }}
           >
             <form onSubmit={(e) => void handleSend(e)}>
@@ -354,6 +380,7 @@ export default function RoomPage() {
 
                 {/* テキスト入力 */}
                 <textarea
+                  ref={textareaRef}
                   value={input}
                   onChange={(e) => {
                     handleInputChange(e.target.value)
@@ -361,7 +388,7 @@ export default function RoomPage() {
                     e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
                   }}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
+                    if (e.key === 'Enter' && e.shiftKey) {
                       e.preventDefault()
                       void handleSend(e as unknown as FormEvent)
                     }
@@ -373,30 +400,80 @@ export default function RoomPage() {
                 />
 
                 {/* 右側アクション */}
-                <div className="ml-2 flex shrink-0 items-center gap-0.5">
-                  {/* 絵文字 */}
-                  {!input.trim() && (
-                    <button
-                      type="button"
-                      className="rounded p-1.5 transition-colors hover:bg-white/10"
-                      style={{ color: '#8d99a6' }}
-                      title="絵文字"
+                <div className="relative ml-2 flex shrink-0 items-center gap-0.5">
+                  {/* 絵文字ピッカー */}
+                  {showEmojiPicker && (
+                    <div
+                      className="absolute bottom-full right-0 mb-2 grid w-max grid-cols-8 gap-0.5 rounded-xl p-2 shadow-2xl"
+                      style={{
+                        background: '#21262d',
+                        border: '1px solid #2d3440',
+                        zIndex: 50,
+                      }}
                     >
-                      <svg
-                        className="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.8}
-                          d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                        />
-                      </svg>
-                    </button>
+                      {[
+                        '😀',
+                        '😂',
+                        '🥹',
+                        '😊',
+                        '😎',
+                        '🥰',
+                        '😍',
+                        '🤩',
+                        '😅',
+                        '😭',
+                        '😤',
+                        '🤔',
+                        '🫠',
+                        '😶',
+                        '🥲',
+                        '😬',
+                        '👍',
+                        '👎',
+                        '👏',
+                        '🙌',
+                        '🤝',
+                        '🙏',
+                        '💪',
+                        '✌️',
+                        '❤️',
+                        '🔥',
+                        '✨',
+                        '🎉',
+                        '💯',
+                        '⚡',
+                        '💀',
+                        '👀',
+                      ].map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => handleEmojiInsert(emoji)}
+                          className="rounded p-1 text-lg hover:bg-white/10"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
                   )}
+
+                  {/* 絵文字ボタン */}
+                  <button
+                    type="button"
+                    onClick={() => setShowEmojiPicker((v) => !v)}
+                    className="rounded p-1.5 transition-colors hover:bg-white/10"
+                    style={{ color: showEmojiPicker ? '#0dbd8b' : '#8d99a6' }}
+                    title="絵文字"
+                  >
+                    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={1.8}
+                        d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                  </button>
 
                   {/* ファイル添付 */}
                   {!input.trim() && (
@@ -428,30 +505,6 @@ export default function RoomPage() {
                           />
                         </svg>
                       )}
-                    </button>
-                  )}
-
-                  {/* その他（空のときのみ） */}
-                  {!input.trim() && (
-                    <button
-                      type="button"
-                      className="rounded p-1.5 transition-colors hover:bg-white/10"
-                      style={{ color: '#8d99a6' }}
-                      title="その他"
-                    >
-                      <svg
-                        className="h-5 w-5"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={1.8}
-                          d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"
-                        />
-                      </svg>
                     </button>
                   )}
 

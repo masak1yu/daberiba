@@ -210,6 +210,12 @@ function PasswordSection({ userId }: { userId: string }) {
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
+  useEffect(() => {
+    if (!saved) return
+    const t = setTimeout(() => setSaved(false), 3000)
+    return () => clearTimeout(t)
+  }, [saved])
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
     if (next !== confirm) {
@@ -234,7 +240,6 @@ function PasswordSection({ userId }: { userId: string }) {
       setCurrent('')
       setNext('')
       setConfirm('')
-      setTimeout(() => setSaved(false), 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : '変更に失敗しました')
     } finally {

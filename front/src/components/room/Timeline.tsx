@@ -10,9 +10,16 @@ import type { MemberAvatars, MemberNames, Reactions } from '../../stores/rooms'
 import { mxcToHttp, mxcToThumbnail } from '../../api/media'
 import { STORAGE_KEY } from '../../api/client'
 import Avatar from '../common/Avatar'
-import { userColor } from '../../utils/userColor'
 
 const EMOJI_LIST = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🎉', '🔥']
+const GROUP_TIMEOUT_MS = 5 * 60 * 1000 // 5分以上経過で新グループ
+
+/** Matrix user ID から表示名を取得（@localpart:server → localpart） */
+function displayName(sender: string, memberNames?: MemberNames): string {
+  if (memberNames?.[sender]) return memberNames[sender]!
+  const m = sender.match(/^@?([^:]+)/)
+  return m ? m[1] : sender
+}
 
 function DateSeparator({ ts }: { ts: number }) {
   const date = new Date(ts)
@@ -204,17 +211,19 @@ export default function Timeline({
 
         {events.map((ev, idx) => {
           const prevEv = events[idx - 1]
-          const isGroupStart = prevEv?.sender !== ev.sender
-          const currDate = new Date(ev.origin_server_ts ?? 0)
-          const prevDate = prevEv ? new Date(prevEv.origin_server_ts ?? 0) : null
+          const currTs = ev.origin_server_ts ?? 0
+          const prevTs = prevEv?.origin_server_ts ?? 0
+          const isGroupStart = prevEv?.sender !== ev.sender || currTs - prevTs > GROUP_TIMEOUT_MS
+          const currDate = new Date(currTs)
+          const prevDate = prevEv ? new Date(prevTs) : null
           const showDateSep = !prevDate || prevDate.toDateString() !== currDate.toDateString()
-          const time = new Date(ev.origin_server_ts ?? 0).toLocaleTimeString('ja-JP', {
+          const time = new Date(currTs).toLocaleTimeString('ja-JP', {
             hour: '2-digit',
             minute: '2-digit',
           })
           const eventReactions = ev.event_id ? (reactions?.[ev.event_id] ?? {}) : {}
           const reactionEntries = Object.entries(eventReactions)
-          const senderName = (ev.sender && memberNames?.[ev.sender]) ?? ev.sender ?? ''
+          const senderName = displayName(ev.sender ?? '', memberNames)
           const senderAvatar = ev.sender ? memberAvatars?.[ev.sender] : undefined
           const isActive = activeEventId === ev.event_id
           const isEditing = editingEventId === ev.event_id
@@ -226,52 +235,55 @@ export default function Timeline({
               {showDateSep && <DateSeparator ts={ev.origin_server_ts ?? 0} />}
               <div
                 className="group relative"
-                style={{ marginTop: !showDateSep && isGroupStart ? '16px' : '0' }}
+                style={{ marginTop: !showDateSep && isGroupStart ? '12px' : '0' }}
               >
-                {/* グループ先頭行: アバター + 送信者名 */}
-                {isGroupStart && (
-                  <div className="flex items-center px-4" style={{ marginBottom: '2px' }}>
-                    <div className="w-[52px] flex shrink-0 items-center justify-center">
+                <div
+                  className="flex px-4 py-0.5 transition-colors"
+                  style={{ background: isActive ? '#2d3440' : 'transparent' }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) e.currentTarget.style.background = '#1e242c'
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) e.currentTarget.style.background = 'transparent'
+                  }}
+                >
+                  {/* 左カラム: アバター or 時刻 */}
+                  <div className="w-10 shrink-0 mr-3 flex items-start justify-center pt-0.5">
+                    {isGroupStart ? (
                       <Avatar
                         userId={ev.sender ?? ''}
                         displayName={senderName}
                         avatarUrl={senderAvatar}
                         size="sm"
                       />
-                    </div>
-                    <span
-                      className="text-sm font-semibold"
-                      style={{ color: userColor(ev.sender ?? '') }}
-                    >
-                      {senderName}
-                    </span>
-                  </div>
-                )}
-
-                {/* メッセージ行: 時刻 + 本文 */}
-                <div
-                  className="flex px-4 transition-colors"
-                  style={{
-                    background: isActive ? '#2d3440' : 'transparent',
-                    paddingTop: '1px',
-                    paddingBottom: '1px',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.background = '#343a46'
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.background = 'transparent'
-                  }}
-                >
-                  {/* 左カラム: 時刻 */}
-                  <div className="w-[52px] shrink-0 flex items-start justify-end pr-3 pt-0.5">
-                    <span className="text-[11px] leading-5" style={{ color: '#636e7d' }}>
-                      {time}
-                    </span>
+                    ) : (
+                      <span
+                        className="text-[10px] leading-5 opacity-0 group-hover:opacity-100 transition-opacity select-none"
+                        style={{ color: '#636e7d' }}
+                      >
+                        {time}
+                      </span>
+                    )}
                   </div>
 
-                  {/* 右カラム: メッセージ本文 */}
+                  {/* 右カラム */}
                   <div className="min-w-0 flex-1">
+                    {/* グループ先頭: ユーザー名 + 時刻 */}
+                    {isGroupStart && (
+                      <div className="flex items-baseline gap-2 mb-0.5">
+                        <span
+                          className="text-sm font-bold leading-tight"
+                          style={{ color: '#e9edf1' }}
+                        >
+                          {senderName}
+                        </span>
+                        <span className="text-[11px]" style={{ color: '#636e7d' }}>
+                          {time}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* メッセージ本文 */}
                     {isEditing ? (
                       <div className="flex gap-2 py-1">
                         <input
@@ -313,7 +325,7 @@ export default function Timeline({
                         </button>
                       </div>
                     ) : (
-                      <div className="text-sm leading-relaxed" style={{ color: '#e9edf1' }}>
+                      <div className="text-sm leading-relaxed" style={{ color: '#d1d5db' }}>
                         <MessageContent content={ev.content} />
                       </div>
                     )}

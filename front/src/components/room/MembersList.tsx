@@ -56,6 +56,12 @@ export default function MembersList({ roomId, onClose }: Props) {
       .finally(() => setLoading(false))
   }, [roomId])
 
+  useEffect(() => {
+    if (!inviteSuccess) return
+    const t = setTimeout(() => setInviteSuccess(false), 3000)
+    return () => clearTimeout(t)
+  }, [inviteSuccess])
+
   async function handleInvite(e: FormEvent) {
     e.preventDefault()
     const target = inviteInput.trim()
@@ -72,7 +78,6 @@ export default function MembersList({ roomId, onClose }: Props) {
       await inviteUser(homeserver, token, roomId, target)
       setInviteInput('')
       setInviteSuccess(true)
-      setTimeout(() => setInviteSuccess(false), 3000)
     } catch (err) {
       setInviteError(err instanceof Error ? err.message : '招待失敗')
     } finally {

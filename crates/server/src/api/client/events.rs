@@ -467,7 +467,7 @@ fn default_push_rules_for(user_id: &str) -> serde_json::Value {
                     "conditions": [
                         {"kind": "event_match", "key": "type", "pattern": "m.room.member"},
                         {"kind": "event_match", "key": "content.membership", "pattern": "invite"},
-                        {"kind": "event_match", "key": "state_key", "pattern": format!("@:localpart:*")}
+                        {"kind": "event_match", "key": "state_key", "pattern": format!("@{}:*", localpart)}
                     ],
                     "actions": ["notify", {"set_tweak": "sound", "value": "default"}, {"set_tweak": "highlight", "value": false}]
                 },

@@ -51,6 +51,14 @@ export function initClient(params: {
   return _client
 }
 
+/** homeserver と accessToken を取得する。未認証なら null を返す。 */
+export function getCredentials(): { homeserver: string; accessToken: string } | null {
+  const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
+  const accessToken = localStorage.getItem(STORAGE_KEY.ACCESS_TOKEN)
+  if (!homeserver || !accessToken) return null
+  return { homeserver, accessToken }
+}
+
 /** 認証情報を削除してクライアントを破棄する */
 export function clearClient(): void {
   Object.values(STORAGE_KEY).forEach((k) => localStorage.removeItem(k))

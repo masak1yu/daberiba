@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@source '../src';
 
 /* iOS SafeArea 対応 */
 :root {

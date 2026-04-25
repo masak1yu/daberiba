@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
-import { useShallow } from 'zustand/react/shallow'
 import { useAuthStore } from '../../stores/auth'
 import { useRoomsStore } from '../../stores/rooms'
 import { startSyncLoop } from '../../api/sync'
@@ -10,14 +9,10 @@ import ToastStack from '../common/ToastStack'
 
 export default function ClientLayout() {
   const client = useAuthStore((s) => s.client)
-  const { applySyncResponse, setSyncing, setError, reset } = useRoomsStore(
-    useShallow((s) => ({
-      applySyncResponse: s.applySyncResponse,
-      setSyncing: s.setSyncing,
-      setError: s.setError,
-      reset: s.reset,
-    }))
-  )
+  const applySyncResponse = useRoomsStore((s) => s.applySyncResponse)
+  const setSyncing = useRoomsStore((s) => s.setSyncing)
+  const setError = useRoomsStore((s) => s.setError)
+  const reset = useRoomsStore((s) => s.reset)
 
   useEffect(() => {
     if (!client) return
