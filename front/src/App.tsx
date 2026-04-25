@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/auth'
 import { useUiStore } from './stores/ui'
 import RequireAuth from './components/common/RequireAuth'
+import ClientLayout from './components/layout/ClientLayout'
 import LoginPage from './pages/LoginPage'
 import HomePage from './pages/HomePage'
 import RoomPage from './pages/RoomPage'
@@ -14,7 +15,6 @@ export default function App() {
 
   useEffect(() => {
     hydrate()
-    // オンライン/オフライン監視を開始する
     const stop = startNetworkWatch()
     return stop
   }, [hydrate, startNetworkWatch])
@@ -24,29 +24,16 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route
-          path="/"
           element={
             <RequireAuth>
-              <HomePage />
+              <ClientLayout />
             </RequireAuth>
           }
-        />
-        <Route
-          path="/room/:roomId"
-          element={
-            <RequireAuth>
-              <RoomPage />
-            </RequireAuth>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <RequireAuth>
-              <SettingsPage />
-            </RequireAuth>
-          }
-        />
+        >
+          <Route path="/" element={<HomePage />} />
+          <Route path="/room/:roomId" element={<RoomPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
