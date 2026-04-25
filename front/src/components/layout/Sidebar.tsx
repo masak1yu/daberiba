@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useRoomsStore, type RoomSummary } from '../../stores/rooms'
-import { userColor } from '../common/Avatar'
+import { userColor } from '../../utils/userColor'
 import CreateRoomModal from '../room/CreateRoomModal'
 import PublicRoomsModal from '../room/PublicRoomsModal'
 
@@ -53,10 +53,7 @@ function RoomItem({
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-1">
-            <span
-              className="truncate text-sm"
-              style={{ fontWeight: hasBadge ? 600 : 400 }}
-            >
+            <span className="truncate text-sm" style={{ fontWeight: hasBadge ? 600 : 400 }}>
               {label}
             </span>
             {time && !hovered && (
@@ -208,7 +205,12 @@ export default function Sidebar() {
               stroke="currentColor"
               style={{ color: '#8d99a6' }}
             >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d="M19 9l-7 7-7-7"
+              />
             </svg>
           </button>
           <div className="flex items-center gap-0.5">
@@ -272,7 +274,10 @@ export default function Sidebar() {
 
         {/* エラーバー */}
         {error && (
-          <div className="mx-3 mb-2 rounded-lg px-3 py-2 text-xs" style={{ background: '#7f1d1d', color: '#fca5a5' }}>
+          <div
+            className="mx-3 mb-2 rounded-lg px-3 py-2 text-xs"
+            style={{ background: '#7f1d1d', color: '#fca5a5' }}
+          >
             {error}
           </div>
         )}
@@ -308,7 +313,12 @@ export default function Sidebar() {
                     style={{ borderColor: '#3d4555', color: '#e9edf1' }}
                   >
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                      />
                     </svg>
                     チャットを開始
                   </button>
@@ -318,7 +328,12 @@ export default function Sidebar() {
                     style={{ borderColor: '#3d4555', color: '#e9edf1' }}
                   >
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14"
+                      />
                     </svg>
                     新しいルーム
                   </button>

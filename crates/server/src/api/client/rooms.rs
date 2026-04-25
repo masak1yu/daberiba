@@ -19,10 +19,7 @@ pub fn routes() -> Router<AppState> {
         .route("/_matrix/client/v3/rooms/:roomId/kick", post(kick_user))
         .route("/_matrix/client/v3/rooms/:roomId/ban", post(ban_user))
         .route("/_matrix/client/v3/rooms/:roomId/unban", post(unban_user))
-        .route(
-            "/_matrix/client/v3/rooms/:roomId/forget",
-            post(forget_room),
-        )
+        .route("/_matrix/client/v3/rooms/:roomId/forget", post(forget_room))
         .route(
             "/_matrix/client/v3/rooms/:roomId/upgrade",
             post(upgrade_room),
@@ -241,7 +238,7 @@ async fn join_room(
             .await
             .map_err(|e| {
                 tracing::warn!(room_id, error = %e, "federation join 失敗");
-                AppError::BadRequest(format!("federation join failed: :e"))
+                AppError::BadRequest(format!("federation join failed: {e}"))
             })?;
         return Ok(Json(serde_json::json!({ "room_id": room_id })));
     }
@@ -302,7 +299,7 @@ async fn leave_room(
             .await
             .map_err(|e| {
                 tracing::warn!(room_id, error = %e, "federation leave 失敗");
-                AppError::BadRequest(format!("federation leave failed: :e"))
+                AppError::BadRequest(format!("federation leave failed: {e}"))
             })?;
         return Ok(Json(serde_json::json!({})));
     }

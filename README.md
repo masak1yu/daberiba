@@ -2,7 +2,7 @@
 
 A [Matrix](https://matrix.org/) protocol-compliant platform — homeserver backend (and planned frontend client).
 
-**Status:** v0.52.0 — Client-Server API Phase 43 (receipt diff delivery, invite-only join enforcement, encryption flag, state event long-poll wake) (functional, not production-ready)
+**Status:** v1.0.0 — Full-stack Matrix platform: Rust homeserver (Client-Server API Phase 43+) + React/TypeScript frontend client with Element-style UI (functional, not production-ready)
 
 [![CI](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml/badge.svg)](https://github.com/masak1yu/daberiba/actions/workflows/ci.yml)
 
@@ -267,7 +267,7 @@ daberiba/
 │   │       └── error.rs      # Matrix-compliant error responses
 │   └── db/              # sqlx database layer
 │       └── src/         # users, rooms, events, sync, profile, devices, media, pushers, receipts
-├── frontend/            # (planned) Matrix frontend client
+├── front/               # React/TypeScript Matrix frontend client (Vite + Zustand + Tailwind)
 ├── schema/
 │   └── schema.sql        # Managed by sqldef (mysqldef)
 ├── .sqlx/                # sqlx offline query cache (committed)

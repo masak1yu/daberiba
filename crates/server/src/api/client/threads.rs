@@ -7,10 +7,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 
 pub fn routes() -> Router<AppState> {
-    Router::new().route(
-        "/_matrix/client/v1/rooms/:roomId/threads",
-        get(get_threads),
-    )
+    Router::new().route("/_matrix/client/v1/rooms/:roomId/threads", get(get_threads))
 }
 
 #[derive(Deserialize)]
@@ -85,10 +82,11 @@ async fn get_threads(
            INNER JOIN events latest_ev
              ON latest_ev.stream_ordering = thread_roots.latest_activity
            WHERE 1=1
-             :cursor_clause
-             :participated_clause
+             {}
+             {}
            ORDER BY thread_roots.latest_activity DESC
            LIMIT ?"#,
+        cursor_clause, participated_clause,
     );
 
     let mut q = sqlx::query(&sql).bind(&room_id);

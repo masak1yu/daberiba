@@ -9,7 +9,8 @@ import type { MatrixEvent } from '../../api/sync'
 import type { MemberAvatars, MemberNames, Reactions } from '../../stores/rooms'
 import { mxcToHttp, mxcToThumbnail } from '../../api/media'
 import { STORAGE_KEY } from '../../api/client'
-import Avatar, { userColor } from '../common/Avatar'
+import Avatar from '../common/Avatar'
+import { userColor } from '../../utils/userColor'
 
 const EMOJI_LIST = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🎉', '🔥']
 
@@ -31,7 +32,10 @@ function DateSeparator({ ts }: { ts: number }) {
   return (
     <div className="flex items-center gap-3 px-4 py-3">
       <div className="flex-1" style={{ height: '1px', background: '#2d3440' }} />
-      <span className="shrink-0 rounded-full px-3 py-0.5 text-xs" style={{ background: '#21262d', color: '#636e7d', border: '1px solid #2d3440' }}>
+      <span
+        className="shrink-0 rounded-full px-3 py-0.5 text-xs"
+        style={{ background: '#21262d', color: '#636e7d', border: '1px solid #2d3440' }}
+      >
         {label}
       </span>
       <div className="flex-1" style={{ height: '1px', background: '#2d3440' }} />
@@ -224,208 +228,233 @@ export default function Timeline({
                 className="group relative"
                 style={{ marginTop: !showDateSep && isGroupStart ? '16px' : '0' }}
               >
-              {/* グループ先頭行: アバター + 送信者名 */}
-              {isGroupStart && (
-                <div className="flex items-center px-4" style={{ marginBottom: '2px' }}>
-                  <div className="w-[52px] flex shrink-0 items-center justify-center">
-                    <Avatar
-                      userId={ev.sender ?? ''}
-                      displayName={senderName}
-                      avatarUrl={senderAvatar}
-                      size="sm"
-                    />
+                {/* グループ先頭行: アバター + 送信者名 */}
+                {isGroupStart && (
+                  <div className="flex items-center px-4" style={{ marginBottom: '2px' }}>
+                    <div className="w-[52px] flex shrink-0 items-center justify-center">
+                      <Avatar
+                        userId={ev.sender ?? ''}
+                        displayName={senderName}
+                        avatarUrl={senderAvatar}
+                        size="sm"
+                      />
+                    </div>
+                    <span
+                      className="text-sm font-semibold"
+                      style={{ color: userColor(ev.sender ?? '') }}
+                    >
+                      {senderName}
+                    </span>
                   </div>
-                  <span
-                    className="text-sm font-semibold"
-                    style={{ color: userColor(ev.sender ?? '') }}
-                  >
-                    {senderName}
-                  </span>
-                </div>
-              )}
+                )}
 
-              {/* メッセージ行: 時刻 + 本文 */}
-              <div
-                className="flex px-4 transition-colors"
-                style={{
-                  background: isActive ? '#2d3440' : 'transparent',
-                  paddingTop: '1px',
-                  paddingBottom: '1px',
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) e.currentTarget.style.background = '#343a46'
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) e.currentTarget.style.background = 'transparent'
-                }}
-              >
-                {/* 左カラム: 時刻 */}
+                {/* メッセージ行: 時刻 + 本文 */}
                 <div
-                  className="w-[52px] shrink-0 flex items-start justify-end pr-3 pt-0.5"
+                  className="flex px-4 transition-colors"
+                  style={{
+                    background: isActive ? '#2d3440' : 'transparent',
+                    paddingTop: '1px',
+                    paddingBottom: '1px',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) e.currentTarget.style.background = '#343a46'
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) e.currentTarget.style.background = 'transparent'
+                  }}
                 >
-                  <span
-                    className="text-[11px] leading-5"
-                    style={{ color: '#636e7d' }}
-                  >
-                    {time}
-                  </span>
-                </div>
+                  {/* 左カラム: 時刻 */}
+                  <div className="w-[52px] shrink-0 flex items-start justify-end pr-3 pt-0.5">
+                    <span className="text-[11px] leading-5" style={{ color: '#636e7d' }}>
+                      {time}
+                    </span>
+                  </div>
 
-                {/* 右カラム: メッセージ本文 */}
-                <div className="min-w-0 flex-1">
-                  {isEditing ? (
-                    <div className="flex gap-2 py-1">
-                      <input
-                        value={editInput}
-                        onChange={(e) => setEditInput(e.target.value)}
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault()
+                  {/* 右カラム: メッセージ本文 */}
+                  <div className="min-w-0 flex-1">
+                    {isEditing ? (
+                      <div className="flex gap-2 py-1">
+                        <input
+                          value={editInput}
+                          onChange={(e) => setEditInput(e.target.value)}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault()
+                              if (editInput.trim() && onEdit) onEdit(ev.event_id!, editInput.trim())
+                              setEditingEventId(null)
+                            }
+                            if (e.key === 'Escape') setEditingEventId(null)
+                          }}
+                          className="min-w-0 flex-1 rounded-lg px-3 py-1.5 text-sm focus:outline-none"
+                          style={{
+                            background: '#2d3440',
+                            color: '#e9edf1',
+                            border: '1px solid #0dbd8b',
+                          }}
+                        />
+                        <button
+                          onClick={() => {
                             if (editInput.trim() && onEdit) onEdit(ev.event_id!, editInput.trim())
                             setEditingEventId(null)
-                          }
-                          if (e.key === 'Escape') setEditingEventId(null)
-                        }}
-                        className="min-w-0 flex-1 rounded-lg px-3 py-1.5 text-sm focus:outline-none"
-                        style={{
-                          background: '#2d3440',
-                          color: '#e9edf1',
-                          border: '1px solid #0dbd8b',
-                        }}
-                      />
-                      <button
-                        onClick={() => {
-                          if (editInput.trim() && onEdit) onEdit(ev.event_id!, editInput.trim())
-                          setEditingEventId(null)
-                        }}
-                        disabled={!editInput.trim()}
-                        className="rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
-                        style={{ background: '#0dbd8b', color: 'white' }}
-                      >
-                        保存
-                      </button>
-                      <button
-                        onClick={() => setEditingEventId(null)}
-                        className="rounded-lg px-3 py-1.5 text-xs"
-                        style={{ background: '#2d3440', color: '#8d99a6' }}
-                      >
-                        取消
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="text-sm leading-relaxed" style={{ color: '#e9edf1' }}>
-                      <MessageContent content={ev.content} />
-                    </div>
-                  )}
-
-                  {/* リアクションバッジ */}
-                  {reactionEntries.length > 0 && (
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      {reactionEntries.map(([emoji, senders]) => {
-                        const reacted = senders.includes(myUserId ?? '')
-                        return (
-                          <button
-                            key={emoji}
-                            onClick={() => ev.event_id && onReact?.(ev.event_id, emoji)}
-                            className="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs transition-colors"
-                            style={{
-                              background: reacted ? 'rgba(13,189,139,0.15)' : '#2d3440',
-                              border: `1px solid ${reacted ? '#0dbd8b' : '#363c48'}`,
-                              color: reacted ? '#0dbd8b' : '#8d99a6',
-                            }}
-                          >
-                            {emoji}
-                            <span className="font-medium">{senders.length}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* ホバーアクションメニュー（右端に浮かぶ） */}
-                <div
-                  className="absolute right-4 -top-3 z-10 hidden rounded-lg p-0.5 group-hover:flex"
-                  style={{
-                    background: '#21262d',
-                    border: '1px solid #2d3440',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {/* リアクション */}
-                  {onReact && ev.event_id && (
-                    <div className="relative">
-                      <button
-                        onClick={() => setActiveEventId(isActive ? null : (ev.event_id ?? null))}
-                        className="rounded p-1.5 transition-colors hover:bg-white/10"
-                        style={{ color: '#8d99a6' }}
-                        title="リアクション"
-                      >
-                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </button>
-                      {isActive && (
-                        <div
-                          className="absolute bottom-full right-0 mb-1 flex gap-0.5 rounded-xl p-2"
-                          style={{
-                            background: '#21262d',
-                            border: '1px solid #2d3440',
-                            boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
                           }}
-                          onClick={(e) => e.stopPropagation()}
+                          disabled={!editInput.trim()}
+                          className="rounded-lg px-3 py-1.5 text-xs font-medium disabled:opacity-50"
+                          style={{ background: '#0dbd8b', color: 'white' }}
                         >
-                          {EMOJI_LIST.map((emoji) => (
+                          保存
+                        </button>
+                        <button
+                          onClick={() => setEditingEventId(null)}
+                          className="rounded-lg px-3 py-1.5 text-xs"
+                          style={{ background: '#2d3440', color: '#8d99a6' }}
+                        >
+                          取消
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-sm leading-relaxed" style={{ color: '#e9edf1' }}>
+                        <MessageContent content={ev.content} />
+                      </div>
+                    )}
+
+                    {/* リアクションバッジ */}
+                    {reactionEntries.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {reactionEntries.map(([emoji, senders]) => {
+                          const reacted = senders.includes(myUserId ?? '')
+                          return (
                             <button
                               key={emoji}
-                              onClick={() => {
-                                onReact(ev.event_id!, emoji)
-                                setActiveEventId(null)
+                              onClick={() => ev.event_id && onReact?.(ev.event_id, emoji)}
+                              className="flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs transition-colors"
+                              style={{
+                                background: reacted ? 'rgba(13,189,139,0.15)' : '#2d3440',
+                                border: `1px solid ${reacted ? '#0dbd8b' : '#363c48'}`,
+                                color: reacted ? '#0dbd8b' : '#8d99a6',
                               }}
-                              className="rounded-lg p-1.5 text-lg transition-colors hover:bg-white/10"
                             >
                               {emoji}
+                              <span className="font-medium">{senders.length}</span>
                             </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
 
-                  {/* 編集（自分のみ） */}
-                  {isMine && onEdit && ev.event_id && (
-                    <button
-                      onClick={() => {
-                        setEditingEventId(ev.event_id!)
-                        setEditInput(body)
-                      }}
-                      className="rounded p-1.5 transition-colors hover:bg-white/10"
-                      style={{ color: '#8d99a6' }}
-                      title="編集"
-                    >
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                      </svg>
-                    </button>
-                  )}
+                  {/* ホバーアクションメニュー（右端に浮かぶ） */}
+                  <div
+                    className="absolute right-4 -top-3 z-10 hidden rounded-lg p-0.5 group-hover:flex"
+                    style={{
+                      background: '#21262d',
+                      border: '1px solid #2d3440',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.5)',
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* リアクション */}
+                    {onReact && ev.event_id && (
+                      <div className="relative">
+                        <button
+                          onClick={() => setActiveEventId(isActive ? null : (ev.event_id ?? null))}
+                          className="rounded p-1.5 transition-colors hover:bg-white/10"
+                          style={{ color: '#8d99a6' }}
+                          title="リアクション"
+                        >
+                          <svg
+                            className="h-3.5 w-3.5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                        </button>
+                        {isActive && (
+                          <div
+                            className="absolute bottom-full right-0 mb-1 flex gap-0.5 rounded-xl p-2"
+                            style={{
+                              background: '#21262d',
+                              border: '1px solid #2d3440',
+                              boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {EMOJI_LIST.map((emoji) => (
+                              <button
+                                key={emoji}
+                                onClick={() => {
+                                  onReact(ev.event_id!, emoji)
+                                  setActiveEventId(null)
+                                }}
+                                className="rounded-lg p-1.5 text-lg transition-colors hover:bg-white/10"
+                              >
+                                {emoji}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                  {/* 削除（自分のみ） */}
-                  {isMine && onDelete && ev.event_id && (
-                    <button
-                      onClick={() => onDelete(ev.event_id!)}
-                      className="rounded p-1.5 transition-colors hover:bg-white/10"
-                      style={{ color: '#e53935' }}
-                      title="削除"
-                    >
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  )}
+                    {/* 編集（自分のみ） */}
+                    {isMine && onEdit && ev.event_id && (
+                      <button
+                        onClick={() => {
+                          setEditingEventId(ev.event_id!)
+                          setEditInput(body)
+                        }}
+                        className="rounded p-1.5 transition-colors hover:bg-white/10"
+                        style={{ color: '#8d99a6' }}
+                        title="編集"
+                      >
+                        <svg
+                          className="h-3.5 w-3.5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                          />
+                        </svg>
+                      </button>
+                    )}
+
+                    {/* 削除（自分のみ） */}
+                    {isMine && onDelete && ev.event_id && (
+                      <button
+                        onClick={() => onDelete(ev.event_id!)}
+                        className="rounded p-1.5 transition-colors hover:bg-white/10"
+                        style={{ color: '#e53935' }}
+                        title="削除"
+                      >
+                        <svg
+                          className="h-3.5 w-3.5"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
               </div>
             </div>
           )

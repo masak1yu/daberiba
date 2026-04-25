@@ -227,7 +227,7 @@ async fn upload_signatures(
             .await
             {
                 failures.insert(
-                    format!(":target_user_id/:key_id"),
+                    format!("{target_user_id}/{key_id}"),
                     serde_json::json!({ "errcode": "M_UNKNOWN", "error": e.to_string() }),
                 );
             }
