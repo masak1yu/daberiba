@@ -121,10 +121,8 @@ async fn get_user(
 ) -> ApiResult<Json<serde_json::Value>> {
     require_admin(&state.pool, &user.user_id).await?;
 
-    let all_users = db::users::list_all(&state.pool).await?;
-    let target = all_users
-        .into_iter()
-        .find(|u| u.get("user_id").and_then(|v| v.as_str()) == Some(&target_user_id))
+    let target = db::users::get_by_id(&state.pool, &target_user_id)
+        .await?
         .ok_or(crate::error::AppError::NotFound)?;
 
     Ok(Json(target))

@@ -7,6 +7,8 @@ use axum::{
 };
 use serde::Deserialize;
 
+const MAX_TYPING_TIMEOUT_MS: u64 = 600_000;
+
 pub fn routes() -> Router<AppState> {
     Router::new().route(
         "/_matrix/client/v3/rooms/:roomId/typing/:userId",
@@ -35,8 +37,14 @@ async fn set_typing(
     Path(path): Path<TypingPath>,
     Json(body): Json<TypingBody>,
 ) -> ApiResult<StatusCode> {
+    // メンバーシップ確認
+    let membership = db::rooms::get_membership(&state.pool, &path.room_id, &user.user_id).await?;
+    if membership.as_deref() != Some("join") {
+        return Err(crate::error::AppError::Forbidden);
+    }
+
     if body.typing {
-        let timeout = body.timeout.unwrap_or(30_000);
+        let timeout = body.timeout.unwrap_or(30_000).min(MAX_TYPING_TIMEOUT_MS);
         state.typing.set(&path.room_id, &user.user_id, timeout);
     } else {
         state.typing.unset(&path.room_id, &user.user_id);

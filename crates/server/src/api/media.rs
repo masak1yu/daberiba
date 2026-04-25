@@ -5,7 +5,7 @@ use crate::{
 };
 use axum::{
     body::Body,
-    extract::{Path, Query, State},
+    extract::{DefaultBodyLimit, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
     response::Response,
     routing::{get, post},
@@ -18,7 +18,10 @@ use uuid::Uuid;
 pub fn routes() -> Router<AppState> {
     Router::new()
         // 旧 v3 メディア API
-        .route("/_matrix/media/v3/upload", post(upload))
+        .route(
+            "/_matrix/media/v3/upload",
+            post(upload).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
+        )
         .route(
             "/_matrix/media/v3/download/:server_name/:media_id",
             get(download),
@@ -33,7 +36,10 @@ pub fn routes() -> Router<AppState> {
             get(thumbnail),
         )
         // MSC3916 認証済みメディア API（v1）
-        .route("/_matrix/client/v1/media/upload", post(upload))
+        .route(
+            "/_matrix/client/v1/media/upload",
+            post(upload).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
+        )
         .route(
             "/_matrix/client/v1/media/download/:server_name/:media_id",
             get(download),

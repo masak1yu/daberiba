@@ -14,7 +14,7 @@
 export function mxcToHttp(mxc: string, homeserver: string): string {
   // mxc://serverName/mediaId
   const match = /^mxc:\/\/([^/]+)\/(.+)$/.exec(mxc)
-  if (!match) return mxc
+  if (!match) return ''
   const [, serverName, mediaId] = match
   return `${homeserver}/_matrix/media/v3/download/${serverName}/${mediaId}`
 }
@@ -28,7 +28,7 @@ export function mxcToHttp(mxc: string, homeserver: string): string {
  */
 export function mxcToThumbnail(mxc: string, homeserver: string, width = 800, height = 600): string {
   const match = /^mxc:\/\/([^/]+)\/(.+)$/.exec(mxc)
-  if (!match) return mxc
+  if (!match) return ''
   const [, serverName, mediaId] = match
   const params = new URLSearchParams({
     width: String(width),

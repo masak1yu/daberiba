@@ -24,6 +24,12 @@ export default function RoomSettingsModal({ roomId, currentName, currentTopic, o
     setTopic(currentTopic ?? '')
   }, [currentName, currentTopic])
 
+  useEffect(() => {
+    if (!saved) return
+    const t = setTimeout(() => setSaved(false), 2000)
+    return () => clearTimeout(t)
+  }, [saved])
+
   async function handleSave(e: FormEvent) {
     e.preventDefault()
     const homeserver = localStorage.getItem(STORAGE_KEY.HOMESERVER)
@@ -43,7 +49,6 @@ export default function RoomSettingsModal({ roomId, currentName, currentTopic, o
       }
       await Promise.all(ops)
       setSaved(true)
-      setTimeout(() => setSaved(false), 2000)
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存に失敗しました')
     } finally {

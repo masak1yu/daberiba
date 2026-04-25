@@ -77,6 +77,12 @@ export default function ProfileModal({ userId, onClose }: Props) {
       .finally(() => setLoading(false))
   }, [userId])
 
+  useEffect(() => {
+    if (!saved) return
+    const t = setTimeout(() => setSaved(false), 3000)
+    return () => clearTimeout(t)
+  }, [saved])
+
   async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -112,7 +118,6 @@ export default function ProfileModal({ userId, onClose }: Props) {
     try {
       await putDisplayName(homeserver, token, userId, displayName.trim())
       setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
     } catch (err) {
       setError(err instanceof Error ? err.message : '保存に失敗しました')
     } finally {

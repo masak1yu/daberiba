@@ -1,4 +1,4 @@
-import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useAuthStore } from '../stores/auth'
 import { useRoomsStore } from '../stores/rooms'
@@ -19,15 +19,19 @@ export default function RoomPage() {
   const decodedRoomId = roomId ? decodeURIComponent(roomId) : ''
 
   const userId = useAuthStore((s) => s.userId)
-  const timelines = useRoomsStore((s) => s.timelines)
-  const rooms = useRoomsStore((s) => s.rooms)
-  const prevBatches = useRoomsStore((s) => s.prevBatches)
-  const historyLoading = useRoomsStore((s) => s.historyLoading)
+  const events = useRoomsStore((s) => s.timelines[decodedRoomId] ?? [])
+  const room = useRoomsStore((s) => s.rooms[decodedRoomId])
+  const hasMore = useRoomsStore((s) => Boolean(s.prevBatches[decodedRoomId]))
+  const isHistoryLoading = useRoomsStore((s) => s.historyLoading[decodedRoomId] ?? false)
   const loadHistory = useRoomsStore((s) => s.loadHistory)
-  const allReactions = useRoomsStore((s) => s.reactions)
-  const allTyping = useRoomsStore((s) => s.typing)
-  const allMemberNames = useRoomsStore((s) => s.memberNames)
-  const allMemberAvatars = useRoomsStore((s) => s.memberAvatars)
+  const reactions = useRoomsStore((s) => s.reactions[decodedRoomId])
+  const typingUsers = useRoomsStore((s) =>
+    (s.typing[decodedRoomId] ?? [])
+      .filter((id) => id !== userId)
+      .map((id) => s.memberNames[decodedRoomId]?.[id] ?? id)
+  )
+  const memberNames = useRoomsStore((s) => s.memberNames[decodedRoomId])
+  const memberAvatars = useRoomsStore((s) => s.memberAvatars[decodedRoomId])
   const markRoomRead = useRoomsStore((s) => s.markRoomRead)
   const storeRedactEvent = useRoomsStore((s) => s.redactEvent)
   const storeApplyEdit = useRoomsStore((s) => s.applyEdit)
@@ -44,17 +48,6 @@ export default function RoomPage() {
   const txnRef = useRef(0)
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const events = useMemo(() => timelines[decodedRoomId] ?? [], [timelines, decodedRoomId])
-  const room = rooms[decodedRoomId]
-  const hasMore = Boolean(prevBatches[decodedRoomId])
-  const isHistoryLoading = historyLoading[decodedRoomId] ?? false
-  const reactions = allReactions[decodedRoomId]
-  const memberNames = allMemberNames[decodedRoomId]
-  const memberAvatars = allMemberAvatars[decodedRoomId]
-  const typingUsers = (allTyping[decodedRoomId] ?? [])
-    .filter((id) => id !== userId)
-    .map((id) => memberNames?.[id] ?? id)
 
   useEffect(() => {
     markRoomRead(decodedRoomId)
@@ -113,9 +106,11 @@ export default function RoomPage() {
     setLeaving(true)
     try {
       await leaveRoom(homeserver, token, decodedRoomId)
-    } catch {
-      setLeaving(false)
+    } catch (err) {
+      showToast(`退出に失敗しました: ${err instanceof Error ? err.message : String(err)}`, 'error')
       setConfirmLeave(false)
+    } finally {
+      setLeaving(false)
     }
   }
 
@@ -178,8 +173,11 @@ export default function RoomPage() {
         headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ msgtype, body: file.name, url: mxc }),
       })
-    } catch {
-      // 失敗は silent
+    } catch (err) {
+      showToast(
+        `ファイル送信に失敗しました: ${err instanceof Error ? err.message : String(err)}`,
+        'error'
+      )
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -192,8 +190,11 @@ export default function RoomPage() {
     if (!homeserver || !token) return
     try {
       await sendReaction(homeserver, token, decodedRoomId, eventId, emoji)
-    } catch {
-      // 失敗は silent
+    } catch (err) {
+      showToast(
+        `リアクション送信に失敗しました: ${err instanceof Error ? err.message : String(err)}`,
+        'error'
+      )
     }
   }
 
@@ -204,8 +205,8 @@ export default function RoomPage() {
     storeRedactEvent(decodedRoomId, eventId)
     try {
       await redactEvent(homeserver, token, decodedRoomId, eventId)
-    } catch {
-      // 失敗は silent
+    } catch (err) {
+      showToast(`削除に失敗しました: ${err instanceof Error ? err.message : String(err)}`, 'error')
     }
   }
 
@@ -227,8 +228,8 @@ export default function RoomPage() {
           'm.new_content': newContent,
         }),
       })
-    } catch {
-      // 失敗は silent
+    } catch (err) {
+      showToast(`編集に失敗しました: ${err instanceof Error ? err.message : String(err)}`, 'error')
     }
   }
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { MatrixClient } from 'matrix-js-sdk'
-import { getClient, clearClient } from '../api/client'
+import { getClient, clearClient, STORAGE_KEY } from '../api/client'
 import { logout as apiLogout } from '../api/auth'
 
 interface AuthState {
@@ -23,7 +23,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   hydrate() {
     const client = getClient()
     if (client) {
-      const deviceId = localStorage.getItem('mx_device_id')
+      const deviceId = localStorage.getItem(STORAGE_KEY.DEVICE_ID)
       set({ client, userId: client.getUserId(), deviceId })
     }
   },

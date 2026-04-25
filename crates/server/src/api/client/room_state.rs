@@ -134,6 +134,12 @@ async fn invite(
     Path(room_id): Path<String>,
     Json(body): Json<InviteBody>,
 ) -> ApiResult<Json<serde_json::Value>> {
+    // 呼び出し元がルームメンバーであることを確認
+    let caller_membership = db::rooms::get_membership(&state.pool, &room_id, &user.user_id).await?;
+    if caller_membership.as_deref() != Some("join") {
+        return Err(crate::error::AppError::Forbidden);
+    }
+
     db::rooms::invite(&state.pool, &room_id, &user.user_id, &body.user_id).await?;
 
     // 被招待者の HTTP pusher に通知（ベストエフォート）

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useRoomsStore, type RoomSummary } from '../../stores/rooms'
 import { userColor } from '../../utils/userColor'
@@ -130,18 +130,26 @@ export default function Sidebar() {
   const [filter, setFilter] = useState<FilterTab>('all')
   const [search, setSearch] = useState('')
 
-  const sorted = Object.values(rooms).sort(
-    (a, b) => (b.lastEvent?.origin_server_ts ?? 0) - (a.lastEvent?.origin_server_ts ?? 0)
+  const sorted = useMemo(
+    () =>
+      Object.values(rooms).sort(
+        (a, b) => (b.lastEvent?.origin_server_ts ?? 0) - (a.lastEvent?.origin_server_ts ?? 0)
+      ),
+    [rooms]
   )
 
-  const filtered = sorted.filter((r) => {
-    if (filter === 'unread' && r.notificationCount === 0 && r.highlightCount === 0) return false
-    if (search) {
-      const label = (r.name ?? r.roomId).toLowerCase()
-      if (!label.includes(search.toLowerCase())) return false
-    }
-    return true
-  })
+  const filtered = useMemo(
+    () =>
+      sorted.filter((r) => {
+        if (filter === 'unread' && r.notificationCount === 0 && r.highlightCount === 0) return false
+        if (search) {
+          const label = (r.name ?? r.roomId).toLowerCase()
+          if (!label.includes(search.toLowerCase())) return false
+        }
+        return true
+      }),
+    [sorted, filter, search]
+  )
 
   function handleSelect(roomId: string) {
     markRoomRead(roomId)
