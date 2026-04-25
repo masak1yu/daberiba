@@ -8,6 +8,9 @@ use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
+/// サーバーが許容する long-poll 最大待機時間（ミリ秒）
+const MAX_SYNC_TIMEOUT_MS: u64 = 30_000;
+
 pub fn routes() -> Router<AppState> {
     Router::new().route("/_matrix/client/v3/sync", get(sync))
 }
@@ -58,7 +61,8 @@ async fn sync(
     let timeout_ms = query.timeout.unwrap_or(0);
     if timeout_ms > 0 && since_stream.is_some() && !sync_has_new_events(&result) {
         let notify = state.event_notify.clone();
-        let deadline = tokio::time::sleep(Duration::from_millis(timeout_ms.min(30_000)));
+        let deadline =
+            tokio::time::sleep(Duration::from_millis(timeout_ms.min(MAX_SYNC_TIMEOUT_MS)));
         tokio::pin!(deadline);
         loop {
             tokio::select! {
@@ -228,7 +232,13 @@ async fn sync(
                 }));
             }
 
-            if let Ok(receipts) = db::receipts::get_for_room(&state.pool, room_id).await {
+            // receipt: 増分 sync は since_ms 以降に変化したもののみ、初回は全件
+            let receipts = if let Some(since_ms) = account_data_since_ms {
+                db::receipts::get_changed_since(&state.pool, room_id, since_ms as i64).await
+            } else {
+                db::receipts::get_for_room(&state.pool, room_id).await
+            };
+            if let Ok(receipts) = receipts {
                 if !receipts.is_empty() {
                     ephemeral_events.push(db::receipts::to_event(receipts));
                 }

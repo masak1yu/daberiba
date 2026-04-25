@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS rooms (
     room_version    VARCHAR(16)   NOT NULL DEFAULT '10' COMMENT 'Matrix room version (1-10)',
     name            VARCHAR(255)  NULL,
     topic           TEXT          NULL,
+    encrypted       TINYINT(1)    NOT NULL DEFAULT 0 COMMENT 'm.room.encryption が設定されている場合 1',
     created_at      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (room_id),
     FOREIGN KEY (creator_user_id) REFERENCES users(user_id) ON DELETE SET NULL

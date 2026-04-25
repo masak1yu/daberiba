@@ -189,6 +189,14 @@ async fn send_state_event(
     )
     .await?;
 
+    // /sync long-polling を起床させる
+    state.event_notify.notify_waiters();
+
+    // m.room.encryption が設定された場合、ルームの暗号化フラグを更新する
+    if path.event_type == "m.room.encryption" {
+        let _ = db::rooms::set_encrypted(&state.pool, &path.room_id).await;
+    }
+
     let mut pdu = pdu_for_hash;
     pdu["event_id"] = serde_json::Value::String(event_id.clone());
     crate::federation_client::dispatch_send_transaction(state, path.room_id.clone(), pdu);
@@ -251,6 +259,14 @@ async fn send_state_event_with_key(
         },
     )
     .await?;
+
+    // /sync long-polling を起床させる
+    state.event_notify.notify_waiters();
+
+    // m.room.encryption が設定された場合、ルームの暗号化フラグを更新する
+    if path.event_type == "m.room.encryption" {
+        let _ = db::rooms::set_encrypted(&state.pool, &path.room_id).await;
+    }
 
     let mut pdu = pdu_for_hash;
     pdu["event_id"] = serde_json::Value::String(event_id.clone());

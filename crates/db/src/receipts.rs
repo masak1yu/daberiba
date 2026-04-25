@@ -32,12 +32,37 @@ pub struct Receipt {
     pub ts: i64,
 }
 
-/// room のすべての receipt を取得（sync 用）
+/// room のすべての receipt を取得（初回 sync 用）
 pub async fn get_for_room(pool: &MySqlPool, room_id: &str) -> Result<Vec<Receipt>> {
     let rows: Vec<(String, String, String, i64)> = sqlx::query_as(
         "SELECT user_id, receipt_type, event_id, ts FROM receipts WHERE room_id = ?",
     )
     .bind(room_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|(user_id, receipt_type, event_id, ts)| Receipt {
+            user_id,
+            receipt_type,
+            event_id,
+            ts,
+        })
+        .collect())
+}
+
+/// since_ms 以降に更新された receipt のみ返す（増分 sync 用）
+pub async fn get_changed_since(
+    pool: &MySqlPool,
+    room_id: &str,
+    since_ms: i64,
+) -> Result<Vec<Receipt>> {
+    let rows: Vec<(String, String, String, i64)> = sqlx::query_as(
+        "SELECT user_id, receipt_type, event_id, ts FROM receipts WHERE room_id = ? AND ts > ?",
+    )
+    .bind(room_id)
+    .bind(since_ms)
     .fetch_all(pool)
     .await?;
 

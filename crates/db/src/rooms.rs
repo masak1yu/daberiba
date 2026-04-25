@@ -422,6 +422,15 @@ pub async fn get_public_rooms(
     Ok((rooms, total))
 }
 
+/// m.room.encryption state イベントが送信されたルームを暗号化済みとしてマークする。
+pub async fn set_encrypted(pool: &MySqlPool, room_id: &str) -> Result<()> {
+    sqlx::query("UPDATE rooms SET encrypted = 1 WHERE room_id = ?")
+        .bind(room_id)
+        .execute(pool)
+        .await?;
+    Ok(())
+}
+
 /// federation invite 用: ルームが存在しない場合のみプレースホルダーとして rooms テーブルに挿入する。
 /// creator_user_id は NULL（federation 起源のルーム）。
 pub async fn ensure_placeholder(pool: &MySqlPool, room_id: &str) -> Result<()> {

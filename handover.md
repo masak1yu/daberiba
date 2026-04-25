@@ -1,22 +1,32 @@
-# Handover — v0.51.0 → v0.52.0
+# Handover — v0.52.0 → v0.53.0
 
-## v0.51.0 でやったこと
+## v0.52.0 でやったこと
 
-- **typing 変化による long-poll 即時起床** (`server/api/client/typing_notif.rs`, `server/api/client/sync.rs`):
-  - `PUT /rooms/{roomId}/typing/{userId}` ハンドラで `state.event_notify.notify_waiters()` を呼び出すよう追加。
-  - `/sync` long-polling のブレーク条件を拡張: `sync_has_new_events(&result) || new_typing_ver > since_typing_version`。
-  - typing 変化時に待機中の `/sync` を即時起床させ、`m.typing` 差分を即座に配信できるようにした。
+- **receipt 差分配信** (`db/receipts.rs`, `server/api/client/sync.rs`):
+  - `db::receipts::get_changed_since(pool, room_id, since_ms)` を新設。`ts > since_ms` で増分のみ取得。
+  - `/sync` の `m.receipt` 生成を改善: 増分 sync（`account_data_since_ms` が Some）では `get_changed_since` を使い、初回 sync は従来通り `get_for_room` で全件返却。
 
-- **アカウント無効化時に全ルームから退室** (`db/rooms.rs`, `server/api/client/account.rs`):
-  - `db::rooms::leave_all()` を新設: `UPDATE room_memberships SET membership = 'leave' WHERE user_id = ? AND membership = 'join'`。
-  - `POST /account/deactivate` ハンドラで全トークン失効 → 全ルーム退室 → アカウント無効化の順で実行。
+- **join_rules 検証** (`server/api/client/rooms.rs`):
+  - `POST /join/{roomIdOrAlias}` で join_rules を確認するよう変更。
+  - `"public"` ルームは誰でも参加可。それ以外（`"invite"` / `"knock"` / `"knock_restricted"` / `"restricted"`）は `membership = 'invite'` が必要。
+  - BAN されているユーザーは `"public"` ルームでも参加を拒否（403）。
+  - membership と join_rules の取得を `tokio::join!` で並列化。
 
-## v0.52.0 候補
+- **long-poll タイムアウト上限の明示化** (`server/api/client/sync.rs`):
+  - `const MAX_SYNC_TIMEOUT_MS: u64 = 30_000` を定義し、マジックナンバーを廃止。
 
-- read receipt の `/sync` 返却 (`m.receipt` ephemeral イベント)
-- 招待された状態でのルーム join 時の membership 変更
-- long-poll の `timeout` パラメータを正確に解析して上限を設定
-- `m.room.encryption` state イベントの presence による暗号化フラグ管理
+- **`m.room.encryption` フラグ管理** (`schema/schema.sql`, `db/rooms.rs`, `server/api/client/events.rs`):
+  - `rooms` テーブルに `encrypted TINYINT(1) NOT NULL DEFAULT 0` カラムを追加。
+  - `db::rooms::set_encrypted(pool, room_id)` を新設。`UPDATE rooms SET encrypted = 1` で暗号化済みをマーク。
+  - `PUT /rooms/{roomId}/state/m.room.encryption` 送信後に `set_encrypted` を呼び出す（`send_state_event` / `send_state_event_with_key` 両方）。
+  - **バグ修正**: `send_state_event` / `send_state_event_with_key` が `/sync` long-polling を起床させていなかった問題を修正。両ハンドラで `state.event_notify.notify_waiters()` を呼び出すよう追加。
+
+## v0.53.0 候補
+
+- `rooms.encrypted` フラグを `/publicRooms` や `GET /rooms/{roomId}/summary` のレスポンスに活用（DB join なし高速パス）
+- `restricted` join_rule のフル実装（許可スペースのメンバーシップ確認）
+- receipt の `/sync` で `m.read.private` を非公開配信（送信者本人の sync のみ含める）
+- long-poll の `since` なし initial sync への `timeout` 対応（現状は即時返却）
 
 ---
 
@@ -405,13 +415,6 @@
 | admin API の認証強化 | 管理者トークン（Bearer admin-token 等）によるヘッダー認証は未対応。現状は `admin=1` フラグのみで判定 |
 | device_lists.changed の粒度 | account_data_since_ms でフィルタしているため since トークン精度に依存する（ミリ秒→秒変換のため微小な漏れあり） |
 
-## v0.51.0 候補
-
-1. **状態解決アルゴリズム v2 完全実装** — auth_events + prev_events グラフを使った完全な conflict resolution
-2. **複数 OIDC プロバイダー対応** — 複数の OIDC プロバイダーを同時設定（例: Google + Keycloak）
-3. **`/sync` long-polling の Notify 強化** — `event_notify` を typing 変化時にも発火させ、タイピング通知をリアルタイム配信
-4. **`/_matrix/client/v3/account/deactivate`** — アカウント無効化エンドポイントの実装（パスワード確認 → 全デバイス削除 → ルーム退室）
-5. **federation backfill 精度向上** — `/_matrix/federation/v1/backfill/{roomId}` での `limit` パラメータ対応と `prev_events` グラフ遡及
 
 ## 開発フロー（おさらい）
 
