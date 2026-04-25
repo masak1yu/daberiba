@@ -34,7 +34,15 @@ async fn main() -> Result<()> {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    // DATABASE_URL が未設定の場合は DB_* 変数から構築する
+    let database_url = env::var("DATABASE_URL").unwrap_or_else(|_| {
+        let host = env::var("DB_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+        let port = env::var("DB_PORT").unwrap_or_else(|_| "3306".to_string());
+        let user = env::var("DB_USER").expect("DATABASE_URL or DB_USER must be set");
+        let pass = env::var("DB_PASS").expect("DATABASE_URL or DB_PASS must be set");
+        let name = env::var("DB_NAME").unwrap_or_else(|_| user.clone());
+        format!("mysql://{user}:{pass}@{host}:{port}/{name}")
+    });
 
     let pool = db::connect(&database_url).await?;
 

@@ -25,7 +25,7 @@ services:
     command:
       - sh
       - -c
-      - mysqldef --host=db --port=3306 --user=${DB_SCHEMA_USER:-matrix} --password=${DB_SCHEMA_PASS} ${DB_NAME:-matrix} < /workspace/schema/schema.sql
+      - mysqldef --host=db --port=3306 --user=${DB_USER:-matrix} --password=${DB_PASS} ${DB_NAME:-matrix} < /workspace/schema/schema.sql
     volumes:
       - .:/workspace:ro
     depends_on:
@@ -44,8 +44,8 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: "3306"
-      DB_SCHEMA_USER: ${DB_SCHEMA_USER:-matrix}
-      DB_SCHEMA_PASS: ${DB_SCHEMA_PASS}
+      DB_USER: ${DB_USER:-matrix}
+      DB_PASS: ${DB_PASS}
       DB_NAME: ${DB_NAME:-matrix}
     depends_on:
       db:
