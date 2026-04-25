@@ -239,6 +239,7 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
     }
 
     set({
+      syncing: false,
       since: resp.next_batch,
       rooms: nextRooms,
       timelines: nextTimelines,

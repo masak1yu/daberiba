@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useShallow } from 'zustand/react/shallow'
 import { useAuthStore } from '../stores/auth'
 import { useRoomsStore } from '../stores/rooms'
 import { startSyncLoop } from '../api/sync'
@@ -12,13 +13,15 @@ import ProfileModal from '../components/common/ProfileModal'
 export default function HomePage() {
   const client = useAuthStore((s) => s.client)
   const userId = useAuthStore((s) => s.userId)
-  const { applySyncResponse, setSyncing, setError, reset, markRoomRead } = useRoomsStore((s) => ({
-    applySyncResponse: s.applySyncResponse,
-    setSyncing: s.setSyncing,
-    setError: s.setError,
-    reset: s.reset,
-    markRoomRead: s.markRoomRead,
-  }))
+  const { applySyncResponse, setSyncing, setError, reset, markRoomRead } = useRoomsStore(
+    useShallow((s) => ({
+      applySyncResponse: s.applySyncResponse,
+      setSyncing: s.setSyncing,
+      setError: s.setError,
+      reset: s.reset,
+      markRoomRead: s.markRoomRead,
+    }))
+  )
   const navigate = useNavigate()
   const [showCreate, setShowCreate] = useState(false)
   const [showPublic, setShowPublic] = useState(false)
