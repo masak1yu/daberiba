@@ -17,10 +17,7 @@ pub fn routes() -> Router<AppState> {
             "/_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey",
             get(get_state_event),
         )
-        .route(
-            "/_matrix/client/v3/rooms/:roomId/members",
-            get(get_members),
-        )
+        .route("/_matrix/client/v3/rooms/:roomId/members", get(get_members))
         .route(
             "/_matrix/client/v3/rooms/:roomId/joined_members",
             get(get_joined_members),

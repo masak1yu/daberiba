@@ -12,7 +12,6 @@ import {
   changePassword,
   type Device,
 } from '../api/devices'
-import AppShell from '../components/layout/AppShell'
 import ProfileModal from '../components/common/ProfileModal'
 
 // ---------------------------------------------------------------------------
@@ -336,29 +335,64 @@ export default function SettingsPage() {
 
   return (
     <>
-      <AppShell title="設定" showBack onBack={() => navigate(-1)}>
+      <div className="flex h-full flex-col" style={{ background: '#15191e', color: '#e9edf1' }}>
+        {/* ヘッダー */}
+        <div
+          className="flex shrink-0 items-center gap-3 px-4 py-3"
+          style={{ borderBottom: '1px solid #2d3440' }}
+        >
+          <button
+            onClick={() => navigate(-1)}
+            className="rounded p-1.5 transition-colors hover:bg-white/10"
+            style={{ color: '#8d99a6' }}
+          >
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+          </button>
+          <h1 className="text-base font-semibold" style={{ color: '#e9edf1' }}>
+            設定
+          </h1>
+        </div>
+
         <div className="h-full overflow-y-auto py-6 flex flex-col gap-6">
           {/* プロフィール */}
           {userId && (
             <section>
-              <h2 className="mb-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              <h2
+                className="mb-3 px-4 text-xs font-semibold uppercase tracking-wider"
+                style={{ color: '#636e7d' }}
+              >
                 プロフィール
               </h2>
-              <div className="mx-4 rounded-xl bg-gray-900">
+              <div
+                className="mx-4 rounded-xl"
+                style={{ background: '#21262d', border: '1px solid #2d3440' }}
+              >
                 <button
                   onClick={() => setShowProfile(true)}
-                  className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-gray-800 rounded-xl"
+                  className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors hover:bg-white/5"
                 >
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-indigo-700 text-sm font-bold select-none">
+                  <div
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold select-none"
+                    style={{ background: '#0dbd8b', color: 'white' }}
+                  >
                     {userId.charAt(1).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-white">
+                    <p className="truncate text-sm font-medium" style={{ color: '#e9edf1' }}>
                       表示名・アバターを変更
                     </p>
-                    <p className="truncate text-xs text-gray-500">{userId}</p>
+                    <p className="truncate text-xs" style={{ color: '#636e7d' }}>
+                      {userId}
+                    </p>
                   </div>
-                  <span className="text-gray-600">›</span>
+                  <span style={{ color: '#636e7d' }}>›</span>
                 </button>
               </div>
             </section>
@@ -366,16 +400,37 @@ export default function SettingsPage() {
 
           {/* デバイス管理 */}
           <section>
-            <h2 className="mb-3 px-4 text-xs font-semibold uppercase tracking-wider text-gray-500">
+            <h2
+              className="mb-3 px-4 text-xs font-semibold uppercase tracking-wider"
+              style={{ color: '#636e7d' }}
+            >
               セッション管理
             </h2>
-            <ul className="divide-y divide-gray-800 rounded-xl bg-gray-900 mx-4">
+            <ul
+              className="mx-4 rounded-xl divide-y"
+              style={
+                {
+                  background: '#21262d',
+                  border: '1px solid #2d3440',
+                  borderColor: '#2d3440',
+                  '--tw-divide-opacity': '1',
+                  '--tw-divide-color': '#2d3440',
+                } as React.CSSProperties
+              }
+            >
               {loadingDevices && (
                 <li className="flex justify-center py-6">
-                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-500 border-t-transparent" />
+                  <div
+                    className="h-5 w-5 animate-spin rounded-full border-2"
+                    style={{ borderColor: '#2d3440', borderTopColor: '#0dbd8b' }}
+                  />
                 </li>
               )}
-              {devicesError && <li className="px-4 py-3 text-sm text-red-400">{devicesError}</li>}
+              {devicesError && (
+                <li className="px-4 py-3 text-sm" style={{ color: '#f87171' }}>
+                  {devicesError}
+                </li>
+              )}
               {devices.map((d) => (
                 <DeviceItem
                   key={d.device_id}
@@ -391,7 +446,7 @@ export default function SettingsPage() {
           {/* パスワード変更 */}
           {userId && <PasswordSection userId={userId} />}
         </div>
-      </AppShell>
+      </div>
 
       {showProfile && userId && (
         <ProfileModal userId={userId} onClose={() => setShowProfile(false)} />

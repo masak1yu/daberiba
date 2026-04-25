@@ -192,7 +192,7 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
 
       // メッセージイベント（state/reaction/replace/redaction 以外）
       const msgEvents = timelineEvents.filter((e) => {
-        if (e.state_key !== undefined) return false
+        if (e.state_key != null) return false
         if (e.type === 'm.reaction') return false
         if (e.type === 'm.room.redaction') return false
         const rel = (e.content as { 'm.relates_to'?: { rel_type?: string } })['m.relates_to']
@@ -265,7 +265,7 @@ export const useRoomsStore = create<RoomsState & RoomsActions>((set, get) => ({
       const resp = await fetchHistory(homeserver, token, roomId, from)
       const reversed = [...resp.chunk].reverse()
       const newMsgEvents = reversed.filter(
-        (e) => e.state_key === undefined && e.type !== 'm.reaction'
+        (e) => e.state_key == null && e.type !== 'm.reaction'
       )
       const newReactionEvents = reversed.filter((e) => e.type === 'm.reaction')
       // 過去ログからも m.room.member を拾う

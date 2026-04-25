@@ -7,7 +7,7 @@ export interface MatrixEvent {
   sender?: string
   origin_server_ts?: number
   content: Record<string, unknown>
-  state_key?: string
+  state_key?: string | null
   /** m.room.redaction イベントが削除対象 event_id を持つ */
   redacts?: string
 }
