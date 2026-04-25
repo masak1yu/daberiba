@@ -10,15 +10,15 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/_matrix/client/v3/pushrules/", get(get_all_rules))
         .route(
-            "/_matrix/client/v3/pushrules/{scope}/{kind}/{ruleId}",
+            "/_matrix/client/v3/pushrules/:scope/:kind/:ruleId",
             get(get_rule).put(put_rule).delete(delete_rule),
         )
         .route(
-            "/_matrix/client/v3/pushrules/{scope}/{kind}/{ruleId}/enabled",
+            "/_matrix/client/v3/pushrules/:scope/:kind/:ruleId/enabled",
             get(get_rule_enabled).put(put_rule_enabled),
         )
         .route(
-            "/_matrix/client/v3/pushrules/{scope}/{kind}/{ruleId}/actions",
+            "/_matrix/client/v3/pushrules/:scope/:kind/:ruleId/actions",
             get(get_rule_actions).put(put_rule_actions),
         )
 }

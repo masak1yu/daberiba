@@ -22,7 +22,7 @@ pub fn routes() -> Router<AppState> {
         // SSO リダイレクト（認証不要 — ブラウザからアクセスされる）
         .route("/_matrix/client/v3/login/sso/redirect", get(sso_redirect))
         .route(
-            "/_matrix/client/v3/login/sso/redirect/{idpId}",
+            "/_matrix/client/v3/login/sso/redirect/:idpId",
             get(sso_redirect_idp),
         )
         // SSO コールバック（認証不要 — OIDC プロバイダーからのリダイレクト）
@@ -271,7 +271,7 @@ async fn sso_redirect(
     sso_redirect_impl(&state, &params.redirect_url).await
 }
 
-/// GET /_matrix/client/v3/login/sso/redirect/{idpId}?redirectUrl=<url>
+/// GET /_matrix/client/v3/login/sso/redirect/:idpId?redirectUrl=<url>
 /// 特定プロバイダー指定（現状はプロバイダーが 1 つのみなので id は無視）。
 async fn sso_redirect_idp(
     State(state): State<AppState>,

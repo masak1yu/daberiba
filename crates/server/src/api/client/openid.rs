@@ -11,12 +11,12 @@ use axum::{
 
 pub fn routes() -> Router<AppState> {
     Router::new().route(
-        "/_matrix/client/v3/user/{userId}/openid/request_token",
+        "/_matrix/client/v3/user/:userId/openid/request_token",
         post(request_token),
     )
 }
 
-/// POST /user/{userId}/openid/request_token
+/// POST /user/:userId/openid/request_token
 /// Widget や外部サービスがユーザー身元を確認するための OpenID トークンを発行する。
 /// 発行されたトークンは GET /_matrix/federation/v1/openid/userinfo で検証できる。
 async fn request_token(

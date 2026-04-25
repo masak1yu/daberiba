@@ -9,15 +9,15 @@ use serde::{Deserialize, Serialize};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
-            "/_matrix/client/v1/rooms/{roomId}/relations/{eventId}",
+            "/_matrix/client/v1/rooms/:roomId/relations/:eventId",
             get(get_relations),
         )
         .route(
-            "/_matrix/client/v1/rooms/{roomId}/relations/{eventId}/{relType}",
+            "/_matrix/client/v1/rooms/:roomId/relations/:eventId/:relType",
             get(get_relations_by_type),
         )
         .route(
-            "/_matrix/client/v1/rooms/{roomId}/relations/{eventId}/{relType}/{eventType}",
+            "/_matrix/client/v1/rooms/:roomId/relations/:eventId/:relType/:eventType",
             get(get_relations_by_type_and_event_type),
         )
 }
@@ -37,7 +37,7 @@ struct RelationsResponse {
     prev_batch: Option<String>,
 }
 
-/// GET /_matrix/client/v1/rooms/{roomId}/relations/{eventId}
+/// GET /_matrix/client/v1/rooms/:roomId/relations/:eventId
 async fn get_relations(
     State(state): State<AppState>,
     axum::Extension(_user): axum::Extension<AuthUser>,
@@ -47,7 +47,7 @@ async fn get_relations(
     fetch_relations(state, room_id, event_id, None, None, query).await
 }
 
-/// GET /_matrix/client/v1/rooms/{roomId}/relations/{eventId}/{relType}
+/// GET /_matrix/client/v1/rooms/:roomId/relations/:eventId/:relType
 async fn get_relations_by_type(
     State(state): State<AppState>,
     axum::Extension(_user): axum::Extension<AuthUser>,
@@ -57,7 +57,7 @@ async fn get_relations_by_type(
     fetch_relations(state, room_id, event_id, Some(rel_type), None, query).await
 }
 
-/// GET /_matrix/client/v1/rooms/{roomId}/relations/{eventId}/{relType}/{eventType}
+/// GET /_matrix/client/v1/rooms/:roomId/relations/:eventId/:relType/:eventType
 async fn get_relations_by_type_and_event_type(
     State(state): State<AppState>,
     axum::Extension(_user): axum::Extension<AuthUser>,

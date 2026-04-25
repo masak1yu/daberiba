@@ -9,27 +9,27 @@ use serde::{Deserialize, Serialize};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/send/{eventType}/{txnId}",
+            "/_matrix/client/v3/rooms/:roomId/send/:eventType/:txnId",
             put(send_event),
         )
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/state/{eventType}",
+            "/_matrix/client/v3/rooms/:roomId/state/:eventType",
             put(send_state_event),
         )
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/state/{eventType}/{stateKey}",
+            "/_matrix/client/v3/rooms/:roomId/state/:eventType/:stateKey",
             put(send_state_event_with_key),
         )
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/messages",
+            "/_matrix/client/v3/rooms/:roomId/messages",
             get(get_messages),
         )
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/context/{eventId}",
+            "/_matrix/client/v3/rooms/:roomId/context/:eventId",
             get(get_context),
         )
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/event/{eventId}",
+            "/_matrix/client/v3/rooms/:roomId/event/:eventId",
             get(get_event),
         )
 }
@@ -277,7 +277,7 @@ async fn send_state_event_with_key(
 
 #[derive(Deserialize)]
 struct MessagesQuery {
-    /// ページネーショントークン（"s{stream_ordering}"）。未指定時は先端から取得。
+    /// ページネーショントークン（"s:stream_ordering"）。未指定時は先端から取得。
     from: Option<String>,
     /// 方向: "b"（新しい順、デフォルト）または "f"（古い順）
     dir: Option<String>,
@@ -467,7 +467,7 @@ fn default_push_rules_for(user_id: &str) -> serde_json::Value {
                     "conditions": [
                         {"kind": "event_match", "key": "type", "pattern": "m.room.member"},
                         {"kind": "event_match", "key": "content.membership", "pattern": "invite"},
-                        {"kind": "event_match", "key": "state_key", "pattern": format!("@{localpart}:*")}
+                        {"kind": "event_match", "key": "state_key", "pattern": format!("@:localpart:*")}
                     ],
                     "actions": ["notify", {"set_tweak": "sound", "value": "default"}, {"set_tweak": "highlight", "value": false}]
                 },

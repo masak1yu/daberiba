@@ -8,7 +8,7 @@ use serde::Deserialize;
 
 pub fn routes() -> Router<AppState> {
     Router::new().route(
-        "/_matrix/client/v1/rooms/{roomId}/hierarchy",
+        "/_matrix/client/v1/rooms/:roomId/hierarchy",
         get(get_hierarchy),
     )
 }
@@ -25,7 +25,7 @@ struct HierarchyQuery {
     max_depth: Option<u32>,
 }
 
-/// GET /_matrix/client/v1/rooms/{roomId}/hierarchy
+/// GET /_matrix/client/v1/rooms/:roomId/hierarchy
 /// スペース階層を返す（MSC2946）。
 /// max_depth まで再帰的に BFS 展開する。ページネーションはルート直下の子に適用。
 async fn get_hierarchy(

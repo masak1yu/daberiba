@@ -10,22 +10,22 @@ use serde::Deserialize;
 pub fn routes() -> Router<AppState> {
     Router::new()
         // Matrix 標準管理 API
-        .route("/_matrix/client/v3/admin/whois/{userId}", get(whois))
+        .route("/_matrix/client/v3/admin/whois/:userId", get(whois))
         // Synapse 互換管理 API
         .route("/_synapse/admin/v1/users", get(list_users))
-        .route("/_synapse/admin/v1/users/{userId}", get(get_user))
+        .route("/_synapse/admin/v1/users/:userId", get(get_user))
         .route(
-            "/_synapse/admin/v1/deactivate/{userId}",
+            "/_synapse/admin/v1/deactivate/:userId",
             post(deactivate_user),
         )
         .route(
-            "/_synapse/admin/v1/users/{userId}/admin",
+            "/_synapse/admin/v1/users/:userId/admin",
             put(set_user_admin),
         )
         .route("/_synapse/admin/v1/rooms", get(list_rooms))
         .route("/_synapse/admin/v1/media", get(list_media))
         .route(
-            "/_synapse/admin/v1/media/{serverName}/{mediaId}",
+            "/_synapse/admin/v1/media/:serverName/:mediaId",
             delete(delete_media),
         )
         .route("/_synapse/admin/v1/event_reports", get(list_event_reports))
@@ -42,7 +42,7 @@ async fn require_admin(
     Ok(())
 }
 
-/// GET /_matrix/client/v3/admin/whois/{userId}
+/// GET /_matrix/client/v3/admin/whois/:userId
 /// ユーザーのセッション情報（デバイス・アクセストークン）を返す（Matrix 標準）。
 async fn whois(
     State(state): State<AppState>,
@@ -112,7 +112,7 @@ async fn list_users(
     })))
 }
 
-/// GET /_synapse/admin/v1/users/{userId}
+/// GET /_synapse/admin/v1/users/:userId
 /// 特定ユーザーの詳細を返す。管理者専用。
 async fn get_user(
     State(state): State<AppState>,
@@ -130,7 +130,7 @@ async fn get_user(
     Ok(Json(target))
 }
 
-/// POST /_synapse/admin/v1/deactivate/{userId}
+/// POST /_synapse/admin/v1/deactivate/:userId
 /// ユーザーを無効化する。管理者専用。
 async fn deactivate_user(
     State(state): State<AppState>,
@@ -183,7 +183,7 @@ struct SetAdminBody {
     admin: bool,
 }
 
-/// PUT /_synapse/admin/v1/users/{userId}/admin
+/// PUT /_synapse/admin/v1/users/:userId/admin
 /// ユーザーの管理者フラグを設定する。管理者専用。
 async fn set_user_admin(
     State(state): State<AppState>,
@@ -250,7 +250,7 @@ async fn list_media(
     })))
 }
 
-/// DELETE /_synapse/admin/v1/media/{serverName}/{mediaId}
+/// DELETE /_synapse/admin/v1/media/:serverName/:mediaId
 /// メディアを削除する（DB レコード + ストレージ両方）。管理者専用。
 async fn delete_media(
     State(state): State<AppState>,

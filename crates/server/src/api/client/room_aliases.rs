@@ -10,11 +10,11 @@ use serde::{Deserialize, Serialize};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route(
-            "/_matrix/client/v3/directory/room/{roomAlias}",
+            "/_matrix/client/v3/directory/room/:roomAlias",
             put(put_alias).get(get_alias).delete(delete_alias),
         )
         .route(
-            "/_matrix/client/v3/rooms/{roomId}/aliases",
+            "/_matrix/client/v3/rooms/:roomId/aliases",
             get(list_room_aliases),
         )
 }
@@ -94,7 +94,7 @@ struct RoomAliasesResponse {
     aliases: Vec<String>,
 }
 
-/// GET /_matrix/client/v3/rooms/{roomId}/aliases
+/// GET /_matrix/client/v3/rooms/:roomId/aliases
 /// ルームに紐づくエイリアス一覧を返す。
 /// room_aliases テーブルのエイリアスに加えて m.room.canonical_alias の
 /// alias / alt_aliases も含める（重複は除く）。

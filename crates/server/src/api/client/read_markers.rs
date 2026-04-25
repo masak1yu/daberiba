@@ -9,7 +9,7 @@ use serde::Deserialize;
 
 pub fn routes() -> Router<AppState> {
     Router::new().route(
-        "/_matrix/client/v3/rooms/{roomId}/read_markers",
+        "/_matrix/client/v3/rooms/:roomId/read_markers",
         post(set_read_markers),
     )
 }
@@ -27,7 +27,7 @@ struct ReadMarkersBody {
     m_fully_read: Option<String>,
 }
 
-/// POST /_matrix/client/v3/rooms/{roomId}/read_markers
+/// POST /_matrix/client/v3/rooms/:roomId/read_markers
 /// m.read / m.read.private / m.fully_read を一括で設定する。
 async fn set_read_markers(
     State(state): State<AppState>,

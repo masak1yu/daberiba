@@ -7,12 +7,12 @@ use axum::{
 
 pub fn routes() -> Router<AppState> {
     Router::new().route(
-        "/_matrix/client/v3/rooms/{roomId}/initialSync",
+        "/_matrix/client/v3/rooms/:roomId/initialSync",
         get(room_initial_sync),
     )
 }
 
-/// GET /_matrix/client/v3/rooms/{roomId}/initialSync
+/// GET /_matrix/client/v3/rooms/:roomId/initialSync
 /// レガシーエンドポイント。ルームの現在の状態・メッセージ・メンバーシップを一括返却する。
 async fn room_initial_sync(
     State(state): State<AppState>,

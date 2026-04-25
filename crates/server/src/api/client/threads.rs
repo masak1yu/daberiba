@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 pub fn routes() -> Router<AppState> {
     Router::new().route(
-        "/_matrix/client/v1/rooms/{roomId}/threads",
+        "/_matrix/client/v1/rooms/:roomId/threads",
         get(get_threads),
     )
 }
@@ -32,7 +32,7 @@ struct ThreadsResponse {
     prev_batch: Option<String>,
 }
 
-/// GET /_matrix/client/v1/rooms/{roomId}/threads
+/// GET /_matrix/client/v1/rooms/:roomId/threads
 /// ルーム内のスレッド一覧を最新活動順で返す。
 async fn get_threads(
     State(state): State<AppState>,
@@ -85,8 +85,8 @@ async fn get_threads(
            INNER JOIN events latest_ev
              ON latest_ev.stream_ordering = thread_roots.latest_activity
            WHERE 1=1
-             {cursor_clause}
-             {participated_clause}
+             :cursor_clause
+             :participated_clause
            ORDER BY thread_roots.latest_activity DESC
            LIMIT ?"#,
     );

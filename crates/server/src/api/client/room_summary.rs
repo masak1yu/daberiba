@@ -7,12 +7,12 @@ use axum::{
 
 pub fn routes() -> Router<AppState> {
     Router::new().route(
-        "/_matrix/client/v1/rooms/{roomId}/summary",
+        "/_matrix/client/v1/rooms/:roomId/summary",
         get(room_summary),
     )
 }
 
-/// GET /_matrix/client/v1/rooms/{roomId}/summary (MSC3266)
+/// GET /_matrix/client/v1/rooms/:roomId/summary (MSC3266)
 /// ルームのサマリー情報を返す。参加前のプレビュー用途にも使える。
 async fn room_summary(
     State(state): State<AppState>,

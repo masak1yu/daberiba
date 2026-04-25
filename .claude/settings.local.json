@@ -3,7 +3,36 @@
     "allow": [
       "Bash(grep -r \"\"ba\"\" /workspaces/daberiba --include=*.rs --include=*.toml --include=*.md --include=*.yml)",
       "Bash(grep -r ''ba'' /workspaces/daberiba --include=*.rs --include=*.toml --include=*.md --include=*.yml)",
-      "Bash(bun --version)"
+      "Bash(bun --version)",
+      "Bash(git config *)",
+      "Bash(git checkout *)",
+      "Bash(gh release *)",
+      "Bash(pnpm --version)",
+      "Bash(npm --version)",
+      "Bash(npx --version)",
+      "Bash(corepack enable *)",
+      "Bash(npm install *)",
+      "Bash(pnpm install *)",
+      "Bash(podman ps *)",
+      "Bash(docker-compose --version)",
+      "Bash(podman compose *)",
+      "Bash(docker-compose up *)",
+      "Bash(docker-compose run *)",
+      "Bash(docker-compose ps *)",
+      "Bash(kill %1)",
+      "Bash(docker-compose logs *)",
+      "Bash(docker exec daberiba-db-1 *)",
+      "Bash(docker-compose down *)",
+      "Bash(SQLX_OFFLINE=true cargo build --bin server)",
+      "Bash(cargo run *)",
+      "Bash(curl -s http://localhost:8448/_matrix/client/versions)",
+      "Bash(pnpm dev *)",
+      "Bash(curl *)",
+      "Bash(kill 44135)",
+      "Bash(git cherry-pick *)",
+      "Bash(pkill -f \"target/debug/server\")",
+      "Bash(./target/debug/server)",
+      "Bash(grep -v \"//\\\\|Binary\\\\|format!\\\\|json!\\\\|struct\\\\|enum\\\\|impl\\\\|fn \\\\|let \\\\|{$\\\\|{}\\\\|{\\\\s\")"
     ]
   }
 }
