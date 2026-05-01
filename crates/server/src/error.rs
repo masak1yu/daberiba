@@ -39,7 +39,7 @@ impl IntoResponse for AppError {
             AppError::Forbidden => (StatusCode::FORBIDDEN, "M_FORBIDDEN", self.to_string()),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, "M_BAD_JSON", msg.clone()),
             AppError::Internal(_) | AppError::Database(_) => {
-                tracing::error!(error = %self);
+                tracing::error!(error = ?self);
                 (
                     StatusCode::INTERNAL_SERVER_ERROR,
                     "M_UNKNOWN",

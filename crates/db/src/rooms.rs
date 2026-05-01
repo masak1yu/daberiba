@@ -361,7 +361,8 @@ pub async fn get_public_rooms(
     "#;
 
     // フィルタ条件付きで総件数を取得
-    let total: u64 = if let Some(term) = filter.filter(|s| !s.is_empty()) {
+    // COUNT() は MariaDB では BIGINT (符号付き) を返すため i64 で受け取る
+    let total: i64 = if let Some(term) = filter.filter(|s| !s.is_empty()) {
         let like = format!("%{}%", term);
         let sql = format!(
             "SELECT COUNT(DISTINCT r.room_id) {base} AND (r.name LIKE ? OR r.topic LIKE ?)"
@@ -375,6 +376,7 @@ pub async fn get_public_rooms(
         let sql = format!("SELECT COUNT(DISTINCT r.room_id) {base}");
         sqlx::query_scalar(&sql).fetch_one(pool).await?
     };
+    let total = total.max(0) as u64;
 
     // ルーム一覧取得
     let rows: Vec<(String, Option<String>, Option<String>, i64)> =
