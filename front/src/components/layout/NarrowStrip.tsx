@@ -58,6 +58,7 @@ export default function NarrowStrip() {
 
       {/* チャットアイコン */}
       <button
+        onClick={() => navigate('/')}
         className="mb-1 flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-white/10"
         style={{ color: '#8d99a6' }}
         title="チャット"
