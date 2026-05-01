@@ -1,6 +1,6 @@
 use crate::media_store::MediaStore;
 use crate::signing_key::ServerSigningKey;
-use crate::sso::SsoConfig;
+use crate::sso::ProviderConfig;
 use crate::typing_store::TypingStore;
 use crate::uia::UiaStore;
 use dashmap::DashMap;
@@ -21,8 +21,8 @@ pub struct AppState {
     pub signing_key: Arc<ServerSigningKey>,
     /// Federation 公開鍵キャッシュ: "{server_name}/{key_id}" -> (key_bytes, valid_until_ms)
     pub fed_key_cache: Arc<DashMap<String, (Vec<u8>, u64)>>,
-    /// SSO/OIDC 設定（OIDC_ISSUER が未設定の場合は None）
-    pub sso: Option<Arc<SsoConfig>>,
+    /// 有効な SSO プロバイダーリスト（未設定の場合は空）
+    pub sso_providers: Arc<Vec<ProviderConfig>>,
     /// 新イベント書き込み時に notify_waiters() を呼んで /sync long-polling を起床させる
     pub event_notify: Arc<Notify>,
 }
@@ -34,7 +34,7 @@ impl AppState {
             .unwrap_or_else(|_| "localhost".to_string())
             .into();
         let http = reqwest::Client::new();
-        let sso = SsoConfig::load_from_env(&http).await.map(Arc::new);
+        let sso_providers = Arc::new(crate::sso::load_providers(&http).await);
         Self {
             pool,
             media,
@@ -44,7 +44,7 @@ impl AppState {
             server_name,
             signing_key,
             fed_key_cache: Arc::new(DashMap::new()),
-            sso,
+            sso_providers,
             event_notify: Arc::new(Notify::new()),
         }
     }
