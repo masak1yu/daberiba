@@ -476,37 +476,35 @@ export default function RoomPage() {
                   </button>
 
                   {/* ファイル添付 */}
-                  {!input.trim() && (
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploading}
-                      className="rounded p-1.5 transition-colors hover:bg-white/10 disabled:opacity-40"
-                      style={{ color: '#8d99a6' }}
-                      title="ファイルを添付"
-                    >
-                      {uploading ? (
-                        <div
-                          className="h-5 w-5 animate-spin rounded-full border"
-                          style={{ borderColor: '#636e7d', borderTopColor: 'transparent' }}
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="rounded p-1.5 transition-colors hover:bg-white/10 disabled:opacity-40"
+                    style={{ color: '#8d99a6' }}
+                    title="ファイルを添付"
+                  >
+                    {uploading ? (
+                      <div
+                        className="h-5 w-5 animate-spin rounded-full border"
+                        style={{ borderColor: '#636e7d', borderTopColor: 'transparent' }}
+                      />
+                    ) : (
+                      <svg
+                        className="h-5 w-5"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={1.8}
+                          d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
                         />
-                      ) : (
-                        <svg
-                          className="h-5 w-5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={1.8}
-                            d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                          />
-                        </svg>
-                      )}
-                    </button>
-                  )}
+                      </svg>
+                    )}
+                  </button>
 
                   {/* 送信ボタン（入力があるときのみ — Element 準拠） */}
                   {input.trim() && (
