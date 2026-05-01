@@ -1,94 +1,162 @@
-/// OIDC プロバイダー設定。
-///
-/// 環境変数から読み込む。OIDC_ISSUER が設定されていれば discovery エンドポイント
-/// (`{issuer}/.well-known/openid-configuration`) から各 URL を自動取得する。
-/// OIDC_ISSUER が未設定の場合は SSO を無効とする。
-///
-/// 必須環境変数（OIDC_ISSUER が設定されている場合）:
-/// - `OIDC_CLIENT_ID`      — クライアント ID
-/// - `OIDC_CLIENT_SECRET`  — クライアントシークレット
-/// - `OIDC_REDIRECT_URI`   — コールバック URL（例: https://your-server/_matrix/client/v3/login/sso/callback）
-///
-/// オプション（discovery で自動取得されない場合に個別指定）:
-/// - `OIDC_AUTH_URL`        — 認可エンドポイント
-/// - `OIDC_TOKEN_URL`       — トークンエンドポイント
-/// - `OIDC_USERINFO_URL`    — ユーザー情報エンドポイント
+use anyhow::Result;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ProviderKind {
+    Oidc,
+    Github,
+}
+
+/// SSO プロバイダー設定。
 #[derive(Clone, Debug)]
-pub struct SsoConfig {
+pub struct ProviderConfig {
+    pub id: String,
+    pub name: String,
     pub client_id: String,
     pub client_secret: String,
     pub redirect_uri: String,
     pub auth_url: String,
     pub token_url: String,
-    pub userinfo_url: String,
-    /// 表示用プロバイダー名（`/login` レスポンスの `identity_providers` に使用）
-    pub provider_name: String,
+    /// None = id_token から sub を抽出（Apple など userinfo エンドポイントがない場合）
+    pub userinfo_url: Option<String>,
+    pub scopes: String,
+    pub kind: ProviderKind,
 }
 
-impl SsoConfig {
-    /// 環境変数から SSO 設定を読み込む。OIDC_ISSUER 未設定の場合は None。
-    pub async fn load_from_env(http: &reqwest::Client) -> Option<Self> {
-        let issuer = std::env::var("OIDC_ISSUER").ok()?;
-        let client_id = std::env::var("OIDC_CLIENT_ID")
-            .expect("OIDC_CLIENT_ID must be set when OIDC_ISSUER is configured");
-        let client_secret = std::env::var("OIDC_CLIENT_SECRET")
-            .expect("OIDC_CLIENT_SECRET must be set when OIDC_ISSUER is configured");
-        let redirect_uri = std::env::var("OIDC_REDIRECT_URI")
-            .expect("OIDC_REDIRECT_URI must be set when OIDC_ISSUER is configured");
-        let provider_name =
-            std::env::var("OIDC_PROVIDER_NAME").unwrap_or_else(|_| "SSO".to_string());
+/// 環境変数から有効なプロバイダーをすべてロードする。
+///
+/// 各プロバイダーは対応する CLIENT_ID が設定されていれば有効。
+/// すべてのプロバイダーで `SSO_REDIRECT_URI` が必要。
+pub async fn load_providers(http: &reqwest::Client) -> Vec<ProviderConfig> {
+    let mut providers = Vec::new();
+    if let Some(p) = load_google(http).await {
+        providers.push(p);
+    }
+    if let Some(p) = load_github() {
+        providers.push(p);
+    }
+    if let Some(p) = load_apple(http).await {
+        providers.push(p);
+    }
+    providers
+}
 
-        // OIDC discovery ドキュメントを取得して各 URL を解決する
-        let discovery_url = format!(
-            "{}/.well-known/openid-configuration",
-            issuer.trim_end_matches('/')
-        );
-        let doc: serde_json::Value = match http.get(&discovery_url).send().await {
-            Ok(r) => match r.json().await {
-                Ok(v) => v,
-                Err(e) => {
-                    tracing::warn!("OIDC discovery parse failed: {}", e);
-                    return None;
-                }
-            },
+fn sso_redirect_uri() -> Option<String> {
+    std::env::var("SSO_REDIRECT_URI").ok()
+}
+
+async fn load_google(http: &reqwest::Client) -> Option<ProviderConfig> {
+    let client_id = std::env::var("GOOGLE_CLIENT_ID").ok()?;
+    let client_secret = std::env::var("GOOGLE_CLIENT_SECRET").ok()?;
+    let redirect_uri = sso_redirect_uri()?;
+    let doc = fetch_oidc_discovery(http, "https://accounts.google.com").await?;
+    let auth_url = doc["authorization_endpoint"].as_str()?.to_string();
+    let token_url = doc["token_endpoint"].as_str()?.to_string();
+    let userinfo_url = doc["userinfo_endpoint"].as_str().map(str::to_string);
+    tracing::info!(provider = "google", "SSO provider enabled");
+    Some(ProviderConfig {
+        id: "google".into(),
+        name: "Google".into(),
+        client_id,
+        client_secret,
+        redirect_uri,
+        auth_url,
+        token_url,
+        userinfo_url,
+        scopes: "openid email profile".into(),
+        kind: ProviderKind::Oidc,
+    })
+}
+
+fn load_github() -> Option<ProviderConfig> {
+    let client_id = std::env::var("GITHUB_CLIENT_ID").ok()?;
+    let client_secret = std::env::var("GITHUB_CLIENT_SECRET").ok()?;
+    let redirect_uri = sso_redirect_uri()?;
+    tracing::info!(provider = "github", "SSO provider enabled");
+    Some(ProviderConfig {
+        id: "github".into(),
+        name: "GitHub".into(),
+        client_id,
+        client_secret,
+        redirect_uri,
+        auth_url: "https://github.com/login/oauth/authorize".into(),
+        token_url: "https://github.com/login/oauth/access_token".into(),
+        userinfo_url: Some("https://api.github.com/user".into()),
+        scopes: "read:user user:email".into(),
+        kind: ProviderKind::Github,
+    })
+}
+
+async fn load_apple(http: &reqwest::Client) -> Option<ProviderConfig> {
+    let client_id = std::env::var("APPLE_CLIENT_ID").ok()?;
+    let team_id = std::env::var("APPLE_TEAM_ID").ok()?;
+    let key_id = std::env::var("APPLE_KEY_ID").ok()?;
+    let private_key = std::env::var("APPLE_PRIVATE_KEY").ok()?;
+    let redirect_uri = sso_redirect_uri()?;
+    let client_secret =
+        match generate_apple_client_secret(&team_id, &key_id, &client_id, &private_key) {
+            Ok(s) => s,
             Err(e) => {
-                tracing::warn!("OIDC discovery fetch failed ({}): {}", discovery_url, e);
+                tracing::warn!("Apple client secret generation failed: {}", e);
                 return None;
             }
         };
+    let doc = fetch_oidc_discovery(http, "https://appleid.apple.com").await?;
+    let auth_url = doc["authorization_endpoint"].as_str()?.to_string();
+    let token_url = doc["token_endpoint"].as_str()?.to_string();
+    tracing::info!(provider = "apple", "SSO provider enabled");
+    Some(ProviderConfig {
+        id: "apple".into(),
+        name: "Apple".into(),
+        client_id,
+        client_secret,
+        redirect_uri,
+        auth_url,
+        token_url,
+        // Apple の userinfo_endpoint は sub のみ返す; id_token から取得する方が確実
+        userinfo_url: None,
+        scopes: "name email".into(),
+        kind: ProviderKind::Oidc,
+    })
+}
 
-        let auth_url = std::env::var("OIDC_AUTH_URL").ok().unwrap_or_else(|| {
-            doc["authorization_endpoint"]
-                .as_str()
-                .unwrap_or("")
-                .to_string()
-        });
-        let token_url = std::env::var("OIDC_TOKEN_URL")
-            .ok()
-            .unwrap_or_else(|| doc["token_endpoint"].as_str().unwrap_or("").to_string());
-        let userinfo_url = std::env::var("OIDC_USERINFO_URL")
-            .ok()
-            .unwrap_or_else(|| doc["userinfo_endpoint"].as_str().unwrap_or("").to_string());
-
-        if auth_url.is_empty() || token_url.is_empty() || userinfo_url.is_empty() {
-            tracing::warn!("OIDC discovery did not return required endpoints; SSO disabled");
-            return None;
+async fn fetch_oidc_discovery(http: &reqwest::Client, issuer: &str) -> Option<serde_json::Value> {
+    let url = format!(
+        "{}/.well-known/openid-configuration",
+        issuer.trim_end_matches('/')
+    );
+    match http.get(&url).send().await {
+        Ok(r) if r.status().is_success() => r.json().await.ok(),
+        Ok(r) => {
+            tracing::warn!("OIDC discovery returned {} for {}", r.status(), issuer);
+            None
         }
-
-        tracing::info!(
-            issuer = %issuer,
-            provider = %provider_name,
-            "SSO/OIDC enabled"
-        );
-
-        Some(Self {
-            client_id,
-            client_secret,
-            redirect_uri,
-            auth_url,
-            token_url,
-            userinfo_url,
-            provider_name,
-        })
+        Err(e) => {
+            tracing::warn!("OIDC discovery failed for {}: {}", issuer, e);
+            None
+        }
     }
+}
+
+/// Apple 用 ES256 JWT クライアントシークレット（有効期限 6 ヶ月）。
+/// `private_key_pem` は PKCS#8 EC 秘密鍵（.p8 ファイルの内容）。
+pub fn generate_apple_client_secret(
+    team_id: &str,
+    key_id: &str,
+    client_id: &str,
+    private_key_pem: &str,
+) -> Result<String> {
+    use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+
+    let now = chrono::Utc::now().timestamp();
+    let claims = serde_json::json!({
+        "iss": team_id,
+        "iat": now,
+        "exp": now + 15_777_000i64,
+        "aud": "https://appleid.apple.com",
+        "sub": client_id,
+    });
+    let mut header = Header::new(Algorithm::ES256);
+    header.kid = Some(key_id.to_string());
+    let key = EncodingKey::from_ec_pem(private_key_pem.as_bytes())?;
+    Ok(encode(&header, &claims, &key)?)
 }

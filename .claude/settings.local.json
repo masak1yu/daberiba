@@ -32,7 +32,13 @@
       "Bash(git cherry-pick *)",
       "Bash(pkill -f \"target/debug/server\")",
       "Bash(./target/debug/server)",
-      "Bash(grep -v \"//\\\\|Binary\\\\|format!\\\\|json!\\\\|struct\\\\|enum\\\\|impl\\\\|fn \\\\|let \\\\|{$\\\\|{}\\\\|{\\\\s\")"
+      "Bash(grep -v \"//\\\\|Binary\\\\|format!\\\\|json!\\\\|struct\\\\|enum\\\\|impl\\\\|fn \\\\|let \\\\|{$\\\\|{}\\\\|{\\\\s\")",
+      "Bash(cargo check *)",
+      "Bash(pnpm tsc *)",
+      "Bash(pnpm lint *)",
+      "Bash(cargo clippy *)",
+      "Bash(pnpm format *)",
+      "Bash(pnpm format:check)"
     ]
   }
 }

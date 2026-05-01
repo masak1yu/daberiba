@@ -1,6 +1,7 @@
 use crate::{
     error::{ApiResult, AppError},
     middleware::auth::AuthUser,
+    sso::{ProviderConfig, ProviderKind},
     state::AppState,
 };
 use axum::{
@@ -9,6 +10,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 
 pub fn routes() -> Router<AppState> {
@@ -19,17 +21,14 @@ pub fn routes() -> Router<AppState> {
             get(register_available),
         )
         .route("/_matrix/client/v3/login", get(login_flows).post(login))
-        // SSO リダイレクト（認証不要 — ブラウザからアクセスされる）
         .route("/_matrix/client/v3/login/sso/redirect", get(sso_redirect))
         .route(
             "/_matrix/client/v3/login/sso/redirect/:idpId",
             get(sso_redirect_idp),
         )
-        // SSO コールバック（認証不要 — OIDC プロバイダーからのリダイレクト）
         .route("/_matrix/client/v3/login/sso/callback", get(sso_callback))
 }
 
-/// 認証必須ルート（router.rs 側で auth middleware を付けて登録する）
 pub fn protected_routes() -> Router<AppState> {
     Router::new().route("/_matrix/client/v1/login/get_token", post(get_login_token))
 }
@@ -40,15 +39,16 @@ async fn login_flows(State(state): State<AppState>) -> Json<serde_json::Value> {
         serde_json::json!({ "type": "m.login.token" }),
     ];
 
-    // SSO が有効な場合は m.login.sso を追加
-    if let Some(sso) = &state.sso {
+    if !state.sso_providers.is_empty() {
         flows.push(serde_json::json!({ "type": "m.login.sso" }));
+        let identity_providers: Vec<_> = state
+            .sso_providers
+            .iter()
+            .map(|p| serde_json::json!({ "id": p.id, "name": p.name }))
+            .collect();
         return Json(serde_json::json!({
             "flows": flows,
-            "identity_providers": [{
-                "id": "oidc",
-                "name": sso.provider_name,
-            }]
+            "identity_providers": identity_providers,
         }));
     }
 
@@ -75,7 +75,6 @@ fn validate_username(username: &str) -> Result<(), AppError> {
     if username.len() > 255 {
         return Err(AppError::BadRequest("username too long".into()));
     }
-    // Matrix localpart: 英数字・アンダースコア・ハイフン・ドットのみ
     if !username
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.'))
@@ -111,7 +110,6 @@ async fn register(
     )
     .await
     .map_err(|e| {
-        // 重複ユーザー
         if e.to_string().contains("Duplicate") || e.to_string().contains("duplicate") {
             AppError::BadRequest("username already taken".into())
         } else {
@@ -159,16 +157,13 @@ async fn login(
                 .identifier
                 .and_then(|id| id.user)
                 .ok_or_else(|| AppError::BadRequest("missing identifier.user".into()))?;
-
             let password = body
                 .password
                 .ok_or_else(|| AppError::BadRequest("missing password".into()))?;
-
             let (user_id, access_token, device_id) =
                 db::users::login(&state.pool, &username, &password, &state.server_name)
                     .await
                     .map_err(|_| AppError::Unauthorized)?;
-
             Ok(Json(LoginResponse {
                 user_id,
                 access_token,
@@ -179,14 +174,10 @@ async fn login(
             let token = body
                 .token
                 .ok_or_else(|| AppError::BadRequest("missing token".into()))?;
-
-            // トークンを消費して user_id を取得
             let user_id = db::login_tokens::consume(&state.pool, &token)
                 .await
                 .map_err(AppError::Internal)?
                 .ok_or(AppError::Unauthorized)?;
-
-            // 新しいデバイスとアクセストークンを発行
             let device_id = uuid::Uuid::new_v4()
                 .to_string()
                 .replace('-', "")
@@ -198,7 +189,6 @@ async fn login(
             let access_token = db::access_tokens::create(&state.pool, &user_id, &device_id)
                 .await
                 .map_err(AppError::Internal)?;
-
             Ok(Json(LoginResponse {
                 user_id,
                 access_token,
@@ -209,8 +199,6 @@ async fn login(
     }
 }
 
-/// POST /_matrix/client/v1/login/get_token
-/// 現在のセッションから短命ログイントークンを発行する（クロスデバインログイン用）。
 async fn get_login_token(
     State(state): State<AppState>,
     axum::Extension(user): axum::Extension<AuthUser>,
@@ -218,7 +206,6 @@ async fn get_login_token(
     let token = db::login_tokens::create(&state.pool, &user.user_id)
         .await
         .map_err(AppError::Internal)?;
-
     Ok(Json(serde_json::json!({
         "login_token": token,
         "expires_in_ms": 120_000,
@@ -230,8 +217,6 @@ struct RegisterAvailableQuery {
     username: Option<String>,
 }
 
-/// GET /_matrix/client/v3/register/available?username=<localpart>
-/// ユーザー名が利用可能か確認する。利用可能なら { available: true }。
 async fn register_available(
     State(state): State<AppState>,
     Query(params): Query<RegisterAvailableQuery>,
@@ -239,21 +224,17 @@ async fn register_available(
     let localpart = params
         .username
         .ok_or_else(|| AppError::BadRequest("username required".into()))?;
-
-    // ローカルパートを user_id 形式に変換
     let server_name = std::env::var("SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
     let user_id = format!("@{}:{}", localpart, server_name);
-
     let exists = db::users::exists(&state.pool, &user_id).await?;
     if exists {
         return Err(AppError::BadRequest("M_USER_IN_USE".into()));
     }
-
     Ok(Json(serde_json::json!({ "available": true })))
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// SSO / OIDC フロー
+// SSO / OAuth2 フロー
 // ──────────────────────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -263,41 +244,48 @@ struct SsoRedirectQuery {
 }
 
 /// GET /_matrix/client/v3/login/sso/redirect?redirectUrl=<url>
-/// OIDC 認可エンドポイントへリダイレクトする。SSO が無効な場合は 400。
+/// 最初の有効プロバイダーへリダイレクト（単一プロバイダー後方互換）。
 async fn sso_redirect(
     State(state): State<AppState>,
     Query(params): Query<SsoRedirectQuery>,
 ) -> Result<Redirect, AppError> {
-    sso_redirect_impl(&state, &params.redirect_url).await
+    let provider = state
+        .sso_providers
+        .first()
+        .ok_or_else(|| AppError::BadRequest("SSO is not configured on this server".into()))?;
+    build_sso_redirect(&state, provider, &params.redirect_url).await
 }
 
 /// GET /_matrix/client/v3/login/sso/redirect/:idpId?redirectUrl=<url>
-/// 特定プロバイダー指定（現状はプロバイダーが 1 つのみなので id は無視）。
+/// 指定プロバイダーへリダイレクト。
 async fn sso_redirect_idp(
     State(state): State<AppState>,
-    Path(_idp_id): Path<String>,
+    Path(idp_id): Path<String>,
     Query(params): Query<SsoRedirectQuery>,
 ) -> Result<Redirect, AppError> {
-    sso_redirect_impl(&state, &params.redirect_url).await
+    let provider = state
+        .sso_providers
+        .iter()
+        .find(|p| p.id == idp_id)
+        .ok_or_else(|| AppError::BadRequest(format!("unknown SSO provider: {}", idp_id)))?;
+    build_sso_redirect(&state, provider, &params.redirect_url).await
 }
 
-async fn sso_redirect_impl(state: &AppState, redirect_url: &str) -> Result<Redirect, AppError> {
-    let sso = state
-        .sso
-        .as_ref()
-        .ok_or_else(|| AppError::BadRequest("SSO is not configured on this server".into()))?;
-
-    // state トークンを生成して DB に保存
-    let state_token = db::sso::create_state(&state.pool, redirect_url)
+async fn build_sso_redirect(
+    state: &AppState,
+    provider: &ProviderConfig,
+    redirect_url: &str,
+) -> Result<Redirect, AppError> {
+    let state_token = db::sso::create_state(&state.pool, redirect_url, &provider.id)
         .await
         .map_err(AppError::Internal)?;
 
-    // OIDC 認可 URL を組み立てる
     let auth_url = format!(
-        "{}?response_type=code&client_id={}&redirect_uri={}&scope=openid+profile+email&state={}",
-        sso.auth_url,
-        urlencoding::encode(&sso.client_id),
-        urlencoding::encode(&sso.redirect_uri),
+        "{}?response_type=code&client_id={}&redirect_uri={}&scope={}&state={}",
+        provider.auth_url,
+        urlencoding::encode(&provider.client_id),
+        urlencoding::encode(&provider.redirect_uri),
+        urlencoding::encode(&provider.scopes),
         state_token,
     );
 
@@ -312,13 +300,11 @@ struct SsoCallbackQuery {
 }
 
 /// GET /_matrix/client/v3/login/sso/callback?code=...&state=...
-/// OIDC プロバイダーからのコールバック。
-/// code を token に交換し、userinfo を取得してログイントークンを発行する。
+/// プロバイダーからのコールバック。code を token に交換し login_token を発行する。
 async fn sso_callback(
     State(state): State<AppState>,
     Query(params): Query<SsoCallbackQuery>,
 ) -> Result<Redirect, AppError> {
-    // エラー応答チェック
     if let Some(err) = params.error {
         return Err(AppError::BadRequest(format!("SSO error: {}", err)));
     }
@@ -330,100 +316,53 @@ async fn sso_callback(
         .state
         .ok_or_else(|| AppError::BadRequest("missing state".into()))?;
 
-    let sso = state
-        .sso
-        .as_ref()
-        .ok_or_else(|| AppError::BadRequest("SSO is not configured".into()))?;
-
-    // state を消費して redirect_url を取得
-    let redirect_url = db::sso::consume_state(&state.pool, &state_token)
+    let (redirect_url, provider_id) = db::sso::consume_state(&state.pool, &state_token)
         .await
         .map_err(AppError::Internal)?
         .ok_or_else(|| AppError::BadRequest("invalid or expired state".into()))?;
 
-    // Authorization code を token に交換
-    let token_resp = state
-        .http
-        .post(&sso.token_url)
-        .form(&[
-            ("grant_type", "authorization_code"),
-            ("code", &code),
-            ("redirect_uri", &sso.redirect_uri),
-            ("client_id", &sso.client_id),
-            ("client_secret", &sso.client_secret),
-        ])
-        .send()
+    let provider = state
+        .sso_providers
+        .iter()
+        .find(|p| p.id == provider_id)
+        .ok_or_else(|| AppError::Internal(anyhow::anyhow!("unknown provider: {}", provider_id)))?;
+
+    let token_json = exchange_code(&state.http, provider, &code)
         .await
-        .map_err(|e| AppError::Internal(e.into()))?;
+        .map_err(AppError::Internal)?;
 
-    let token_json: serde_json::Value = token_resp
-        .json()
+    let user_info = extract_user_info(&state.http, provider, &token_json)
         .await
-        .map_err(|e| AppError::Internal(e.into()))?;
+        .map_err(AppError::Internal)?;
 
-    let access_token = token_json["access_token"]
-        .as_str()
-        .ok_or_else(|| AppError::Internal(anyhow::anyhow!("no access_token in OIDC response")))?;
+    let composite_sub = format!("{}:{}", provider_id, user_info.sub);
 
-    // userinfo エンドポイントからユーザー情報を取得
-    let userinfo: serde_json::Value = state
-        .http
-        .get(&sso.userinfo_url)
-        .bearer_auth(access_token)
-        .send()
-        .await
-        .map_err(|e| AppError::Internal(e.into()))?
-        .json()
-        .await
-        .map_err(|e| AppError::Internal(e.into()))?;
-
-    let sub = userinfo["sub"]
-        .as_str()
-        .ok_or_else(|| AppError::Internal(anyhow::anyhow!("no sub in OIDC userinfo")))?;
-
-    // プロバイダー固有の composite sub キー（将来的な複数プロバイダー対応）
-    let composite_sub = format!("oidc:{}", sub);
-
-    // 既存マッピングを探すか、新規ユーザーを作成する
     let matrix_user_id = if let Some(uid) = db::sso::find_user_by_sub(&state.pool, &composite_sub)
         .await
         .map_err(AppError::Internal)?
     {
         uid
     } else {
-        // ユーザー名を userinfo から決定する
-        let localpart = derive_localpart(&userinfo);
-        let unique_localpart =
-            make_unique_localpart(&state.pool, &localpart, &state.server_name).await?;
-
-        // ランダムパスワードで登録（SSO ユーザーはパスワードログイン不可）
+        let base = user_info
+            .preferred_username
+            .as_deref()
+            .map(sanitize_localpart)
+            .unwrap_or_else(|| sanitize_localpart(&user_info.sub));
+        let localpart = make_unique_localpart(&state.pool, &base, &state.server_name).await?;
         let random_pw = uuid::Uuid::new_v4().to_string();
-        let (uid, _tok, _dev) = db::users::register(
-            &state.pool,
-            &unique_localpart,
-            &random_pw,
-            &state.server_name,
-        )
-        .await
-        .map_err(AppError::Internal)?;
-
-        // マッピングを保存
+        let (uid, _, _) =
+            db::users::register(&state.pool, &localpart, &random_pw, &state.server_name)
+                .await
+                .map_err(AppError::Internal)?;
         db::sso::link_account(&state.pool, &composite_sub, &uid)
             .await
             .map_err(AppError::Internal)?;
-
-        // display_name を userinfo から設定（ベストエフォート）
-        let display_name = userinfo["name"]
-            .as_str()
-            .or_else(|| userinfo["preferred_username"].as_str());
-        if let Some(dn) = display_name {
+        if let Some(dn) = &user_info.display_name {
             let _ = db::profile::set_displayname(&state.pool, &uid, Some(dn)).await;
         }
-
         uid
     };
 
-    // Matrix ログイントークンを発行して client にリダイレクト
     let login_token = db::login_tokens::create(&state.pool, &matrix_user_id)
         .await
         .map_err(AppError::Internal)?;
@@ -437,30 +376,152 @@ async fn sso_callback(
     Ok(Redirect::temporary(&final_url))
 }
 
-/// userinfo クレームから Matrix ローカルパートを導出する。
-/// preferred_username → email ローカルパート → sub の先頭 16 文字 の順に試みる。
-fn derive_localpart(userinfo: &serde_json::Value) -> String {
-    let raw = userinfo["preferred_username"]
-        .as_str()
-        .map(str::to_string)
-        .or_else(|| {
-            userinfo["email"]
-                .as_str()
-                .and_then(|e| e.split('@').next())
-                .map(str::to_string)
-        })
-        .or_else(|| {
-            userinfo["sub"]
-                .as_str()
-                .map(|s| s.chars().take(16).collect())
-        })
-        .unwrap_or_else(|| "sso_user".to_string());
+// ──────────────────────────────────────────────────────────────────────────────
+// OAuth2 トークン交換とユーザー情報取得
+// ──────────────────────────────────────────────────────────────────────────────
 
-    // Matrix localpart 制約: a-z0-9_-. のみ、小文字化
-    sanitize_localpart(&raw)
+struct ExtractedUser {
+    sub: String,
+    preferred_username: Option<String>,
+    display_name: Option<String>,
 }
 
-/// 文字列を Matrix localpart 制約に合わせてサニタイズする。
+async fn exchange_code(
+    http: &reqwest::Client,
+    provider: &ProviderConfig,
+    code: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let mut req = http.post(&provider.token_url).form(&[
+        ("grant_type", "authorization_code"),
+        ("code", code),
+        ("redirect_uri", &provider.redirect_uri),
+        ("client_id", &provider.client_id),
+        ("client_secret", &provider.client_secret),
+    ]);
+    // GitHub はデフォルトで form エンコードを返す; JSON が必要
+    if provider.kind == ProviderKind::Github {
+        req = req.header("Accept", "application/json");
+    }
+    let resp = req.send().await?;
+    let json: serde_json::Value = resp.json().await?;
+    if let Some(err) = json["error"].as_str() {
+        anyhow::bail!("token exchange failed: {}", err);
+    }
+    Ok(json)
+}
+
+async fn extract_user_info(
+    http: &reqwest::Client,
+    provider: &ProviderConfig,
+    token_json: &serde_json::Value,
+) -> anyhow::Result<ExtractedUser> {
+    match provider.kind {
+        ProviderKind::Github => extract_github_user_info(http, token_json).await,
+        ProviderKind::Oidc => extract_oidc_user_info(http, provider, token_json).await,
+    }
+}
+
+async fn extract_github_user_info(
+    http: &reqwest::Client,
+    token_json: &serde_json::Value,
+) -> anyhow::Result<ExtractedUser> {
+    let access_token = token_json["access_token"]
+        .as_str()
+        .ok_or_else(|| anyhow::anyhow!("no access_token in GitHub response"))?;
+
+    let userinfo: serde_json::Value = http
+        .get("https://api.github.com/user")
+        .header("Authorization", format!("Bearer {}", access_token))
+        .header("User-Agent", "daberiba")
+        .send()
+        .await?
+        .json()
+        .await?;
+
+    let id = userinfo["id"]
+        .as_i64()
+        .ok_or_else(|| anyhow::anyhow!("no id in GitHub userinfo"))?;
+    let login = userinfo["login"].as_str().map(str::to_string);
+    let display_name = userinfo["name"]
+        .as_str()
+        .or_else(|| userinfo["login"].as_str())
+        .map(str::to_string);
+
+    Ok(ExtractedUser {
+        sub: id.to_string(),
+        preferred_username: login,
+        display_name,
+    })
+}
+
+async fn extract_oidc_user_info(
+    http: &reqwest::Client,
+    provider: &ProviderConfig,
+    token_json: &serde_json::Value,
+) -> anyhow::Result<ExtractedUser> {
+    if let Some(userinfo_url) = &provider.userinfo_url {
+        // 標準 OIDC userinfo エンドポイント（Google など）
+        let access_token = token_json["access_token"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("no access_token in OIDC response"))?;
+        let userinfo: serde_json::Value = http
+            .get(userinfo_url)
+            .bearer_auth(access_token)
+            .send()
+            .await?
+            .json()
+            .await?;
+        let sub = userinfo["sub"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("no sub in OIDC userinfo"))?
+            .to_string();
+        let preferred_username = userinfo["preferred_username"]
+            .as_str()
+            .or_else(|| userinfo["email"].as_str().and_then(|e| e.split('@').next()))
+            .map(str::to_string);
+        let display_name = userinfo["name"]
+            .as_str()
+            .or_else(|| userinfo["preferred_username"].as_str())
+            .map(str::to_string);
+        Ok(ExtractedUser {
+            sub,
+            preferred_username,
+            display_name,
+        })
+    } else {
+        // id_token から sub を抽出（Apple — userinfo エンドポイントなし）
+        let id_token = token_json["id_token"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("no id_token in response"))?;
+        let sub = extract_jwt_claim(id_token, "sub")
+            .ok_or_else(|| anyhow::anyhow!("could not extract sub from id_token"))?;
+        let email = extract_jwt_claim(id_token, "email");
+        let preferred_username = email
+            .as_deref()
+            .and_then(|e| e.split('@').next())
+            .map(str::to_string);
+        Ok(ExtractedUser {
+            sub,
+            preferred_username,
+            display_name: None,
+        })
+    }
+}
+
+/// JWT のペイロード（base64url）から指定クレームの文字列値を取り出す。署名検証はしない。
+fn extract_jwt_claim(jwt: &str, claim: &str) -> Option<String> {
+    let payload = jwt.split('.').nth(1)?;
+    let bytes = base64::engine::general_purpose::URL_SAFE_NO_PAD
+        .decode(payload)
+        .ok()?;
+    let claims: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
+    claims[claim].as_str().map(str::to_string)
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// ユーザー名ユーティリティ
+// ──────────────────────────────────────────────────────────────────────────────
+
 fn sanitize_localpart(s: &str) -> String {
     let out: String = s
         .to_lowercase()
@@ -475,7 +536,6 @@ fn sanitize_localpart(s: &str) -> String {
     }
 }
 
-/// ローカルパートが重複する場合に数字サフィックスを付けてユニークにする。
 async fn make_unique_localpart(
     pool: &sqlx::MySqlPool,
     base: &str,

@@ -379,6 +379,7 @@ CREATE TABLE IF NOT EXISTS sent_transactions (
 -- コールバック時に state を検証し redirect_url を取得する。有効期限は 5 分。
 CREATE TABLE IF NOT EXISTS sso_states (
     state        VARCHAR(255) NOT NULL,
+    provider     VARCHAR(32)  NOT NULL DEFAULT '',
     redirect_url TEXT         NOT NULL,
     expires_at   BIGINT       NOT NULL COMMENT 'Unix milliseconds',
     PRIMARY KEY (state)
